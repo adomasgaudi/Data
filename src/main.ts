@@ -2348,7 +2348,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; rom?: { unit: "pct" | "cm"; val: number; ref?: string }; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -2797,6 +2797,36 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
   if (Object.keys(o).length === 0) delete setOverrides[id];
   else setOverrides[id] = o;
   saveSetOverrides();
+}
+/** Set or clear a set's RANGE OF MOTION (a variation, NOT a note — owner: "tags/variations are
+ * never notes; notes are user-only"). Stored as a per-set attribute, shown as a ROM chip. */
+function setSetRom(id: string, rom: { unit: "pct" | "cm"; val: number; ref?: string } | null): void {
+  if (!canEditCurrentAthlete()) return;
+  const o = setOverrides[id] ?? {};
+  if (!rom) delete o.rom; else o.rom = rom;
+  if (Object.keys(o).length === 0) delete setOverrides[id];
+  else setOverrides[id] = o;
+  saveSetOverrides();
+}
+/** A set's ROM as a chip + the note with any LEGACY "ROM…" token stripped out. ROM lives on the
+ * per-set override now; older sets may still carry a "ROM X%"/"ROM Ncm" note from before this
+ * change — we parse it for display so it shows as a chip (a variation), never as a user note. */
+function romOfSet(sid: string, notes: string | undefined): { chip: string; note: string } {
+  let label = "", tip = "Range of motion for this set", from = "";
+  const o = setOverrides[sid]?.rom;
+  if (o) {
+    label = o.unit === "cm" ? `ROM ${fmt(o.val)}cm${o.ref ? ` ${o.ref}` : ""}` : `ROM ${fmt(o.val)}%`;
+    from = o.unit === "cm" && o.ref ? o.ref : "";
+  } else {
+    const cm = (notes ?? "").match(/\bROM\s*(\d+)\s*cm(?:\s+from\s+([^,·]+))?/i);
+    const pct = (notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
+    if (cm) { label = `ROM ${cm[1]}cm${cm[2] ? ` ${cm[2].trim()}` : ""}`; from = cm[2] ? cm[2].trim() : ""; }
+    else if (pct) label = `ROM ${pct[1]}%`;
+  }
+  if (from) tip += ` — measured from ${from}`;
+  const note = (notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
+  const chip = label ? `<span class="set-rom" title="${escapeHtml(tip)}">${escapeHtml(label)}</span>` : "";
+  return { chip, note };
 }
 
 /**
@@ -7961,7 +7991,11 @@ function setDisplay(raw: SetRecord): string {
   const effClass = setEffortClass(s, predictedRir(currentStrengthFor(currentStrengthByUserExercise(effFormula), s), s.weight, s.reps, effFormula));
   const effCls = effClass === "hard" ? "wo-eff wo-eff-hard" : effClass === "mid" ? "wo-eff wo-eff-mid" : "";
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
-  const note = s.notes?.trim();
+  // ROM is a VARIATION chip shown with the tags — NEVER in the note (owner). romOfSet pulls it
+  // from the per-set attribute (or strips a legacy "ROM…" token) and returns the USER note only.
+  const romRes = romOfSet(setId(raw), s.notes);
+  const romChip = romRes.chip;
+  const note = romRes.note;
   // Bodyweight = no real added weight (0, 1, or unlogged null): the VARIATION (tag / ×N) is
   // the description and becomes the shaded base, with reps as the trailing superscript — so a
   // bodyweight set reads "B2W⁷" / "×0.82⁷", never "0⁷ ×0.82" (owner: tags before reps, reps last).
@@ -7983,7 +8017,7 @@ function setDisplay(raw: SetRecord): string {
     canEditCurrentAthlete()
       ? `<button type="button" class="wo-set-menu${hasVariant && S.showVariants ? " has-var" : ""}" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
       : h;
-  const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
+  const chips = variationChipsHtml(s) + romChip; // support / band / lean chips (model lifts) + ROM chip
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
@@ -9232,13 +9266,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   // Per-set range of motion is logged as a universal "ROM X%" note token (any
   // exercise); show it as its own chip and peel it out of the displayed note text.
-  // ROM token: percent ("ROM 90%") or cm with an optional reference ("ROM 20cm from floor").
-  const romCm = (s.notes ?? "").match(/\bROM\s*(\d+)\s*cm(?:\s+from\s+([^,·]+))?/i);
-  const romPctM = (s.notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
-  const romTag = romCm
-    ? `<span class="set-rom" title="Range of motion for this set${romCm[2] ? ` — measured from ${romCm[2].trim()}` : ""}">ROM ${romCm[1]}cm${romCm[2] ? ` ${romCm[2].trim()}` : ""}</span>`
-    : romPctM ? `<span class="set-rom" title="Range of motion for this set">ROM ${romPctM[1]}%</span>` : "";
-  const notesNoRom = (s.notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
+  // ROM is a per-set VARIATION (chip), never a user note (owner). romOfSet reads the attribute
+  // (or strips a legacy "ROM…" token) and gives back the USER note only.
+  const romRes = romOfSet(setId(s), s.notes);
+  const romTag = romRes.chip;
+  const notesNoRom = romRes.note;
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
   // load for X reps, computed from this set's 1RM. Shown as value^X (matching the weight
@@ -9378,9 +9410,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
   // Editable NOTE: the original CSV note (or your edit of it). Drives the displayed
   // text and the variation difficulty; blank it to fall back to the original.
+  // The Note field is the USER's note ONLY — ROM (a variation) is shown as a chip, never here
+  // (owner). Strip any legacy "ROM…" token from both the value and the original-compare baseline.
+  const userNote = romOfSet(sid, s.notes).note;
+  const origUserNote = romOfSet(sid, raw.notes).note;
   const noteFld =
     `<label class="set-edit-f set-edit-f-note">Note` +
-    `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(raw.notes ?? "")}" value="${escapeHtml(s.notes ?? "")}" placeholder="${escapeHtml(raw.notes ?? "(no note)")}" /></label>`;
+    `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(origUserNote)}" value="${escapeHtml(userNote)}" placeholder="${escapeHtml(origUserNote || "(no note)")}" /></label>`;
   // Per-SIDE edit fields (unilateral only): each side defaults to the logged value
   // (blank input = linked); fill one in to record a side that differs. Writes go to
   // the per-set side store, not the set override. The "⇄ unilateral" toggle sets the
@@ -10142,6 +10178,10 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
   if (!canEditCurrentAthlete()) return;
   const username = src.username;
   const exerciseName = src.originalExerciseName ?? src.exerciseName;
+  // ROM is a per-set VARIATION, not a note (owner): carry it as an attribute and NEVER copy a
+  // legacy "ROM…" token into the new set's note.
+  const srcRom = setOverrides[setId(src)]?.rom;
+  const cleanNote = romOfSet(setId(src), src.notes).note;
   manualEntries.push({
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     seq: Date.now() % 2000000000,
@@ -10151,10 +10191,11 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
     exerciseName,
     weight,
     reps,
-    ...(src.notes ? { notes: src.notes } : {}),
+    ...(cleanNote ? { notes: cleanNote } : {}),
     ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
   });
   const entryId = manualEntries[manualEntries.length - 1]!.id;
+  if (srcRom) setSetRom(`${username}|${exerciseName}|${src.date}|${100000 + manualEntries.length - 1}`, { ...srcRom });
   saveManual();
   mergeManualSets();
   const refresh = () => {
@@ -19710,26 +19751,25 @@ function onInlineAddGo(form: HTMLElement): boolean {
         const dim = s.dataset.dim!; const lvl = s.value;
         if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]);
       }
-      // This line's ROM → a note token. PERCENT: "ROM X%" only when it differs from the exercise's
-      // default (default-ROM sets stay clean). CM: "ROM Ncm from <ref>" always (a deliberate value).
-      // The free-text note rides alongside.
-      let note = sharedNote;
+      // This line's ROM is a VARIATION, recorded as a per-set attribute below — NEVER as a note
+      // (owner: "tags/variations are not notes; notes are user-only"). Read the pill into a rom
+      // object: cm → always (a deliberate value); % → only when it differs from the default.
+      const note = sharedNote; // the free-text note is the USER's note only
+      let rom: { unit: "pct" | "cm"; val: number; ref?: string } | null = null;
       const romPill = ln.querySelector<HTMLElement>(".wo-af-rompill");
       if (romPill) {
         const unit = romPill.dataset.romunit === "cm" ? "cm" : "pct";
         const v = parseFloat(romPill.dataset.romval ?? "");
         const romDef = parseInt(romPill.dataset.romdefault ?? "", 10);
-        let tok = "";
-        if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); tok = ref ? `ROM ${v}cm from ${ref}` : `ROM ${v}cm`; } }
-        else if (Number.isFinite(v) && v !== romDef) tok = `ROM ${v}%`;
-        if (tok) note = note ? `${note} ${tok}` : tok;
+        if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); rom = ref ? { unit, val: v, ref } : { unit, val: v }; } }
+        else if (Number.isFinite(v) && v !== romDef) rom = { unit: "pct", val: v };
       }
       // This line's incline/height (push-ups): a non-floor cm/SQ/Smith level is pinned to the
       // created set's per-set override below. Floor (0cm) = the default, left unset.
       const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
       const incDim = incPill ? (incPill.dataset.incdim as LevelDim) : undefined;
       const incVal = incPill ? Number(incPill.dataset.incval) : NaN;
-      return { weight, reps, rir, chosenDims, note, incDim, incVal };
+      return { weight, reps, rir, chosenDims, note, incDim, incVal, rom };
     })
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   const username = els.athlete.value;
@@ -19779,6 +19819,10 @@ function onInlineAddGo(form: HTMLElement): boolean {
       if (incDim && Number.isFinite(incVal) && levelCm(incDim, incVal) !== 0)
         setSetOverrideLevel(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, incDim, incVal);
     }
+  }
+  // ROM per line → a per-set attribute (NOT a note — owner). Pinned to the created set's id.
+  for (let i = 0; i < setLines.length; i++) {
+    if (setLines[i]!.rom) setSetRom(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rom);
   }
   // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
   // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.
