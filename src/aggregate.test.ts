@@ -221,22 +221,21 @@ describe("canonicalizeExerciseNames", () => {
     expect(records.find((r) => r.originalExerciseName === "Stairs 4")).toBeTruthy();
   });
 
-  it("folds owner-confirmed Chin Ups → Pull Ups (and its spellings)", () => {
+  it("keeps Chin Ups SEPARATE from Pull Ups (owner reversed: standalone + only combined via the Pull/Chin group)", () => {
     const recs = [
       ...Array.from({ length: 5 }, () => rec({ exerciseName: "Pull Ups" })),
       rec({ exerciseName: "Chin Ups" }),
-      rec({ exerciseName: "Chin up" }),
-      rec({ exerciseName: "Chin ups" }),
+      rec({ exerciseName: "Chin ups" }), // a casing variant of chin — folds to ONE chin, NOT into Pull Ups
       rec({ exerciseName: "One Arm Pull Ups" }), // a DIFFERENT lift — must stay separate
     ];
     const { records, merges } = canonicalizeExerciseNames(recs);
-    // Pull Ups is most-logged, so every chin variant folds into it.
-    expect(records.filter((r) => r.exerciseName === "Pull Ups")).toHaveLength(8);
-    // The distinct one-arm variant is untouched.
-    expect(records.some((r) => r.exerciseName === "One Arm Pull Ups" && !r.originalExerciseName)).toBe(true);
+    // Chin no longer folds into Pull Ups — Pull Ups keeps only its own 5.
+    expect(records.filter((r) => r.exerciseName === "Pull Ups")).toHaveLength(5);
+    // Chin Ups stays its own exercise.
+    expect(records.some((r) => /chin/i.test(r.exerciseName))).toBe(true);
+    // No Pull Ups merge pulled chin in.
     const m = merges.find((x) => x.canonical === "Pull Ups");
-    expect(m?.variants).toEqual(expect.arrayContaining(["Chin Ups", "Chin up", "Chin ups"]));
-    expect(m?.variants).not.toContain("One Arm Pull Ups");
+    expect(m?.variants ?? []).not.toContain("Chin Ups");
   });
 
   it("keeps Smith Machine Squat separate from Squat (combined only in the group)", () => {

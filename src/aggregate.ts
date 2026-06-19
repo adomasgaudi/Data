@@ -987,16 +987,15 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
  * AI-NOTE: do not add merges here without explicit owner sign-off — silent
  * exercise merges inflate/confuse the leaderboards. Confirmed so far:
  *   - Stairs 4 → Stairs (source app renames on settings change)
- *   - Chin Ups → Pull Ups (owner-confirmed same lift; 2026-06-01)
+ *   - Chin Ups: was folded → Pull Ups (2026-06-01); owner REVERSED it (2026-06-19) —
+ *     keep Chin Ups a SEPARATE exercise, combined with Pull Ups only via the
+ *     "Pull/Chin" combinable group (combine.pull-mix), like Smith Squat ↔ Squat.
  * NOTE: Smith Machine Squat is intentionally NOT aliased to Squat — the owner
  * wants them kept separate; they're combined only in the "Squat pattern"
  * scaling group (see EXERCISE_GROUPS), not folded at the data level.
  */
 const EXERCISE_NAME_ALIASES: Record<string, string> = {
   "Stairs 4": "Stairs",
-  "Chin Ups": "Pull Ups",
-  "Chin up": "Pull Ups",
-  "Chin ups": "Pull Ups",
 };
 
 /**
