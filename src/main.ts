@@ -8428,8 +8428,16 @@ function renderWorkoutsPage() {
       );
     })
     .join("");
+  // A persistent top-of-list "+ exercise today" button (owner): when there's no session dated
+  // TODAY you'd otherwise have to open a past day and change its date to log today — this gives a
+  // one-tap way to add an exercise to today, sitting just above the most recent day. Day view,
+  // first page, and only when today has no session yet (else that day's own "+ exercise" covers it).
+  const todayHasSession = workoutGroups.some((g) => !g.rest && g.date === todayIso());
+  const addTodayRow = (showAddSetsNow() && S.workoutsPage === 0 && !byWeek && !historyByExercise && !todayHasSession)
+    ? `<tr class="wo-addtoday-row"><td colspan="2"><button type="button" class="wo-addex wo-addtoday" data-adddate="${escapeHtml(todayIso())}" title="Log an exercise for today">+ exercise today</button></td></tr>`
+    : "";
   els.workoutsTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${addTodayRow}${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
   if (openDates.size) reopenWorkoutGroups(openDates); // re-expand the days that were open BEFORE reopenSetEdit, so the set editor inside one can re-anchor (rule 24 / PB-12)

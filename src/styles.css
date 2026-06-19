@@ -2758,6 +2758,9 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .wo-addset:hover { border-color: var(--accent); color: var(--accent); }
 .wo-addex-wrap { margin-top: 0.35rem; }
+/* Top-of-history "+ exercise today" row — a clear gap below it separates it from the first day. */
+.wo-addtoday-row td { padding: 0.1rem 0 0.7rem; }
+.wo-addtoday { color: var(--accent); border-style: solid; border-color: var(--accent-soft, var(--line)); }
 .wo-addex {
   font: inherit; font-size: 0.91rem; font-weight: 700;
   border: 1px dashed var(--line); border-radius: var(--r-pill); padding: 3px 13px;
