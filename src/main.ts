@@ -18906,8 +18906,16 @@ function afLine(ex: string): string {
     `<div class="addm-line-main">` +
     `<div class="addm-set-chip">` +
     `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
+    `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
     `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+    // Unilateral: a second weight×reps pair for the LEFT side, shown only for a unilateral lift in
+    // the ADD path (toggled in syncAddmReal). The strength calc uses the WEAKER side (onInlineAddGo).
+    `<span class="wo-af-lside" hidden>` +
+    `<span class="wo-af-sidelbl" title="Left side">L</span>` +
+    `<input class="wo-af-weight-l" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Left weight (kg)" />` +
+    `<input class="wo-af-reps-l" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Left reps" />` +
+    `</span>` +
     `<span class="addm-real" aria-hidden="true" hidden></span>` +
     `</div>` +
     `<span class="addm-rir-slot"></span>` +
@@ -19273,7 +19281,14 @@ function syncAddmReal(form: HTMLElement): void {
   // Use the equipment the NEW set will be logged on (the current choice), so the live preview
   // matches what the set will compute once added (Phase 3).
   const eq = ex ? equipSettingsCurrent(ex) : null;
+  // Unilateral lifts get a second (left) weight×reps pair in the ADD path so both sides are
+  // editable up front (owner); the expanded-table editor still handles editing an existing set.
+  const uni = !!ex && isUni(ex) && !form.dataset.editsid;
   for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const lside = ln.querySelector<HTMLElement>(".wo-af-lside");
+    const rlbl = ln.querySelector<HTMLElement>(".wo-af-sidelbl-r");
+    if (lside) lside.toggleAttribute("hidden", !uni);
+    if (rlbl) rlbl.toggleAttribute("hidden", !uni);
     const out = ln.querySelector<HTMLElement>(".addm-real");
     const pre = ln.querySelector<HTMLElement>(".wo-af-wpre");
     if (!out) continue;
@@ -19723,7 +19738,13 @@ function passivePaletteHtml(ex: string): string {
       : on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`;
     return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}${locked ? " is-locked" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(title)}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
   }).join("");
-  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
+  // Unilateral indicator (owner: "if it's unilateral I should see it OUT of the settings, next to
+  // the passive tags"). Shown only when on; tapping it flips the per-exercise unilateral state
+  // (mirrors the ⚙ cog toggle). Distinct look from the tag pills (it's a state, not a tag).
+  const uniInd = isUni(ex)
+    ? `<button type="button" class="addm-uni-ind" data-uniex="${escapeHtml(ex)}" title="Unilateral — each set is a right + a left set (single-arm/leg); calculations use the weaker side. Tap to turn off.">⇄ unilateral</button>`
+    : "";
+  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}${uniInd}</div>`;
 }
 /** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
 function inclinePillLabel(dim: LevelDim, val: number): string {
@@ -20236,6 +20257,14 @@ function onAddModalClick(e: MouseEvent): void {
     }
     return;
   }
+  // The unilateral INDICATOR next to the passive tags — tapping flips uni off (mirrors the cog).
+  const uniInd = t.closest<HTMLElement>(".addm-uni-ind");
+  if (uniInd?.dataset.uniex) {
+    setUnilateralOverride(uniInd.dataset.uniex, !isUni(uniInd.dataset.uniex));
+    refreshAddmSettings();
+    syncPendingFromModal();
+    return;
+  }
   // Add-line RIR picker: toggle the menu, toggle bands (multi-select, owner), "specify" an exact
   // value, or "clear". The chosen grade rides on data-picked (encoded) and is read on Add.
   const rirDd = t.closest<HTMLElement>(".addm-rir");
@@ -20440,6 +20469,13 @@ function onInlineAddGo(form: HTMLElement): boolean {
     .map((ln) => {
       const weight = parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
       const reps = Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
+      // Unilateral LEFT side (only present/visible for a unilateral lift). Empty = linked (same as
+      // the right/primary side); a value records a per-set divergence, with the WEAKER side used
+      // as the strength base (handled after the records are created).
+      const lwTxt = ln.querySelector<HTMLInputElement>(".wo-af-weight-l")?.value.trim() ?? "";
+      const lrTxt = ln.querySelector<HTMLInputElement>(".wo-af-reps-l")?.value.trim() ?? "";
+      const lWeight = lwTxt === "" ? NaN : parseFloat(lwTxt);
+      const lReps = lrTxt === "" ? NaN : Math.round(parseFloat(lrTxt));
       // Only a MANUALLY-picked RIR is recorded; an untouched (assumed) picker stays empty so the
       // new set keeps the same assumed-RIR behaviour as every other ungraded set.
       const rir = (ln.querySelector?.<HTMLElement>(".addm-rir")?.dataset.picked) || "";
@@ -20474,7 +20510,7 @@ function onInlineAddGo(form: HTMLElement): boolean {
       const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
       const incDim = incPill ? (incPill.dataset.incdim as LevelDim) : undefined;
       const incVal = incPill ? Number(incPill.dataset.incval) : NaN;
-      return { weight, reps, rir, chosenDims, note, incDim, incVal, rom };
+      return { weight, reps, lWeight, lReps, rir, chosenDims, note, incDim, incVal, rom };
     })
     .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   const username = els.athlete.value;
@@ -20528,6 +20564,28 @@ function onInlineAddGo(form: HTMLElement): boolean {
   // ROM per line → a per-set attribute (NOT a note — owner). Pinned to the created set's id.
   for (let i = 0; i < setLines.length; i++) {
     if (setLines[i]!.rom) setSetRom(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rom);
+  }
+  // Unilateral per-side values (owner): store a divergence when the two sides differ, and set the
+  // base record's weight/reps to the WEAKER side so every strength/1RM calc uses the weaker arm
+  // (volume/counting still sum both sides via explodeSides). Sides equal → stay linked (no store).
+  if (isUni(exerciseName)) {
+    // Rough 1RM proxy (same lift on both sides, so only the ordering matters): Epley for weighted,
+    // reps as the tiebreak for bodyweight / equal-weight.
+    const sideScore = (w: number | null, r: number) => (w && w > 0 ? w * (1 + r / 30) : 0) + r * 1e-3;
+    for (let i = 0; i < setLines.length; i++) {
+      const l = setLines[i]!;
+      const hasL = Number.isFinite(l.lWeight) || Number.isFinite(l.lReps);
+      if (!hasL) continue;
+      const rW = Number.isFinite(l.weight) ? l.weight : null;
+      const rR = l.reps;
+      const lW = Number.isFinite(l.lWeight) ? l.lWeight : rW;
+      const lR = Number.isFinite(l.lReps) ? l.lReps : rR;
+      if (lW === rW && lR === rR) continue; // identical sides → leave linked
+      const id = `${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+      const ent = manualEntries[startIdx + i];
+      if (ent && sideScore(lW, lR) < sideScore(rW, rR)) { ent.weight = lW; ent.reps = lR; } // weaker = base
+      setSideDivergence(id, { rWeight: rW, rReps: rR, lWeight: lW, lReps: lR });
+    }
   }
   // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
   // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.

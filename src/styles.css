@@ -3080,6 +3080,34 @@ sup.wr-bw { font-size: 0.85em; }
   white-space: nowrap; margin-right: -4px;
 }
 .addm-set-chip .wo-af-wpre[hidden] { display: none; }
+/* Unilateral: a small R/L side label + a second (left) weight×reps pair, kept compact so the
+   line still fits one row (owner: "two entries for both arms, smaller"). */
+.addm-set-chip .wo-af-sidelbl { align-self: center; font-size: 0.7rem; font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }
+.addm-set-chip .wo-af-sidelbl[hidden] { display: none; }
+.addm-set-chip .wo-af-lside { display: inline-flex; align-items: flex-start; gap: 4px; }
+.addm-set-chip .wo-af-lside[hidden] { display: none; }
+.addm-set-chip .wo-af-weight-l, .addm-set-chip .wo-af-reps-l {
+  box-sizing: border-box; min-height: var(--tap-min); margin: 0;
+  border: 1px solid var(--line); background: var(--line); border-radius: 6px;
+  padding: 4px 6px; text-align: center; color: inherit; font-weight: 700;
+  -moz-appearance: textfield; appearance: textfield;
+}
+.addm-set-chip .wo-af-weight-l { width: 2.7rem; font-size: 0.95rem; }
+.addm-set-chip .wo-af-reps-l { width: 2.5rem; font-size: 0.8rem; color: var(--muted); margin-top: -3px; }
+.addm-set-chip .wo-af-weight-l::-webkit-outer-spin-button, .addm-set-chip .wo-af-weight-l::-webkit-inner-spin-button,
+.addm-set-chip .wo-af-reps-l::-webkit-outer-spin-button, .addm-set-chip .wo-af-reps-l::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.addm-set-chip .wo-af-weight-l::placeholder, .addm-set-chip .wo-af-reps-l::placeholder { color: var(--muted); font-weight: 600; opacity: 1; }
+.addm-set-chip .wo-af-weight-l:focus, .addm-set-chip .wo-af-reps-l:focus {
+  outline: none; border-color: var(--accent); background: var(--panel);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* Unilateral indicator next to the passive-tag palette (a STATE, not a tag → its own look). */
+.addm-uni-ind {
+  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
+  padding: 2px 8px; border: 1px solid var(--accent); border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
+  min-height: var(--tap-min); display: inline-flex; align-items: center;
+}
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
 .addm-vtag-strip:empty { display: none; }
