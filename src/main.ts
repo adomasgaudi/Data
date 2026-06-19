@@ -14041,6 +14041,30 @@ function exerciseInfoHtml(name: string): string {
   const combineHint = combinableGroupsForEx(name).map((g) => g.label).join(", ");
   const compareHint = comparableGroupsForEx(name).map((g) => g.label).join(", ");
 
+  // VARIATION TAGS (owner: "I should see not just ROM, but every single tag and how it affects
+  // the exercise, what options it has"). For a modelled lift, list every dimension and ALL its
+  // options with their difficulty ×factor (band shows the −kg assist), the default ★, the
+  // grayed/obvious levels muted, and each option's plain explanation. Empty for an unmodelled lift.
+  const varFam = familyOf(name);
+  const varDims = varFam ? AF_DIM_ORDER.filter((d) => FAMILIES[varFam]!.dims[d]) : [];
+  const variationsBody = varDims.map((dim) => {
+    const levels = famLevels(varFam!, dim);
+    const opts = Object.keys(levels).map((l) => {
+      const factor = dim === "band" ? (l === "none" ? "0kg" : `−${bandAssistKg(varFam!, l)}kg`) : `×${levels[l]}`;
+      const isDef = famDefaultLevel(varFam!, dim) === l;
+      const gray = isGray(varFam!, dim, l);
+      const hint = afLevelHint(dim, l);
+      return (
+        `<span class="ex-var-opt${isDef ? " is-default" : ""}${gray ? " is-gray" : ""}">` +
+        `<span class="ex-var-opt-name">${escapeHtml(afLevelText(dim, l, varFam!))}${isDef ? " ★" : ""}</span>` +
+        `<span class="ex-var-opt-f">${escapeHtml(factor)}</span>` +
+        (hint ? `<span class="ex-var-opt-hint">${escapeHtml(hint)}</span>` : "") +
+        `</span>`
+      );
+    }).join("");
+    return `<div class="ex-var-dimrow"><span class="ex-var-dimname">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><div class="ex-var-opts">${opts}</div></div>`;
+  }).join("");
+
   const rows = [
     codeShortRow,
     foldSection("disc", "Discipline", discHint, discChips),
@@ -14050,6 +14074,7 @@ function exerciseInfoHtml(name: string): string {
     compareChips ? foldSection("compare", "Comparable", compareHint, compareChips) : "",
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
+    variationsBody ? foldSection("variations", "Variation tags", `${varDims.length} tag${varDims.length === 1 ? "" : "s"} — tap to see options`, variationsBody) : "",
     item("Default ROM", romInput),
     item("Machine weight", mwInput),
     isAssistedMachine(name) ? item("Machine ÷", mmInput) : "",

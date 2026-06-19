@@ -3928,6 +3928,19 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-meta-fold[open] > .ex-meta-fold-sum::before { content: "▾"; }
 .ex-meta-fold-hint { color: var(--muted); font-size: 0.78rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ex-meta-fold[open] > .ex-meta-fold-sum > .ex-meta-fold-hint { display: none; }
+/* Variation-tags fold: each dimension (support, band, ROM…) as a row — its name, then every
+   option with its difficulty ×factor, a ★ on the default, grayed/obvious levels muted, and a
+   plain explanation. So the whole variation model of a lift is visible at a glance (owner). */
+.ex-var-dimrow { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; padding: 4px 0; border-top: 1px dashed var(--line); }
+.ex-var-dimrow:first-child { border-top: none; }
+.ex-var-dimname { flex: 0 0 100%; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
+.ex-var-opts { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.ex-var-opt { display: inline-flex; align-items: baseline; gap: 3px; font-size: 0.82rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--bg); }
+.ex-var-opt.is-default { border-color: var(--accent); }
+.ex-var-opt.is-gray { opacity: 0.55; } /* obvious/baseline (gray) levels read faded */
+.ex-var-opt-name { font-weight: 600; color: var(--text); }
+.ex-var-opt-f { font-size: 0.78em; color: var(--accent); font-weight: 700; }
+.ex-var-opt-hint { font-size: 0.72em; color: var(--muted); font-style: italic; }
 /* Editable spelling-merge sources: each spelling is a chip; folded ones carry a ✕ to
    split them out, split-out siblings are "＋ name" chips to merge back. */
 .ex-spell-wrap { display: flex; flex-direction: column; gap: 0.3rem; }
