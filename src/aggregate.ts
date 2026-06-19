@@ -987,16 +987,38 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
  * AI-NOTE: do not add merges here without explicit owner sign-off — silent
  * exercise merges inflate/confuse the leaderboards. Confirmed so far:
  *   - Stairs 4 → Stairs (source app renames on settings change)
+ *   - Lever Sup. → Lever Supination, Lever Pro. → Lever Pronation (2026-06-19,
+ *     owner): the source app's abbreviated spellings; fold into the full names
+ *     that carry the exercise metadata. Matched LOOSELY (casing / trailing dot).
  *   - Chin Ups: was folded → Pull Ups (2026-06-01); owner REVERSED it (2026-06-19) —
  *     keep Chin Ups a SEPARATE exercise, combined with Pull Ups only via the
  *     "Pull/Chin" combinable group (combine.pull-mix), like Smith Squat ↔ Squat.
  * NOTE: Smith Machine Squat is intentionally NOT aliased to Squat — the owner
  * wants them kept separate; they're combined only in the "Squat pattern"
  * scaling group (see EXERCISE_GROUPS), not folded at the data level.
+ *
+ * The RIGHT side is authoritative: it becomes the display name even when the
+ * abbreviated spelling is the more-logged one (canonicalizeExerciseNames forces
+ * it), so the merged exercise always keeps the full, metadata-bearing name.
  */
 const EXERCISE_NAME_ALIASES: Record<string, string> = {
   "Stairs 4": "Stairs",
+  "Lever Sup.": "Lever Supination",
+  "Lever Pro.": "Lever Pronation",
 };
+
+/**
+ * Loose lookup of the alias table so the logged spelling's casing or a trailing
+ * dot don't matter ("Lever Sup." == "Lever Sup" == "lever sup."). Returns the
+ * fold-into target, or undefined when the name isn't an alias.
+ */
+const looseAliasKey = (s: string): string => s.trim().toLowerCase().replace(/[.\s]+$/, "");
+const ALIAS_BY_LOOSE_KEY = new Map<string, string>(
+  Object.entries(EXERCISE_NAME_ALIASES).map(([raw, target]) => [looseAliasKey(raw), target]),
+);
+function aliasTarget(name: string): string | undefined {
+  return ALIAS_BY_LOOSE_KEY.get(looseAliasKey(name));
+}
 
 /**
  * Conservative "same exercise, just spelled differently" key. Folds together
@@ -1006,7 +1028,7 @@ const EXERCISE_NAME_ALIASES: Record<string, string> = {
  * table above.
  */
 export function sameExerciseKey(name: string): string {
-  const aliased = EXERCISE_NAME_ALIASES[name.trim()] ?? name;
+  const aliased = aliasTarget(name) ?? name;
   return aliased
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ") // punctuation/dashes → space
@@ -1051,7 +1073,10 @@ export function canonicalizeExerciseNames(records: readonly SetRecord[]): {
   for (const byName of clusters.values()) {
     // Most-logged spelling wins; ties broken alphabetically for determinism.
     const sorted = [...byName.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-    const display = sorted[0]![0];
+    // An explicit alias TARGET overrides the most-logged heuristic, so a merged
+    // lift always keeps its full, metadata-bearing name even when an abbreviated
+    // spelling has more logged sets (e.g. "Lever Sup." → "Lever Supination").
+    const display = sorted.map(([n]) => aliasTarget(n)).find((t): t is string => !!t) ?? sorted[0]![0];
     for (const [name] of sorted) canonical.set(name, display);
     if (sorted.length > 1)
       merges.push({

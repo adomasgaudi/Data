@@ -186,6 +186,14 @@ describe("sameExerciseKey", () => {
     expect(sameExerciseKey("Low wall climb 1")).not.toBe(sameExerciseKey("Low wall climb 2"));
     expect(sameExerciseKey("Stairs 4")).toBe(sameExerciseKey("Stairs")); // explicit alias
   });
+
+  it("folds the abbreviated Lever spellings into the full names (loose: casing / trailing dot)", () => {
+    expect(sameExerciseKey("Lever Sup.")).toBe(sameExerciseKey("Lever Supination"));
+    expect(sameExerciseKey("lever sup")).toBe(sameExerciseKey("Lever Supination"));
+    expect(sameExerciseKey("Lever Pro.")).toBe(sameExerciseKey("Lever Pronation"));
+    // a different lever lift must NOT get swept in
+    expect(sameExerciseKey("Lever Abduction")).not.toBe(sameExerciseKey("Lever Supination"));
+  });
 });
 
 describe("canonicalizeExerciseNames", () => {
@@ -219,6 +227,17 @@ describe("canonicalizeExerciseNames", () => {
     const { records } = canonicalizeExerciseNames(recs);
     expect(records.every((r) => r.exerciseName === "Stairs")).toBe(true);
     expect(records.find((r) => r.originalExerciseName === "Stairs 4")).toBeTruthy();
+  });
+
+  it("renames the abbreviated Lever spelling to the full name even when it's more logged", () => {
+    const recs = [
+      rec({ exerciseName: "Lever Sup." }),
+      rec({ exerciseName: "Lever Sup." }),
+      rec({ exerciseName: "Lever Supination" }), // fewer sets, but the full name must win
+    ];
+    const { records } = canonicalizeExerciseNames(recs);
+    expect(records.every((r) => r.exerciseName === "Lever Supination")).toBe(true);
+    expect(records.find((r) => r.originalExerciseName === "Lever Sup.")).toBeTruthy();
   });
 
   it("keeps Chin Ups SEPARATE from Pull Ups (owner reversed: standalone + only combined via the Pull/Chin group)", () => {
