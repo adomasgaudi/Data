@@ -10452,7 +10452,18 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
     ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
   });
   const entryId = manualEntries[manualEntries.length - 1]!.id;
-  if (srcRom) setSetRom(`${username}|${exerciseName}|${src.date}|${100000 + manualEntries.length - 1}`, { ...srcRom });
+  // The new set must carry the SOURCE set's variation TAGS (owner: "+ Add set should copy all the
+  // tags the set I copied from had" — it was logging a tagless set). The weight/reps come from the
+  // ruler, but every per-set variation transfers: the picked-tag vec (__set:<id>), any non-SQ
+  // level (smith/cm), the difficulty scale, and ROM. Mirrors duplicateSetFromId's faithful copy.
+  const newId = `${username}|${exerciseName}|${src.date}|${100000 + manualEntries.length - 1}`;
+  const srcVec = variationVecOverrides[variationKey(exerciseName, `__set:${setId(src)}`)];
+  if (srcVec && Object.keys(srcVec).length) { variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)] = { ...srcVec }; saveVariationVecs(); }
+  const a = applySetOverride(src); // effective level (covers a per-set level override)
+  if (a.levelDim && a.levelDim !== "sq" && a.levelValue !== undefined) setSetOverrideLevel(newId, a.levelDim, a.levelValue);
+  const srcScale = setOverrides[setId(src)]?.scale;
+  if (srcScale != null && srcScale !== 1) setSetOverrideField(newId, "scale", srcScale);
+  if (srcRom) setSetRom(newId, { ...srcRom });
   saveManual();
   mergeManualSets();
   const refresh = () => {
@@ -10466,6 +10477,8 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
   refresh();
   showToast(`Added ${displayName(exerciseName)} set (${reps}×${fmt(weight)})`, "Undo", () => {
     manualEntries = manualEntries.filter((e) => e.id !== entryId);
+    delete setOverrides[newId]; saveSetOverrides();
+    if (variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)]) { delete variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)]; saveVariationVecs(); }
     saveManual();
     mergeManualSets();
     refresh();
