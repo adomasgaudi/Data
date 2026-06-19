@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-46 — Editing a set opens the OLD pills-only popover, not the full add menu
+
+- **First seen / reported:** recurring across many sessions; owner #persistent #debug 2026-06-19 (Handstand kicks, collapsed set → ✎). "Editing a set should open the SAME full menu as adding — weight, reps, note, tags, cog, proper CSS — not the old variation-pills popover with old CSS."
+- **The recurrence:** the unify-edit-into-add work was done PARTIALLY several times (the inline set-edit CARD got the same select picker; the set-action menu got an `edit` action that opened openAddModal). But it never fully landed: in the set-action menu the PENCIL (✎) was wired to `act:"variant"` → `openVariantFromAttrs` → `openScaleEditor` (the OLD `#scaleEditPop` pills popover), while the `edit` action sat on the ⚙ icon AND only prefilled weight/reps (no tags) AND created a NEW set on save instead of editing. So the owner kept tapping the pencil and getting the old menu.
+- **Root cause:** two parallel editors (old scaleEditor popover + new add modal) and the edit ENTRY POINT (the ✎) still pointed at the old one; the new path was incomplete (no tag prefill, no in-place save).
+- **Fix (b.2.9.231, WO-252):** ONE editor. The set-action ✎ now opens openAddModal in a real EDIT mode (`edit: {sid, note, rawNote}`). It prefills the set's note + every variation tag (from `{...rNote(fam,note).vec, ...noteVecOverride}`), incline (setOverrides[sid].levelDim/Value), ROM (setOverrides[sid].rom) and RIR; relabels Add→Save; drops +set/Suggested; and onInlineAddGo branches to `applySetEdit(form)` which UPDATES the set's per-set overrides in place (setSetOverrideField/Note, setNoteVecDim on the set's note key, setSetOverrideLevel, setSetRom, setRpe) instead of creating entries. The old `variant`/scaleEditor path is removed from the set menu.
+- **Watch:** when "unifying" two UIs, the recurrence comes from leaving the OLD one reachable from the primary entry point. Repoint the entry (the ✎) AND make the new path complete (prefill ALL fields + save back), or the owner lands on the old one again. The add path's per-set setters are the SSOT — the edit path must reuse them with the existing id, never a parallel write.
+- **Recurrences:** several partial attempts before this full landing.
+
+---
+
 ## PB-45 — Workout history re-sorts (jumps) when you delete a set in an expanded day
 
 - **First seen / reported:** 2026-06-18, mobile, Athlete → Workouts, day expanded. Owner: "if I delete a set the exercises (sorted by most sets) reshuffle and another jumps to the top; it should wait until I close the expanded view, then resort." Recurrence 1 (the b.2.9.220 fix did not hold).

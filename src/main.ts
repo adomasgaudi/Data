@@ -10053,13 +10053,20 @@ function handleSetAct(item: HTMLElement): void {
     deleteSetsWithUndo([sid], src ? displayName(src.exerciseName) : "set");
     return;
   }
-  if (act === "edit") {
-    // Open the NEW add/edit sheet — identical to the + set / + exercise menu (tags, RIR, machine,
-    // variation pickers) — prefilled with this set's weight/reps, replacing the OLD expanded per-set
-    // editor (owner: "this is an old menu, replace it with the new one").
+  if (act === "edit" || act === "variant") {
+    // Open the FULL add/edit sheet in EDIT mode (owner #persistent: "editing a set should open the
+    // SAME menu as adding — weight, reps, note, TAGS, cog, proper CSS — not the old pills popover").
+    // Prefilled with this set's values; Save updates the set in place. Replaces the old scaleEditor.
     const src = liveRecords().find((r) => setId(r) === sid);
     if (!src) return;
-    openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) });
+    const btn = document.querySelector<HTMLElement>(`.wo-set-menu[data-setmenu="${CSS.escape(sid)}"]`);
+    const note = btn?.dataset.scaleeditNote ?? `__set:${sid}`;
+    const rawNote = btn?.dataset.scaleeditRawnote ?? (src.notes ?? "");
+    openAddModal(
+      src.originalExerciseName ?? src.exerciseName, src.date,
+      { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) },
+      { sid, note, rawNote },
+    );
     return;
   }
   if (act === "ruleredit") {
@@ -10123,7 +10130,6 @@ function rulerHtml(kind: string, min: number, step: number, count: number, curId
 function openSetActionMenu(anchor: HTMLElement): void {
   closeSetActionMenu();
   const sid = anchor.dataset.setmenu!;
-  const hasVar = anchor.dataset.scaleeditEx !== undefined;
   const src = liveRecords().find((r) => setId(r) === sid);
   const curReps = Math.max(1, Math.round(src?.reps ?? 1));
   const w = src?.weight ?? 0;
@@ -10148,8 +10154,7 @@ function openSetActionMenu(anchor: HTMLElement): void {
   // No Duplicate button (owner): "+ Add set" with unchanged values already duplicates the set.
   menu.innerHTML =
     `<div class="set-act-icons">` +
-    (hasVar ? ico("variant", "✎", "Change variant") : "") +
-    ico("edit", "⚙", "Open the full add menu (tags, RIR…) for this lift") +
+    ico("edit", "✎", "Edit this set — the full menu (weight, reps, tags, note, RIR…)") +
     ico("del", "✕", "Delete set", " set-act-ico--del") +
     `</div>` +
     `<div class="set-act-sec">Change reps / weight, then edit this set or add a new one</div>` +
@@ -19041,6 +19046,8 @@ function syncPendingFromModal(): void {
   syncAddmVtags(form);
   syncAddmReal(form);
   syncAddmRir(form);
+  // Editing an existing set shows no "pending add" ghost (it's an in-place edit, not a new set).
+  if (form.dataset.editsid) { pendingAdd = null; refreshGhost(); return; }
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
   const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
@@ -19376,8 +19383,9 @@ function closeAddModal(): void {
   if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); window.scrollTo(0, y); } } // drop the ghost
 }
 /** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
-function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }): void {
+function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }, edit?: { sid: string; note: string; rawNote: string }): void {
   closeAddModal();
+  const isEdit = !!edit;
   const isNew = !exerciseName;
   const ex = exerciseName ?? "";
   const today = todayIso();
@@ -19435,8 +19443,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
   const wrap = document.createElement("div");
   wrap.className = "addm-overlay";
   wrap.innerHTML =
-    `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isNew ? "Add an exercise" : "Add a set"}">` +
-    `<div class="addm-head"><span class="addm-title">${isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
+    `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isEdit ? "Edit a set" : isNew ? "Add an exercise" : "Add a set"}">` +
+    `<div class="addm-head"><span class="addm-title">${isEdit ? `Edit set — ${escapeHtml(displayName(ex))}` : isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
     // PB-43 diagnostic: stamp the LOADED build into the modal so a screenshot of it self-
     // identifies its version — the weight/reps box has been re-styled 6× and the owner kept
     // screenshotting a STALE cached build, so AIs chased a box that was already changed.
@@ -19451,6 +19459,61 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
     setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
     setv(".wo-af-reps", String(prefill.reps));
+  }
+  // EDIT MODE (owner #persistent: "editing a set should open the SAME full add menu — weight,
+  // reps, note, tags, cog, proper CSS — not the old pills popover"). Prefill the ONE set's note +
+  // every variation tag/incline/ROM from its current values, mark the form so onInlineAddGo
+  // UPDATES this set instead of creating a new one, relabel Add→Save, and drop the add-only
+  // bits (+ set / Suggested). PB-46.
+  if (isEdit && edit) {
+    const formEl = wrap.querySelector<HTMLElement>(".wo-addform");
+    if (formEl) {
+      formEl.dataset.editsid = edit.sid;
+      formEl.dataset.editnote = edit.note;
+      formEl.dataset.editorignote = edit.rawNote;
+    }
+    // Free-text note = the set's RAW note (not the synthetic __set: key or auto tags).
+    const noteEl = wrap.querySelector<HTMLInputElement>(".wo-af-note");
+    if (noteEl) noteEl.value = edit.rawNote;
+    // Pre-select every variation pill to the set's EFFECTIVE vec (what its note implies + per-set
+    // picks). Set the <select> value BEFORE the body MutationObserver enhances it into an .xdd
+    // twin — the twin then renders the chosen level, and the rAF syncAddmVtags colours it.
+    const fam = familyOf(ex);
+    if (fam) {
+      const effVec = { ...rNote(fam, edit.note).vec, ...noteVecOverride(ex, edit.note) };
+      for (const sel of wrap.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+        const v = effVec[sel.dataset.dim!];
+        if (v != null && Array.from(sel.options).some((o) => o.value === String(v))) sel.value = String(v);
+      }
+    }
+    // Incline pill ← the set's per-set level (cm/SQ/Smith).
+    const lvl = setOverrides[edit.sid];
+    const incPill = wrap.querySelector<HTMLElement>(".wo-af-incpill");
+    if (incPill && lvl?.levelDim && lvl.levelValue !== undefined) {
+      incPill.dataset.incdim = lvl.levelDim;
+      incPill.dataset.incval = String(lvl.levelValue);
+      incPill.textContent = `↕ ${inclinePillLabel(lvl.levelDim, lvl.levelValue)}`;
+      incPill.classList.toggle("is-set", levelCm(lvl.levelDim, lvl.levelValue) !== 0);
+    }
+    // ROM pill ← the set's stored ROM override (unit + value + reference).
+    const rom = setOverrides[edit.sid]?.rom;
+    const romPill = wrap.querySelector<HTMLElement>(".wo-af-rompill");
+    if (romPill && rom) {
+      romPill.dataset.romunit = rom.unit;
+      romPill.dataset.romval = String(rom.val);
+      romPill.dataset.romref = rom.ref ?? "";
+      romPill.textContent = romPillLabel(rom.unit, rom.val);
+    }
+    // RIR pill ← the set's grade, if any.
+    const grade = rpeGrades[edit.sid];
+    const rirPill = wrap.querySelector<HTMLElement>(".addm-rir");
+    if (rirPill && grade) rirPill.dataset.picked = grade;
+    // Add-only bits make no sense when editing ONE set.
+    wrap.querySelector<HTMLElement>(".wo-af-addline")?.remove();
+    wrap.querySelector<HTMLElement>(".addm-sugg")?.remove();
+    // Add → Save.
+    const go = wrap.querySelector<HTMLElement>(".wo-af-go");
+    if (go) go.textContent = "Save";
   }
   wrap.addEventListener("click", onAddModalClick);
   // Live ghost preview: every input/change/click in the popup re-derives the pending set(s)
@@ -19720,7 +19783,60 @@ function toggleInlineAddExerciseForm(btn: HTMLElement) {
 
 /** Log the set(s) from an inline form into the hand-logged sets, then refresh
  * the Workouts view in place (keeping the open weeks/days expanded). */
+/** Save an EDIT of one existing set (PB-46): the add-modal form opened in edit mode UPDATES the
+ * set's per-set overrides in place — weight/reps, the free note, every variation tag, incline,
+ * ROM and RIR — then re-renders and closes. Reuses the exact per-set setters the add path uses. */
+function applySetEdit(form: HTMLElement): boolean {
+  const sid = form.dataset.editsid!;
+  const ex = form.dataset.addex ?? "";
+  const editNote = form.dataset.editnote || `__set:${sid}`;
+  const origNote = form.dataset.editorignote ?? "";
+  const ln = form.querySelector<HTMLElement>(".addm-line") ?? form;
+  const wTxt = ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value.trim() ?? "";
+  const rTxt = ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value.trim() ?? "";
+  const w = wTxt === "" ? null : parseFloat(wTxt);
+  const r = rTxt === "" ? null : Math.round(parseFloat(rTxt));
+  setSetOverrideField(sid, "weight", w !== null && Number.isFinite(w) ? w : null);
+  setSetOverrideField(sid, "reps", r !== null && Number.isFinite(r) ? r : null);
+  setSetOverrideNote(sid, form.querySelector<HTMLInputElement>(".wo-af-note")?.value ?? "", origNote);
+  // Tags: write EVERY dim's chosen level to the set's vec, so a change back to default also applies.
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    if (s.dataset.dim) setNoteVecDim(ex, editNote, s.dataset.dim, s.value);
+  }
+  // Incline (cm/SQ/Smith) — floor (0cm) clears it.
+  const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (incPill && isInclineLevelExercise(ex)) {
+    const dim = incPill.dataset.incdim as LevelDim;
+    const val = Number(incPill.dataset.incval);
+    setSetOverrideLevel(sid, dim, Number.isFinite(val) && levelCm(dim, val) !== 0 ? val : null);
+  }
+  // ROM — read the pill exactly like onInlineAddGo; cleared at the default.
+  const romPill = ln.querySelector<HTMLElement>(".wo-af-rompill");
+  if (romPill) {
+    const unit = romPill.dataset.romunit === "cm" ? "cm" : "pct";
+    const v = parseFloat(romPill.dataset.romval ?? "");
+    const romDef = parseInt(romPill.dataset.romdefault ?? "", 10);
+    let rom: { unit: "pct" | "cm"; val: number; ref?: string } | null = null;
+    if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); rom = ref ? { unit, val: v, ref } : { unit, val: v }; } }
+    else if (Number.isFinite(v) && v !== romDef) rom = { unit: "pct", val: v };
+    setSetRom(sid, rom);
+  }
+  const rir = ln.querySelector<HTMLElement>(".addm-rir")?.dataset.picked || "";
+  if (rir) setRpe(sid, rir);
+  closeAddModal();
+  const y = window.scrollY;
+  renderAll();
+  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+  refreshExerciseInfo();
+  window.scrollTo(0, y);
+  return true;
+}
 function onInlineAddGo(form: HTMLElement): boolean {
+  // EDIT MODE (PB-46): the form is editing ONE existing set — UPDATE its per-set overrides in
+  // place (weight, reps, note, tags, incline, ROM, RIR) instead of creating new entries, using
+  // the SAME setters the add path uses but on the set's existing id.
+  if (form.dataset.editsid) return applySetEdit(form);
   // New-exercise form carries a search input; the per-exercise form carries the
   // name on the button's data-addex.
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
