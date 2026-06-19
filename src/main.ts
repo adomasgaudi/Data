@@ -18943,7 +18943,12 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
     const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
     let cur: string;
     if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
-    else { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
+    // ADD path: an ACTIVE tag (promoted, or a meaningful non-gray default like b2w) pre-selects
+    // your most-used recent level; a PASSIVE tag sits at its DEFAULT so it stays hidden AND is
+    // never recorded on the set until you ＋add it from the palette (owner: a passive tag must
+    // not appear next to the weight).
+    else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
+    else cur = dflt;
     // For the leverage knobs (lever / reach) show the torque factor in each option
     // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
     const showFactor = dim === "lever" || dim === "reach";
@@ -19110,10 +19115,13 @@ function syncAddmVtags(form: HTMLElement): void {
     const fam = ex ? familyOf(ex) : null;
     const dim = sel.dataset.dim ?? "";
     const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? "");
-    const promoted = ex && dim ? isPassivePromoted(ex, dim) : false;
+    // A PASSIVE tag (＋, not ✓, in the palette) must NEVER show next to the weight (owner) — so
+    // visibility keys off the SAME tagActive() the palette uses, not the pill's value. The
+    // exception is a set that actually CARRIES a non-default tag (edit path) — kept via `!gray`.
+    const active = ex && dim ? tagActive(ex, fam, dim) : false;
     // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
     sel.classList.toggle("is-set", !gray);
-    sel.closest<HTMLElement>(".addm-vtag")?.classList.toggle("addm-vtag--off", gray && !promoted);
+    sel.closest<HTMLElement>(".addm-vtag")?.classList.toggle("addm-vtag--off", !active && gray);
   }
 }
 
@@ -19499,8 +19507,10 @@ function addmVariantField(ex: string): string {
 }
 /** Is a tag ACTIVE (shown inline next to the weight) for this exercise — i.e. the owner has
  * promoted it, OR it's a dim whose DEFAULT level is meaningful (non-gray, e.g. back-to-wall)?
- * A gray-default dim (the obvious baseline) stays passive until promoted. */
-function paletteTagActive(ex: string, fam: string | null, id: string): boolean {
+ * A gray-default dim (the obvious baseline) stays PASSIVE until promoted, and a passive tag is
+ * NEVER shown next to the weight (owner). The SINGLE source of truth for both the palette ✓/＋
+ * and the inline pill's visibility, so they can't disagree. */
+function tagActive(ex: string, fam: string | null, id: string): boolean {
   if (isPassivePromoted(ex, id)) return true;
   if (id === "rom") return false; // ROM has no "meaningful default" — passive until ＋added
   return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
@@ -19518,7 +19528,7 @@ function passivePaletteHtml(ex: string): string {
   if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
   tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   const pills = tags.map((t) => {
-    const on = paletteTagActive(ex, fam, t.id);
+    const on = tagActive(ex, fam, t.id);
     return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
   }).join("");
   return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
@@ -19907,13 +19917,25 @@ function onAddModalClick(e: MouseEvent): void {
   if (passBtn?.dataset.passive) {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
     if (ex) {
-      togglePassivePromoted(ex, passBtn.dataset.passive);
-      if (passBtn.dataset.passive === "rom") {
+      const id = passBtn.dataset.passive;
+      togglePassivePromoted(ex, id);
+      if (id === "rom") {
         const on = isPassivePromoted(ex, "rom");
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
           if (on && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
           else if (!on && existing) existing.closest(".addm-vtag")?.remove();
+        }
+      } else {
+        // Promoting a dim seeds its pill with your most-used level (ready to record); DEMOTING
+        // resets it to the default, so the now-hidden tag records nothing on the set. Dispatch a
+        // change so the xdd twin re-renders its label.
+        const fam = familyOf(ex);
+        if (fam) {
+          const dflt = famDefaultLevel(fam, id);
+          const val = tagActive(ex, fam, id) ? frequentLevelFor(ex, fam, id, dflt) : dflt;
+          for (const sel of form.querySelectorAll<HTMLSelectElement>(`.addm-line-vars .wo-af-dim[data-dim="${CSS.escape(id)}"]`))
+            if ([...sel.options].some((o) => o.value === val)) { sel.value = val; sel.dispatchEvent(new Event("change", { bubbles: true })); }
         }
       }
       const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");

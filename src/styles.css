@@ -3013,7 +3013,9 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform--modal .addm-inputs input { width: 100%; min-width: 0; }
 /* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
 .addm-lines { display: flex; flex-direction: column; gap: 0.6rem; }
-.addm-line { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
+/* wrap so the weight/reps group drops to its OWN line below the tags rather than running off the
+   right edge when a lift carries many tags (owner: "going out of bounds"). */
+.addm-line { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
 /* A faint dashed divider between sets so it's clear which tags belong to which set (owner). */
 .addm-lines > .addm-line + .addm-line { border-top: 1px dashed var(--line); padding-top: 0.6rem; }
 .addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; margin-left: auto; }
