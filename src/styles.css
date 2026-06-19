@@ -2523,7 +2523,9 @@ select.subtle-select:hover, select.subtle-select:focus {
 .rm-frac .rm-num { border-bottom: 1px solid currentColor; padding: 0 0.3rem; }
 .rm-frac .rm-den { padding: 0 0.3rem; }
 /* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
-.wo-var-chips { display: inline-flex; flex-wrap: wrap; gap: 3px; margin-right: 4px; vertical-align: middle; }
+/* Tags wrap into tight rows (owner: they're short vertically but wide horizontally, so stack
+   them close — two rows beat one long horizontal run). Tight row-gap, normal column-gap. */
+.wo-var-chips { display: inline-flex; flex-wrap: wrap; align-content: flex-start; gap: 1px 3px; margin-right: 4px; vertical-align: middle; }
 .wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; }
 .wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
 .wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }

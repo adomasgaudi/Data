@@ -7945,21 +7945,33 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>)
   if (!fam) return "";
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
-  // A GRAY level (the obvious baseline, or an owner 👁 override) is "just the exercise" and
-  // never a history chip; a meaningful value (incl. a non-baseline default like b2w) shows.
-  const sup = vec.support != null ? String(vec.support) : null;
-  if (sup && !isGray(fam, "support", sup)) push(" wo-var-sup", afLevelText("support", sup, fam));
-  const pos = vec.position != null ? String(vec.position) : null;
-  if (pos && !isGray(fam, "position", pos)) push("", afLevelText("position", pos, fam));
-  if (vec.band != null && !isGray(fam, "band", String(vec.band))) push(" wo-var-band", `band ${String(vec.band)}`);
-  if (vec.lean != null && !isGray(fam, "lean", String(vec.lean))) push("", `lean ${String(vec.lean)}`);
+  // Render EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
+  // show, not just support/band). A GRAY level (the obvious baseline, or an owner 👁 override) is
+  // "just the exercise" and never a chip. The family "rom" depth dim is skipped — range is the
+  // universal ROM chip's job (rendered separately), so it never double-shows.
+  for (const dim of AF_DIM_ORDER) {
+    if (dim === "rom") continue;
+    const v = vec[dim] != null ? String(vec[dim]) : null;
+    if (!v || isGray(fam, dim, v)) continue;
+    const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
+    const txt = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
+    push(cls, txt);
+  }
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
 }
 function variationChipsHtml(r: SetRecord): string {
   const fam = familyOf(r.exerciseName);
+  if (!fam) return "";
+  // Picked tags on a model-lift set live under the per-set `__set:<id>` key — whether the set is
+  // NOTELESS or also carries a user note. A typed note may ALSO imply a vec. Merge both so every
+  // picked tag shows (the bug: keying only off r.notes hid all tags on a noteless set, e.g. a
+  // forearm-support pick that never wrote a note).
   const note = (r.notes ?? "").trim();
-  if (!fam || !note) return "";
-  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const vec = {
+    ...(note ? { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) } : {}),
+    ...noteVecOverride(r.exerciseName, `__set:${setId(r)}`),
+  };
+  if (Object.keys(vec).length === 0) return "";
   return variationChipsFromVec(fam, vec);
 }
 
