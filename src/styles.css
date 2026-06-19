@@ -3073,6 +3073,13 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-real sup { font-size: 0.66em; vertical-align: super; line-height: 0; font-weight: 700; }
 .addm-real[hidden] { display: none; }
+/* Machine-base "N+" prefix glued to the LEFT of the weight box, so it reads "10+<weight>"
+   (owner: see the machine weight even before dialing one). Accent, aligned to the box. */
+.addm-set-chip .wo-af-wpre {
+  align-self: center; font-size: 1.05rem; font-weight: 700; color: var(--accent);
+  white-space: nowrap; margin-right: -4px;
+}
+.addm-set-chip .wo-af-wpre[hidden] { display: none; }
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
 .addm-vtag-strip:empty { display: none; }

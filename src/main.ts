@@ -18879,6 +18879,7 @@ function afLine(ex: string): string {
     `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
     `<div class="addm-line-main">` +
     `<div class="addm-set-chip">` +
+    `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
     `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
     `<span class="addm-real" aria-hidden="true" hidden></span>` +
@@ -19248,19 +19249,26 @@ function syncAddmReal(form: HTMLElement): void {
   const eq = ex ? equipSettingsCurrent(ex) : null;
   for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
     const out = ln.querySelector<HTMLElement>(".addm-real");
+    const pre = ln.querySelector<HTMLElement>(".wo-af-wpre");
     if (!out) continue;
     const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
     const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
     const repsSup = reps === null ? "" : `<sup>${reps}</sup>`;
-    let formula = "";
-    if (eq && eq.assisted && w !== null && w < 0) {
-      // Assisted machine: the dialed counterweight over-reads by the divisor → shown as dial/divisor.
-      formula = `${fmt(w)}/${fmt(eq.divisor)}${repsSup}`;
-    } else if (eq && eq.kgBase > 0 && w !== null) {
-      // Machine base weight: a hidden resistance added to the dial → shown as base+dial (like the history).
-      formula = `${fmt(eq.kgBase)}+${fmt(w)}${repsSup}`;
+    // Machine base weight → a persistent "N+" prefix glued to the LEFT of the weight box, shown
+    // ALWAYS (even before a weight is dialed) so the box reads "10+<weight>" like the history
+    // (owner: "if it has a machine weight I should see it even before adding weight, 10+ then the weight").
+    if (pre) {
+      if (eq && eq.kgBase > 0) { pre.textContent = `${fmt(eq.kgBase)}+`; pre.removeAttribute("hidden"); }
+      else { pre.textContent = ""; pre.setAttribute("hidden", ""); }
     }
-    if (formula) { out.innerHTML = `= ${formula}`; out.removeAttribute("hidden"); }
+    // Assisted machine (the ÷ multiplier): the dialed counterweight over-reads by the divisor.
+    // Show "÷N" before a weight is dialed, then the full "dial/N" once it is.
+    let formula = "";
+    if (eq && eq.assisted) {
+      if (w !== null && w < 0) formula = `= ${fmt(w)}/${fmt(eq.divisor)}${repsSup}`;
+      else if (w === null) formula = `÷${fmt(eq.divisor)}`;
+    }
+    if (formula) { out.innerHTML = formula; out.removeAttribute("hidden"); }
     else { out.textContent = ""; out.setAttribute("hidden", ""); }
   }
 }
