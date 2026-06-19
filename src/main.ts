@@ -8015,7 +8015,7 @@ function jumpToWorkoutDate(iso: string): boolean {
   // fold) so the jumped-to row is actually visible, then expand + flash it.
   for (let el: HTMLElement | null = row; el; el = el.parentElement)
     if (el instanceof HTMLDetailsElement) el.open = true;
-  insertDetail(row, 2, workoutGroupHtml(grp)); // expand it like a tap would
+  insertDetail(row, 1, workoutGroupHtml(grp)); // expand it like a tap would
   row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
@@ -8559,12 +8559,12 @@ function renderWorkoutsPage() {
         if (g.gap) {
           // A collapsed run of empty days: a broken-axis break showing how many
           // rest days were skipped between the slivers above and below.
-          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
+          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
         }
         // A rest day is just a thin sliver with a separating line — count the
         // lines between sessions to see how many days passed, no text needed. In
         // compact mode (.is-compact) the sliver shrinks to a ~3px hairline.
-        return `<tr class="rest-row${S.restCompact ? " is-compact" : ""}" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
+        return `<tr class="rest-row${S.restCompact ? " is-compact" : ""}" title="${escapeHtml(g.label)} — rest"><td></td></tr>`;
       }
       const abs = start + i;
       // One exercise's compact line (1RM · name · sets), reused for the day's active
@@ -8675,8 +8675,7 @@ function renderWorkoutsPage() {
       return (
         `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
         `<div class="wo-date">${yearMark}<span class="caret">▸</span><span class="wo-rel">${escapeHtml(dp.rel)}</span> <span class="wo-md">${escapeHtml(dp.md)}</span><span class="wo-year"> ${escapeHtml(dp.year)}</span>${tagBtn}</div>` +
-        `<div class="wo-did">${did}${addExBtn}</div></td>` +
-        `<td class="num">${g.totalSets}</td></tr>`
+        `<div class="wo-did">${did}${addExBtn}</div></td></tr>`
       );
     })
     .join("");
@@ -8686,10 +8685,10 @@ function renderWorkoutsPage() {
   // first page, and only when today has no session yet (else that day's own "+ exercise" covers it).
   const todayHasSession = workoutGroups.some((g) => !g.rest && g.date === todayIso());
   const addTodayRow = (showAddSetsNow() && S.workoutsPage === 0 && !byWeek && !historyByExercise && !todayHasSession)
-    ? `<tr class="wo-addtoday-row"><td colspan="2"><button type="button" class="wo-addex wo-addtoday" data-adddate="${escapeHtml(todayIso())}" title="Log an exercise for today">+ exercise today</button></td></tr>`
+    ? `<tr class="wo-addtoday-row"><td><button type="button" class="wo-addex wo-addtoday" data-adddate="${escapeHtml(todayIso())}" title="Log an exercise for today">+ exercise today</button></td></tr>`
     : "";
   els.workoutsTable.innerHTML =
-    head + `<tbody>${addTodayRow}${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${addTodayRow}${rows || `<tr><td class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
   if (openDates.size) reopenWorkoutGroups(openDates); // re-expand the days that were open BEFORE reopenSetEdit, so the set editor inside one can re-anchor (rule 24 / PB-12)
@@ -9015,7 +9014,7 @@ function onWorkoutRowClick(e: MouseEvent) {
   }
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
-  insertDetail(row, 2, workoutGroupHtml(grp));
+  insertDetail(row, 1, workoutGroupHtml(grp));
 }
 
 /** One exercise's expanded sub-table rows (header + each set, newest-first),
@@ -20796,7 +20795,7 @@ function reopenWorkoutGroups(dates: Set<string>) {
   for (const row of document.querySelectorAll<HTMLTableRowElement>("tr.wo-row")) {
     if (row.classList.contains("open")) continue;
     const grp = workoutGroups[Number(row.dataset.index)];
-    if (grp && dates.has(grp.date)) insertDetail(row, 2, workoutGroupHtml(grp));
+    if (grp && dates.has(grp.date)) insertDetail(row, 1, workoutGroupHtml(grp));
   }
 }
 
