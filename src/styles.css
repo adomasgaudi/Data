@@ -3749,8 +3749,14 @@ body.view-s2 .wa-sel-group { display: none; }
 /* Menu hugs the cell width and wraps long descriptions instead of going wide.
    The RIR picker is the rightmost column, so anchor the menu to the cell's RIGHT
    edge (it grows leftward) — left-anchored it overflowed off the screen. */
-.xdd-rpe .xdd-menu { min-width: max(100%, 13rem); max-width: min(15rem, 92vw); left: auto; right: 0; }
-.xdd-rpe .set-rpe-opt { white-space: normal; line-height: 1.25; padding: 6px 9px; font-size: 0.78rem; }
+/* Snug to the option text (owner: no big empty space to the right) — content width, not a fixed
+   13rem; still capped so a long label can't run off-screen, and right-anchored. */
+.xdd-rpe .xdd-menu { min-width: max-content; width: max-content; max-width: min(14rem, 92vw); left: auto; right: 0; }
+/* Each RIR option stacks the descriptive label over the tiny gray actual-range. */
+.xdd-rpe .set-rpe-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 0; white-space: nowrap; line-height: 1.15; padding: 5px 10px; font-size: 0.82rem; }
+.xdd-rpe .rpe-opt-lbl { font-weight: 600; }
+.xdd-rpe .rpe-opt-sub { font-size: 0.62rem; color: var(--muted); font-weight: 400; }
+.xdd-rpe .set-rpe-opt.is-active .rpe-opt-sub { color: inherit; opacity: 0.8; }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
 /* The short code shown beside the full exercise name in the Index list. */

@@ -2107,46 +2107,67 @@ function saveAlone() {
 // string like "0.5-1.3"), not a single number, because the owner grades how it
 // FELT and that maps to a band, not an exact rep count.
 //
-// RIR ladder — the single source of truth. `id` is the stored value and also
-// the range shown in the cell; `word` is a one-word feel for the closed picker
-// button; `desc` is the full plain-language feel shown in the open list. Bands
-// run hardest (almost no reps left) → easiest (many reps in reserve).
-// Contiguous, non-overlapping.
-const RIR_BANDS: ReadonlyArray<{ id: string; word: string; desc: string }> = [
-  { id: "0.3–0.5", word: "brutal", desc: "extremely difficult — trained person, 2–4s grind" },
-  { id: "0.5–1.3", word: "difficult", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
-  { id: "1.3–1.5", word: "very hard", desc: "maybe one more rep, but very hard" },
-  { id: "1.5–1.8", word: "hard", desc: "could do another rep, but hard" },
-  { id: "1.8–2.5", word: "1–2 left", desc: "1 RIR for sure, maybe 2" },
-  { id: "2.5–4.5", word: "2–3 left", desc: "2–3 reps in reserve" },
-  { id: "4–8", word: "easy", desc: "4–8 reps in reserve" },
-  { id: "8–15", word: "very easy", desc: "8–15 reps in reserve" },
-  { id: "15–30", word: "light", desc: "15–30 reps in reserve" },
-  { id: "30–100", word: "warm-up", desc: "30–100 reps in reserve (warm-up light)" },
+// RIR ladder — the single source of truth. `id` is the stored value (a range
+// string like "2.8–4.8"); `label` is the descriptive feel shown BIG in the picker
+// (and on the closed pill); `sub` is the actual rep-range shown tiny + gray under
+// the label (omitted when the label already IS the range); `lo`/`hi` bound the
+// range; `rep` is the representative RIR used in every calculation. The scale is
+// LOGARITHMIC, so `rep` is the GEOMETRIC mean of lo..hi (owner) — except the
+// hardest band, which starts at 0 (no geo-mean) and uses 0.25. Bands run hardest
+// (almost no reps left) → easiest (many in reserve); ranges may OVERLAP now
+// (they're feels, not a contiguous partition), so snapping is by nearest rep.
+const GEO = (lo: number, hi: number) => Math.sqrt(lo * hi);
+const RIR_BANDS: ReadonlyArray<{ id: string; label: string; sub: string; lo: number; hi: number; rep: number }> = [
+  { id: "0–0.5", label: "gun to head", sub: "0–0.5", lo: 0, hi: 0.5, rep: 0.25 },
+  { id: "0.3–1", label: "grind 2+s", sub: "0.3–1", lo: 0.3, hi: 1, rep: GEO(0.3, 1) },
+  { id: "0.8–1.5", label: "maybe 1", sub: "0.8–1.5", lo: 0.8, hi: 1.5, rep: GEO(0.8, 1.5) },
+  { id: "1.3–2", label: "1", sub: "1.3–2", lo: 1.3, hi: 2, rep: GEO(1.3, 2) },
+  { id: "1.8–2.8", label: "1–2", sub: "1.8–2.8", lo: 1.8, hi: 2.8, rep: GEO(1.8, 2.8) },
+  { id: "2.8–4.8", label: "2–4", sub: "2.8–4.8", lo: 2.8, hi: 4.8, rep: GEO(2.8, 4.8) },
+  { id: "4–8", label: "4–8", sub: "", lo: 4, hi: 8, rep: GEO(4, 8) },
+  { id: "8–15", label: "8–15", sub: "", lo: 8, hi: 15, rep: GEO(8, 15) },
+  { id: "15–30", label: "15–30", sub: "", lo: 15, hi: 30, rep: GEO(15, 30) },
+  { id: "30–100", label: "30–100", sub: "", lo: 30, hi: 100, rep: GEO(30, 100) },
 ];
+// Old (pre-log) band ids → the new band they map to, so grades logged on the old
+// scale keep showing once the ranges were redefined. The last four ids are unchanged.
+const RIR_ID_MIGRATE: Record<string, string> = {
+  "0.3–0.5": "0–0.5", "0.5–1.3": "0.3–1", "1.3–1.5": "0.8–1.5",
+  "1.5–1.8": "1.3–2", "1.8–2.5": "1.8–2.8", "2.5–4.5": "2.8–4.8",
+};
 /** Look up a band by its stored id. */
 const rirBand = (id: string | undefined) => RIR_BANDS.find((b) => b.id === id);
 const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
-/** Representative RIR for a logged band id ("2.5–4" → 3.25), or null if unknown. */
+/** The descriptive label for a band id (for the closed pill / read-only cell), or the raw id. */
+const rirLabel = (id: string | undefined): string => (id ? rirBand(id)?.label ?? id : "–");
+/** Representative RIR for a logged band id — the band's precomputed GEOMETRIC mean (the scale is
+ * logarithmic, owner). Unknown/legacy ids fall back to a parsed geo-mean. Null if unparseable. */
 function rirBandMid(id: string | undefined): number | null {
   if (!id) return null;
+  const b = rirBand(id);
+  if (b) return b.rep;
   const [lo, hi] = id.split(/[–-]/).map((n) => parseFloat(n));
-  return lo !== undefined && Number.isFinite(lo) ? (hi !== undefined && Number.isFinite(hi) ? (lo + hi) / 2 : lo) : null;
+  if (lo === undefined || !Number.isFinite(lo)) return null;
+  if (hi === undefined || !Number.isFinite(hi)) return lo;
+  return lo > 0 ? GEO(lo, hi) : (lo + hi) / 2;
 }
-/** The RIR_BANDS band whose range contains a numeric RIR (bands are ascending and
- * contiguous, so the first band whose upper bound exceeds `rir` holds it). */
+/** The band closest to a numeric RIR, measured in LOG space (matching the log scale) so a
+ * predicted RIR snaps to the band whose representative value is nearest. Replaces the old
+ * contiguous-range lookup now that bands can overlap. */
 function bandContainingRir(rir: number): string {
+  const lr = Math.log(Math.max(rir, 0.05));
+  let best = RIR_BANDS[0]!, bestD = Infinity;
   for (const b of RIR_BANDS) {
-    const hi = parseFloat(b.id.split(/[–-]/)[1] ?? b.id);
-    if (Number.isFinite(hi) && rir < hi) return b.id;
+    const d = Math.abs(Math.log(Math.max(b.rep, 0.05)) - lr);
+    if (d < bestD) { bestD = d; best = b; }
   }
-  return RIR_BANDS[RIR_BANDS.length - 1]!.id;
+  return best.id;
 }
 /** The ASSUMED RIR band for a set the owner hasn't graded (owner: "always add a rir
  * to sets automatically"). Prefers the set's own predicted RIR (snapped to a band);
  * with no prediction it falls back to the muscle-group typical — legs 4–8, upper body
- * 2.5–4.5. UPPER body never auto-assumes EASIER than 2.5–4.5 (owner: "non-leg-heavy
- * lifts should auto 2.5–4.5, not 4–8") — a too-easy prediction is floored there. The
+ * the "2–4" band. UPPER body never auto-assumes EASIER than "2–4" (owner: "non-leg-heavy
+ * lifts should auto 2–4, not 4–8") — a too-easy prediction is floored there. The
  * store (rpeGrades) stays the single source of truth for what's REAL: a graded set has
  * an entry, an assumed one doesn't, so picking a band turns it real. */
 function assumedRirBandId(exerciseName: string, predRir: number | null): string {
@@ -2154,12 +2175,12 @@ function assumedRirBandId(exerciseName: string, predRir: number | null): string 
   if (predRir !== null && Number.isFinite(predRir)) {
     const band = bandContainingRir(predRir);
     if (lower) return band;
-    // Upper body: floor the assumption at 2.5–4.5 (RIR_BANDS run hardest→easiest, so a
-    // higher index = easier — clamp any easier band back to 2.5–4.5).
-    const floor = RIR_BANDS.findIndex((b) => b.id === "2.5–4.5");
-    return RIR_BANDS.findIndex((b) => b.id === band) > floor ? "2.5–4.5" : band;
+    // Upper body: floor the assumption at the "2–4" band (RIR_BANDS run hardest→easiest, so a
+    // higher index = easier — clamp any easier band back to it).
+    const floor = RIR_BANDS.findIndex((b) => b.id === "2.8–4.8");
+    return RIR_BANDS.findIndex((b) => b.id === band) > floor ? "2.8–4.8" : band;
   }
-  return lower ? "4–8" : "2.5–4.5";
+  return lower ? "4–8" : "2.8–4.8";
 }
 /** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
  * they get the wider "mid" effort band — see effortClass(). */
@@ -2201,7 +2222,17 @@ const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
   try {
     const o = JSON.parse(localStorage.getItem(RPE_STORE_KEY) ?? "{}");
-    return o && typeof o === "object" ? (o as Record<string, string>) : {};
+    if (!o || typeof o !== "object") return {};
+    const g = o as Record<string, string>;
+    // Migrate grades logged on the OLD (pre-log) RIR scale to the new band ids so they don't
+    // silently read as ungraded after the ranges were redefined.
+    let changed = false;
+    for (const k of Object.keys(g)) {
+      const mapped = RIR_ID_MIGRATE[g[k]!];
+      if (mapped) { g[k] = mapped; changed = true; }
+    }
+    if (changed) { try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(g)); } catch { /* ignore */ } }
+    return g;
   } catch {
     return {};
   }
@@ -9416,7 +9447,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const rpeAssumed = assumedRirBandId(s.exerciseName, predRir);
   const rpeCell = canEditCurrentAthlete()
     ? rpeDropdownHtml(sid, rpeFor(s), rpeAssumed)
-    : `<span class="rpe-ro${rpeFor(s) ? "" : " is-assumed"}">${escapeHtml(rirBand(rpeFor(s))?.id ?? rpeAssumed)}</span>`;
+    : `<span class="rpe-ro${rpeFor(s) ? "" : " is-assumed"}">${escapeHtml(rirLabel(rpeFor(s) ?? rpeAssumed))}</span>`;
   // A technique level (squat-rack hole / cm) logged in the note — show the tag.
   const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
   // The variation difficulty multiplier applied to this set (note model × level ×
@@ -9636,6 +9667,16 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
  * unset); the open menu lists every band with its full description, plus a Clear
  * row. Reuses the app's .xdd dropdown styling; matched to the cell width. Clicks
  * are handled by delegation in the sets-table handler (onSetRpeClick). */
+/** One RIR picker option: the descriptive label big, the actual rep-range tiny + gray under it,
+ * with the geometric-mean value the calculations use in the tooltip. Shared by both pickers. */
+function rirBandOptHtml(b: (typeof RIR_BANDS)[number], active: boolean): string {
+  const sub = b.sub ? `<span class="rpe-opt-sub">${escapeHtml(b.sub)}</span>` : "";
+  return (
+    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(b.id)}" ` +
+    `title="${escapeHtml(`RIR ${b.sub || b.label} · avg ${b.rep.toFixed(2)}`)}" role="option">` +
+    `<span class="rpe-opt-lbl">${escapeHtml(b.label)}</span>${sub}</button>`
+  );
+}
 function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: string): string {
   const band = rirBand(grade);
   // No graded value → show the ASSUMED band (faded/dashed) instead of "–", so every set
@@ -9643,13 +9684,11 @@ function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: str
   // assumed id rides on data-assumed so a clear (re-render) can restore the assumption.
   const assumed = !band && assumedId ? rirBand(assumedId) : undefined;
   const shown = band ?? assumed;
-  const label = shown ? shown.id : "–";
-  const optHtml = (val: string, text: string, title: string, active: boolean) =>
-    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
-  // Just the number range — no explanations (the why stays as a hover tooltip).
+  const label = shown ? shown.label : "–";
+  // Each option: the descriptive label BIG, the actual rep-range tiny + gray under it (owner).
   const menu =
-    optHtml("", "clear", "Clear — back to the assumed RIR", !band) +
-    RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, shown?.id === b.id)).join("");
+    `<button type="button" class="xdd-opt set-rpe-opt${!band ? " is-active" : ""}" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
+    RIR_BANDS.map((b) => rirBandOptHtml(b, shown?.id === b.id)).join("");
   const cls = band ? " is-set" : assumed ? " is-assumed" : "";
   const aria = band ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";
   return (
@@ -19114,7 +19153,7 @@ let addmStrength: Map<string, Map<number, number>> | null = null;
 /** The assumed RIR band for a candidate set (lift + dialed weight/reps), from the same
  * predicted-RIR model the history uses. Falls back to the lift's default band with no reps. */
 function addmAssumedRirBand(ex: string, date: string, weight: number | null, reps: number | null): string {
-  if (!ex) return "2.5–4.5";
+  if (!ex) return "2.8–4.8";
   if (reps === null || reps <= 0) return assumedRirBandId(ex, null);
   const formula = currentFormula();
   if (!addmStrength) addmStrength = currentStrengthByUserExercise(formula);
@@ -19126,12 +19165,10 @@ function addmAssumedRirBand(ex: string, date: string, weight: number | null, rep
  * ASSUMED band (faded) until the owner picks one, then it becomes a chosen value recorded on
  * the new set. No setId — the value is read on Add and written to the created set's id. */
 function addmRirHtml(assumedId: string): string {
-  const band = rirBand(assumedId);
-  const label = band ? band.id : "–";
-  const opt = (val: string, text: string, title: string, active: boolean) =>
-    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
-  const menu = opt("", "clear", "Clear — back to the assumed RIR", false) +
-    RIR_BANDS.map((b) => opt(b.id, b.id, b.desc, b.id === assumedId)).join("");
+  const label = rirLabel(assumedId);
+  const menu =
+    `<button type="button" class="xdd-opt set-rpe-opt" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
+    RIR_BANDS.map((b) => rirBandOptHtml(b, b.id === assumedId)).join("");
   return (
     `<div class="xdd xdd-rpe addm-rir is-assumed" data-addmrir data-assumed="${escapeHtml(assumedId)}">` +
     `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve — assumed from reps & 1RM; tap to set" title="RIR — assumed from your reps & 1RM; tap to set">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
@@ -19159,7 +19196,7 @@ function syncAddmRir(form: HTMLElement): void {
     // Not picked → track the live assumed band: update the button label + the menu's active row.
     dd.dataset.assumed = assumed;
     const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
-    if (btn) btn.innerHTML = `${escapeHtml(rirBand(assumed)?.id ?? "–")}<span class="xdd-caret">▾</span>`;
+    if (btn) btn.innerHTML = `${escapeHtml(rirLabel(assumed))}<span class="xdd-caret">▾</span>`;
     for (const o of dd.querySelectorAll<HTMLElement>(".set-rpe-opt")) o.classList.toggle("is-active", o.dataset.rir === assumed);
   }
 }
