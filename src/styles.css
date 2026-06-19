@@ -2830,10 +2830,9 @@ sup.wr-bw { font-size: 0.85em; }
 /* dissolve the .wo-af-dims wrapper so its dim/tag columns join the tag wrap directly, beside the ROM */
 .addm-line-vars .wo-af-dims { display: contents; }
 /* Each tag is a little COLUMN: a tiny gray CAPTION naming what it is (owner: "above the tag,
-   very small gray letters — lean / rom") over the pill. A PASSIVE tag (at its obvious baseline
-   and not promoted) hides the whole column via .addm-vtag--off. */
+   very small gray letters — lean / rom") over the pill. PB-48: a passive tag isn't rendered at
+   all (no more hide-class), so only ACTIVE tags ever appear here. */
 .addm-vtag { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 0 0 auto; min-width: 0; }
-.addm-vtag--off { display: none; }
 .addm-vtag-cap { font-size: 0.5rem; line-height: 1; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding-left: 2px; white-space: nowrap; }
 /* Each tag/ROM pill in the line (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
 .addm-line-vars select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
@@ -3013,9 +3012,11 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform--modal .addm-inputs input { width: 100%; min-width: 0; }
 /* Multi-set add: one weight×reps LINE per set, looks like a set chip (weight + superscript reps). */
 .addm-lines { display: flex; flex-direction: column; gap: 0.6rem; }
-/* wrap so the weight/reps group drops to its OWN line below the tags rather than running off the
-   right edge when a lift carries many tags (owner: "going out of bounds"). */
-.addm-line { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
+/* PB-48 (owner: "tags should always be on the LEFT of the weight; if there are more than fit they
+   WRAP, but stay left of the weight"): nowrap keeps the tag block (.addm-line-vars, flex:1 1 auto)
+   on the left and the weight group (.addm-line-main, flex:0 0 auto) on the right — the tags wrap
+   WITHIN their own block (min-width:0) instead of the weight dropping to a line below them. */
+.addm-line { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
 /* A faint dashed divider between sets so it's clear which tags belong to which set (owner). */
 .addm-lines > .addm-line + .addm-line { border-top: 1px dashed var(--line); padding-top: 0.6rem; }
 .addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; margin-left: auto; }

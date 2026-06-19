@@ -9984,7 +9984,7 @@ function positionScaleEditor(anchor: HTMLElement): void {
   pop.style.top = `${top}px`;
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
-  // #super-persistent (PB-47): EVERY edit of a real set routes through the modern Add-set sheet,
+  // #super-persistent (PB-48): EVERY edit of a real set routes through the modern Add-set sheet,
   // never the old Scale×/grid popover (owner). So the moment we have a set id, redirect — this
   // chokepoint covers the collapsed quick-edit chip and any other caller that passes a setId.
   if (meta?.setId) {
@@ -10184,7 +10184,7 @@ function toggleSetEdit(target: HTMLElement): boolean {
   const row = target.closest<HTMLElement>("tr.set-main");
   if (!row?.dataset.setid) return false;
   if (!canEditCurrentAthlete()) return false; // read-only spectate view — never open the editor (owner)
-  // #super-persistent (PB-47): tapping a set to edit it opens the SAME modern Add-set sheet as
+  // #super-persistent (PB-48): tapping a set to edit it opens the SAME modern Add-set sheet as
   // adding one (owner: "the editing menu should look EXACTLY like the add menu"), NOT the old
   // Scale×/grid inline card. Route through openAddModal's edit mode — the single set editor.
   const sid = row.dataset.setid;
@@ -19046,34 +19046,40 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
-  const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
-  // In the ADD path the `lean` dim is rendered as its own rich pill (leanPillHtml: hand-point
-  // + cm/block + hand-length conversion), so skip it from the generic selects here. The EDIT
-  // path keeps the plain lean select (editing a logged set's canonical cm).
-  const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d] && !(d === "lean" && !edit)).map((dim) => {
-    const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
-    const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
-    let cur: string;
-    if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
-    // ADD path: an ACTIVE tag (promoted, or a meaningful non-gray default like b2w) pre-selects
-    // your most-used recent level; a PASSIVE tag sits at its DEFAULT so it stays hidden AND is
-    // never recorded on the set until you ＋add it from the palette (owner: a passive tag must
-    // not appear next to the weight).
-    else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
-    else cur = dflt;
-    // For the leverage knobs (lever / reach) show the torque factor in each option
-    // (e.g. "60cm ×1.5") so the effect on the effective load is visible while picking.
-    const showFactor = dim === "lever" || dim === "reach";
-    const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l, fam)} ×${levels[l]}` : afLevelText(dim, l, fam));
-    const opts = Object.keys(levels)
-      .map((l) => {
-        const hint = afLevelHint(dim, l);
-        return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
-      })
-      .join("");
-    return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></span>`;
-  }).join("");
+  // ROOT FIX (PB-48, owner #persistent ×3 — gray "NONE" tags kept leaking next to the weight).
+  // A PASSIVE tag is no longer RENDERED-then-HIDDEN (that hide raced the async select-enhancement
+  // and failed via .closest, so the gray pills leaked through). Instead the ADD path renders ONLY
+  // the tags that should SHOW — an ACTIVE tag (promoted, or a meaningful non-gray default like
+  // b2w) — so a passive tag simply does NOT exist in the DOM and CAN'T appear by the weight.
+  // The EDIT-arg path (the legacy per-set scaleEditPop) still renders EVERY dim so you can add any
+  // variation there; the add-modal's own edit mode uses the no-edit call + inserts carried tags.
+  // In the ADD path `lean` is its own rich pill (leanPillHtml), so it's skipped from the selects.
+  const selects = AF_DIM_ORDER
+    .filter((d) => famDef.dims[d] && !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d)))
+    .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
+    .join("");
   return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
+}
+/** Build ONE captioned variation tag (.addm-vtag = a tiny caption + the dim <select>) for an
+ * add/edit line. Extracted from variantSelectsHtml (PB-48) so the palette ＋ handler can INSERT a
+ * single tag's pill when you promote it — no full rebuild that would reset your other picks. The
+ * pre-selected level: the set's CARRIED value (edit), else your most-used recent level (an active
+ * add tag), else the default. */
+function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { note: string }, effVec?: Record<string, string> | null): string {
+  const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
+  const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
+  let cur: string;
+  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
+  else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
+  else cur = dflt;
+  const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
+  // For the leverage knobs (lever / reach) show the torque factor in each option ("60cm ×1.5").
+  const showFactor = dim === "lever" || dim === "reach";
+  const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l, fam)} ×${levels[l]}` : afLevelText(dim, l, fam));
+  const opts = Object.keys(levels)
+    .map((l) => { const hint = afLevelHint(dim, l); return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`; })
+    .join("");
+  return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></span>`;
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
@@ -19215,25 +19221,17 @@ const numOrNull = (v: string | undefined): number | null => { const n = parseFlo
 /** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
  * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
 function syncAddmVtags(form: HTMLElement): void {
-  // Owner: next to the weight, show ONLY the tags that matter — the ones whose VALUE is
-  // meaningful (set away from the obvious baseline, e.g. b2w) OR that the owner PROMOTED for
-  // this lift via the palette above. Every possible dim is rendered (so editing a set can
-  // prefill any of them), but a passive one is hidden by toggling a class on its WRAPPER
-  // (.addm-vtag) — done on the wrapper, not the xdd twin, so it works even before the <select>
-  // is enhanced into its pill (the old per-twin hide raced the async enhancement and let the
-  // gray "NONE" tags leak through). The selects stay the source read on Add (onInlineAddGo).
+  // PB-48: a PASSIVE tag is no longer in the DOM at all (variantSelectsHtml renders only ACTIVE
+  // tags), so there's nothing to HIDE here — the old "render then hide a gray pill" raced the
+  // async select-enhancement and leaked the gray "NONE" tags next to the weight. This now only
+  // COLOURS a rendered tag whose value is meaningful (non-gray: support→accent, band→gold) via
+  // .is-set; the selects are the source read on Add (onInlineAddGo).
   for (const sel of form.querySelectorAll<HTMLSelectElement>(".addm-line-vars .wo-af-dim")) {
     const ex = sel.dataset.ex ?? "";
     const fam = ex ? familyOf(ex) : null;
     const dim = sel.dataset.dim ?? "";
     const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? "");
-    // A PASSIVE tag (＋, not ✓, in the palette) must NEVER show next to the weight (owner) — so
-    // visibility keys off the SAME tagActive() the palette uses, not the pill's value. The
-    // exception is a set that actually CARRIES a non-default tag (edit path) — kept via `!gray`.
-    const active = ex && dim ? tagActive(ex, fam, dim) : false;
-    // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
     sel.classList.toggle("is-set", !gray);
-    sel.closest<HTMLElement>(".addm-vtag")?.classList.toggle("addm-vtag--off", !active && gray);
   }
 }
 
@@ -19903,6 +19901,21 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     const fam = familyOf(ex);
     if (fam) {
       const effVec = { ...rNote(fam, edit.note).vec, ...noteVecOverride(ex, edit.note) };
+      // PB-48: the add-modal renders only ACTIVE tags, so a dim this set CARRIES at a non-default
+      // level (but isn't a promoted/active tag) wouldn't be rendered. Insert its pill into each
+      // line's tag wrap so editing SHOWS (and can change) it; the loop below then pre-selects it.
+      for (const dim of AF_DIM_ORDER) {
+        if (!FAMILIES[fam]!.dims[dim] || dim === "lean") continue; // lean = its own pill
+        const dflt = famDefaultLevel(fam, dim);
+        if (String(effVec[dim] ?? dflt) === dflt) continue; // at default → not a carried tag
+        for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          if (slot.querySelector(`.addm-vtag[data-dim="${CSS.escape(dim)}"]`)) continue;
+          const html = dimVtagHtml(ex, fam, dim, { note: edit.note }, effVec);
+          const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+          if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+          else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+        }
+      }
       for (const sel of wrap.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
         const v = effVec[sel.dataset.dim!];
         if (v != null && Array.from(sel.options).some((o) => o.value === String(v))) sel.value = String(v);
@@ -20106,15 +20119,21 @@ function onAddModalClick(e: MouseEvent): void {
           else if (!on && existing) existing.closest(".addm-vtag")?.remove();
         }
       } else {
-        // Promoting a dim seeds its pill with your most-used level (ready to record); DEMOTING
-        // resets it to the default, so the now-hidden tag records nothing on the set. Dispatch a
-        // change so the xdd twin re-renders its label.
+        // PB-48: promoting a dim INSERTS its captioned pill (seeded with your most-used level);
+        // demoting REMOVES it — so a passive tag is never in the DOM and can't leak by the weight.
+        // Inserting/removing the one pill keeps every other line's picks intact (no full rebuild).
         const fam = familyOf(ex);
         if (fam) {
-          const dflt = famDefaultLevel(fam, id);
-          const val = tagActive(ex, fam, id) ? frequentLevelFor(ex, fam, id, dflt) : dflt;
-          for (const sel of form.querySelectorAll<HTMLSelectElement>(`.addm-line-vars .wo-af-dim[data-dim="${CSS.escape(id)}"]`))
-            if ([...sel.options].some((o) => o.value === val)) { sel.value = val; sel.dispatchEvent(new Event("change", { bubbles: true })); }
+          const nowActive = tagActive(ex, fam, id);
+          for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+            const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
+            if (nowActive && !existing) {
+              const html = dimVtagHtml(ex, fam, id);
+              const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+              if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+              else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+            } else if (!nowActive && existing) existing.remove();
+          }
         }
       }
       const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
