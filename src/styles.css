@@ -3082,6 +3082,15 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-addform--modal .wo-af-dims { max-width: 100%; }
 .addm-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
 .addm-actions .wo-af-go { flex: 1 1 auto; padding: 9px 13px; }
+/* Edit-mode footer: the set-management actions (not-comparable / reset / delete) kept when an
+   edit routes through this sheet. A subtle row above Save — small text buttons, delete in the
+   destructive terracotta, so the sheet still reads as the add sheet. */
+.addm-edit-foot { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.7rem; }
+.addm-edit-act { font: inherit; font-size: 0.78rem; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: var(--r-pill); padding: 4px 10px; min-height: var(--tap-min); }
+.addm-edit-act:hover { border-color: var(--accent); color: var(--accent); }
+.addm-edit-nc.is-on { color: #fff; background: var(--muted); border-color: var(--muted); }
+.addm-edit-del { color: var(--remove); border-color: color-mix(in srgb, var(--remove) 40%, var(--line)); margin-left: auto; }
+.addm-edit-del:hover { color: #fff; background: var(--remove); border-color: var(--remove); }
 /* Suggestions: below the lines, gray ghost pills with a direct-add "+" button. */
 .addm-sugg { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0 0.2rem; }
 .addm-sugg-row { display: flex; flex-wrap: nowrap; gap: 0.4rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }

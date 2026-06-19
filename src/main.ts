@@ -9984,6 +9984,13 @@ function positionScaleEditor(anchor: HTMLElement): void {
   pop.style.top = `${top}px`;
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
+  // #super-persistent (PB-47): EVERY edit of a real set routes through the modern Add-set sheet,
+  // never the old Scale×/grid popover (owner). So the moment we have a set id, redirect — this
+  // chokepoint covers the collapsed quick-edit chip and any other caller that passes a setId.
+  if (meta?.setId) {
+    const src = liveRecords().find((r) => setId(r) === meta.setId);
+    if (src) { openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) }, { sid: meta.setId, note: note || `__set:${meta.setId}`, rawNote: meta.rawNote ?? src.notes ?? "" }); return; }
+  }
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
   scaleEditInCard = false; // this is the standalone popover (the collapsed-line chip), not the card
   scaleBandExpanded = false; // band starts collapsed each time the popover opens
@@ -10173,31 +10180,20 @@ function setEditOutside(e: MouseEvent): void {
   closeSetEdit();
 }
 function toggleSetEdit(target: HTMLElement): boolean {
-  if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // the card's ✕
+  if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // legacy card's ✕ (now unused)
   const row = target.closest<HTMLElement>("tr.set-main");
-  if (!row) return false;
+  if (!row?.dataset.setid) return false;
   if (!canEditCurrentAthlete()) return false; // read-only spectate view — never open the editor (owner)
-  let sib = row.nextElementSibling;
-  while (sib && !sib.classList.contains("set-edit-row")) {
-    if (sib.classList.contains("set-main")) break; // reached the next set's main row
-    sib = sib.nextElementSibling;
-  }
-  if (sib?.classList.contains("set-edit-row")) {
-    const willOpen = sib.hasAttribute("hidden"); // currently hidden → this tap opens it
-    const sid = (sib as HTMLElement).dataset.seteditid ?? null;
-    if (openSetEditId && openSetEditId !== sid) closeSetEdit(); // one card at a time (popup)
-    sib.toggleAttribute("hidden");
-    row.classList.toggle("edit-open");
-    openSetEditId = willOpen ? sid : null;
-    if (willOpen) {
-      renderCardVarModel(); // DEDUP-2: fill the inline variation model BEFORE positioning (it changes height)
-      const pop = sib.querySelector<HTMLElement>(".set-edit-pop");
-      if (pop) positionSetEditPop(pop, row);
-      setTimeout(() => document.addEventListener("click", setEditOutside, true), 0);
-    } else {
-      document.removeEventListener("click", setEditOutside, true);
-    }
-  }
+  // #super-persistent (PB-47): tapping a set to edit it opens the SAME modern Add-set sheet as
+  // adding one (owner: "the editing menu should look EXACTLY like the add menu"), NOT the old
+  // Scale×/grid inline card. Route through openAddModal's edit mode — the single set editor.
+  const sid = row.dataset.setid;
+  const src = liveRecords().find((r) => setId(r) === sid);
+  if (!src) return false;
+  const chip = row.querySelector<HTMLElement>(".set-scale.is-editable"); // carries the set's note keys
+  const note = chip?.dataset.scaleeditNote ?? `__set:${sid}`;
+  const rawNote = chip?.dataset.scaleeditRawnote ?? (src.notes ?? "");
+  openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) }, { sid, note, rawNote });
   return true;
 }
 /** Re-open the set-edit panel that was open before a table rebuild (PB-12): un-hide its
@@ -19916,6 +19912,16 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     // Add → Save.
     const go = wrap.querySelector<HTMLElement>(".wo-af-go");
     if (go) go.textContent = "Save";
+    // The set-management actions the OLD edit popover carried — kept on this modern sheet so
+    // routing every edit through ONE sheet (owner #super-persistent: "editing a set should look
+    // exactly like the add menu") doesn't lose flag / reset / delete. Sits above Save.
+    const nc = notComparableSets.has(edit.sid);
+    wrap.querySelector<HTMLElement>(".addm-actions")?.insertAdjacentHTML("beforebegin",
+      `<div class="addm-edit-foot">` +
+      `<button type="button" class="addm-edit-act addm-edit-nc${nc ? " is-on" : ""}" data-editnc aria-pressed="${nc}" title="Not comparable — keep reps/sets but drop this set's 1RM &amp; volume">⊘ ${nc ? "not comparable" : "not comparable?"}</button>` +
+      `<button type="button" class="addm-edit-act addm-edit-reset" data-editreset title="Reset this set's on-device edits">↺ reset</button>` +
+      `<button type="button" class="addm-edit-act addm-edit-del" data-editdel title="Delete this set">🗑 delete</button>` +
+      `</div>`);
   }
   wrap.addEventListener("click", onAddModalClick);
   // Live ghost preview: every input/change/click in the popup re-derives the pending set(s)
@@ -20024,6 +20030,31 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
+  // Edit-mode footer (not-comparable / reset / delete) for the set being edited.
+  const editSid = form.dataset.editsid;
+  if (editSid) {
+    if (t.closest("[data-editdel]")) {
+      const src = liveRecords().find((r) => setId(r) === editSid);
+      closeAddModal();
+      deleteSetsWithUndo([editSid], src ? displayName(src.exerciseName) : "set");
+      return;
+    }
+    if (t.closest("[data-editreset]")) {
+      delete setOverrides[editSid]; saveSetOverrides();
+      closeAddModal();
+      refreshAfterDifficultyEdit();
+      return;
+    }
+    const ncBtn = t.closest<HTMLElement>("[data-editnc]");
+    if (ncBtn) {
+      const on = !notComparableSets.has(editSid);
+      setSetNotComparable(editSid, on);
+      ncBtn.classList.toggle("is-on", on);
+      ncBtn.setAttribute("aria-pressed", String(on));
+      ncBtn.textContent = `⊘ ${on ? "not comparable" : "not comparable?"}`;
+      return;
+    }
+  }
   // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
   const incPill = t.closest<HTMLElement>(".wo-af-incpill");
   if (incPill) { openInclinePicker(incPill); return; }

@@ -808,3 +808,14 @@ recurrence count. Leave a `PB-n` comment at the fix site.
 - **Suspected root cause:** Unknown. Candidates: (a) els.athlete.value is empty/mismatched → activeRecords() returns [] → no content; (b) tab-analysis is hidden (switchTopTab called with wrong name); (c) CSS issue making content invisible. Debug banner will tell us.
 - **Data status:** ud.csv has 12618 rows — data is bundled and correct.
 - **RESOLVED (b.2.8.309):** Not a code bug. Debug banner at v.308 confirmed `records=12576, viewMode=admin, tabVisible=true, chips=1` — page renders correctly. Root cause was **stale browser cache** serving v.304 on the user's phone. Hard-refresh resolved it.
+
+---
+
+## PB-47 — Editing a set opens the OLD popover, not the modern Add-set sheet
+
+- **First seen:** 2026-06-19, Android/Brave. Marked `#super-persistent` by the owner.
+- **Recurrence count:** 2 (WO-252 / b.2.9.231 claimed to fix "edit opens the add menu" but only redirected the collapsed set-action ✎; the expanded-table set tap and the ×scale / quick-edit chips still opened the old editor).
+- **Symptom:** Tapping a set in the EXPANDED set table (Workouts or Exercises tab) opens the legacy editor — a Scale× box, a plain grid of dim `<select>`s, and unilateral/not-comparable/reset/delete — instead of the modern Add-set sheet (TAGS palette, captioned pills, W/reps boxes). Owner: "the editing menu should look EXACTLY like the menu I have when I add a new set."
+- **Prior fix attempts:** WO-252 rewired only `handleSetAct('edit')` (the collapsed pill's ✎) to `openAddModal` edit mode; it left `toggleSetEdit` (the set-row tap → inline `.set-edit-row` card) and `openScaleEditor` (`#scaleEditPop`, reached via the `.set-scale`/`.wo-set-variant` chips) opening the old UI.
+- **Root cause:** TWO set editors coexisted. The fix patched one entry point, not the shared design flaw (more than one editor).
+- **Fix (WO-255 / b.2.9.244):** Route EVERY set edit through the one modern sheet. `toggleSetEdit` now calls `openAddModal(...edit)` instead of toggling the inline card; `openScaleEditor` redirects to `openAddModal` the moment it has a `setId` (covers the ×scale + quick-edit chips). The add-modal edit mode gained a small footer (⊘ not comparable / ↺ reset / 🗑 delete) so no set-management action is lost. The old `.set-edit-row` card + `#scaleEditPop` render paths are now orphaned (left in place this pass; flagged for a follow-up prune so the deletion is isolated from this behaviour change).
