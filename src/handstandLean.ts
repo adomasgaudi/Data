@@ -76,10 +76,5 @@ export const TAP_CONTACT_HINT: Record<TapContact, string> = {
   sh_tap: "Shoulders only, light tap — hardest",
 };
 
-/** Placeholder difficulty factors (×1 = hardest reference, <1 = easier). Calibrate. */
-export const TAP_CONTACT_FACTOR: Record<TapContact, number> = {
-  hips_rest: 0.85,
-  sh_rest: 0.92,
-  hips_tap: 0.97,
-  sh_tap: 1.0,
-};
+// The DIFFICULTY FACTORS for these levels live in the FAMILIES config (variationConfig.ts,
+// HANDSTAND.dims.tapContact) — the one place the resolver reads — so they're not duplicated here.

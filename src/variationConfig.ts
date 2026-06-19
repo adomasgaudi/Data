@@ -174,8 +174,13 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // FOREARM SUPPORT (owner) — forearms rested on a block at this height (cm). Neutral
       // ×1 placeholders for now — calibrate in ⚙ Difficulty multipliers.
       forearmSupport: { none: 1.0, "7cm": 1.0, "15cm": 1.0, "23cm": 1.0, "30cm": 1.0 },
+      // WALL-TAP CONTACT (owner) — what touches the wall × rest vs light tap. The labels /
+      // hints live in handstandLean.ts (TAP_CONTACT_*); THESE are the difficulty factors
+      // (the SSOT the resolver reads). More support (hips+shoulders) and resting are easier;
+      // shoulders-only light-tap is the hardest reference. "none" = not a wall-tap / unset.
+      tapContact: { none: 1.0, hips_rest: 0.85, sh_rest: 0.92, hips_tap: 0.97, sh_tap: 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm", forearmSupport: "none" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm", forearmSupport: "none", tapContact: "none" },
   },
   // The owner's "Lever" lifts (EXR-163) — an adjustable one-sided loaded handle: a
   // plate on a movable collar near one END, gripped at the other, swung like a

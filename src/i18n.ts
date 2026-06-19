@@ -400,6 +400,7 @@ const LT: Record<string, string> = {
   "none": "nėra",
   "ROM": "amplitudė",
   "fwd lean": "pasvirimas",
+  "wall touch": "sienos lietimas",
   "tempo": "tempas",
   "band": "guma",
   "position": "padėtis",

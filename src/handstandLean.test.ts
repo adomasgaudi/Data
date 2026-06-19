@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   handPointOffsetCm, leanCanonicalCm, leanCanonicalFromBlock,
-  YOGA_BLOCK_CM, TAP_CONTACT_ORDER, TAP_CONTACT_FACTOR, TAP_CONTACT_LABEL,
+  YOGA_BLOCK_CM, TAP_CONTACT_ORDER, TAP_CONTACT_LABEL,
   DEFAULT_HAND_LENGTH_CM,
 } from "./handstandLean";
+import { FAMILIES } from "./variationConfig";
 
 describe("handstand lean — hand-point conversion", () => {
   it("palm-base is the canonical zero-offset reference", () => {
@@ -29,11 +30,12 @@ describe("handstand lean — hand-point conversion", () => {
 });
 
 describe("handstand wall-tap contact", () => {
-  it("is ordered easiest → hardest with monotonically rising factors", () => {
+  it("is ordered easiest → hardest with monotonically rising factors in the family config", () => {
     expect(TAP_CONTACT_ORDER).toEqual(["hips_rest", "sh_rest", "hips_tap", "sh_tap"]);
-    const factors = TAP_CONTACT_ORDER.map((c) => TAP_CONTACT_FACTOR[c]);
+    const dim = FAMILIES.HANDSTAND!.dims.tapContact!; // factors live in the family config (SSOT)
+    const factors = TAP_CONTACT_ORDER.map((c) => dim[c]!);
     for (let i = 1; i < factors.length; i++) expect(factors[i]!).toBeGreaterThan(factors[i - 1]!);
-    expect(TAP_CONTACT_FACTOR.sh_tap).toBe(1.0); // hardest = reference
+    expect(dim.sh_tap).toBe(1.0); // hardest = reference
   });
   it("has a short code label for every level", () => {
     for (const c of TAP_CONTACT_ORDER) expect(TAP_CONTACT_LABEL[c].length).toBeLessThanOrEqual(8);

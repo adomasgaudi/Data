@@ -84,6 +84,7 @@ import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupP
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
+import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
@@ -18774,8 +18775,8 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // ladderGrip (L-shape / hooked / no support) is INFREQUENT (owner: "it shouldn't be the second
 // tag"), so it sits LATE in the order — its obvious "no support" default stays gray/hidden and it
 // only shows when you ＋reveal, after the common dims.
-const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "ladderGrip", "position"];
-const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "tapContact", "continuity", "band", "ladderGrip", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", tapContact: "wall touch", continuity: "tempo", band: "band", position: "position" };
 // ONE canonical label per (dimension, level), shared by the history TAG
 // (variationChipsHtml) and the add-set PICKER so the two can never drift — the
 // owner: "the variation selection should look like the tag and vice versa". The
@@ -18799,6 +18800,11 @@ const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
   // Lever (plate distance from the grip) levels are cm, left as-is; reach (arm held out) reads in words.
   reach: { tucked: { label: "tucked in" }, neutral: { label: "neutral" }, extended: { label: "extended" }, far: { label: "far out" } },
 };
+// Wall-tap CONTACT levels: short chip code + the long explanation as the picker-menu hint,
+// built from the handstandLean SSOT so the labels can't drift. "none" = unset (the default,
+// never a tag — rule 60).
+AF_LEVEL_LBL.tapContact = { none: { label: "no touch" } };
+for (const c of TAP_CONTACT_ORDER) AF_LEVEL_LBL.tapContact[c] = { label: TAP_CONTACT_LABEL[c as TapContact], hint: TAP_CONTACT_HINT[c as TapContact] };
 /** Canonical short label for a dimension level (cm levels like "+23cm" are left as-is) — used by BOTH the tag and the picker. */
 function afLevelText(dim: string, level: string, family?: string): string {
   if (family) { const o = famLabelOf(family, dim, level); if (o) return o; } // owner's rename wins
