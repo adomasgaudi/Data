@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  handPointOffsetCm, leanCanonicalCm, leanCanonicalFromBlock,
+  handPointOffsetCm, leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm,
   YOGA_BLOCK_CM, TAP_CONTACT_ORDER, TAP_CONTACT_LABEL,
   DEFAULT_HAND_LENGTH_CM,
 } from "./handstandLean";
@@ -26,6 +26,12 @@ describe("handstand lean — hand-point conversion", () => {
     expect(YOGA_BLOCK_CM).toEqual({ small: 5, medium: 15, large: 23 });
     expect(leanCanonicalFromBlock("medium", "base", 16)).toBe(15);
     expect(leanCanonicalFromBlock("medium", "fingertips", 16)).toBe(31); // 15 + 16
+  });
+  it("snaps a converted cm to the nearest discrete lean level", () => {
+    const keys = ["0cm", "3cm", "5cm", "8cm", "10cm", "13cm", "15cm", "18cm", "20cm", "23cm"];
+    expect(snapToLeanLevelCm(19, keys)).toBe("18cm"); // 3cm@fingertips (≈19) → nearest 18cm
+    expect(snapToLeanLevelCm(0, keys)).toBe("0cm");
+    expect(snapToLeanLevelCm(100, keys)).toBe("23cm"); // beyond the table → clamps to the max
   });
 });
 

@@ -84,7 +84,10 @@ import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupP
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
-import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact } from "./handstandLean";
+import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
+  DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
+  leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm,
+  type HandPoint, type YogaBlockSide } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
@@ -1917,6 +1920,23 @@ const athleteOverrides: Record<string, AthleteStatsOverride> = (() => {
 })();
 function saveAthleteOverrides() {
   saveJson(ATHLETE_STATS_KEY, athleteOverrides);
+}
+
+// Per-athlete HAND LENGTH (fingertips → palm-base, cm) — the ONE measurement that converts a
+// handstand-lean reading taken at any hand point into the canonical palm-base cm (handstandLean.ts).
+// Synced (shared body measurement, like the sets) — keyed by username; default ≈16cm.
+const HAND_LENGTH_KEY = "colosseum.handLength.v1";
+const handLengthOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(HAND_LENGTH_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function handLengthFor(username: string): number {
+  const v = handLengthOverrides[username];
+  return typeof v === "number" && v > 0 ? v : DEFAULT_HAND_LENGTH_CM;
+}
+function setHandLength(username: string, cm: number | undefined): void {
+  if (cm === undefined || !(cm > 0)) delete handLengthOverrides[username];
+  else handLengthOverrides[username] = cm;
+  saveJson(HAND_LENGTH_KEY, handLengthOverrides);
 }
 
 // Manually-added athletes (admin "＋ Add athlete"): users who aren't in the scraped
@@ -18747,6 +18767,15 @@ function copyLineVariation(from: HTMLElement, to: HTMLElement): void {
     toRom.textContent = romPillLabel(toRom.dataset.romunit, Number(toRom.dataset.romval) || 0);
     toRom.classList.toggle("is-set", fromRom.classList.contains("is-set"));
   }
+  // Lean pill (button) — copy its snapped level + label (handstand families).
+  const fromLean = from.querySelector<HTMLElement>(".wo-af-leanpill");
+  const toLean = to.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (fromLean && toLean) {
+    const lvl = fromLean.dataset.leanlevel ?? toLean.dataset.leandefault ?? "0cm";
+    toLean.dataset.leanlevel = lvl;
+    toLean.textContent = leanPillLabel(lvl);
+    toLean.classList.toggle("is-set", fromLean.classList.contains("is-set"));
+  }
 }
 
 /** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
@@ -18867,7 +18896,10 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
   const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
-  const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
+  // In the ADD path the `lean` dim is rendered as its own rich pill (leanPillHtml: hand-point
+  // + cm/block + hand-length conversion), so skip it from the generic selects here. The EDIT
+  // path keeps the plain lean select (editing a logged set's canonical cm).
+  const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d] && !(d === "lean" && !edit)).map((dim) => {
     const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
     const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
     let cur: string;
@@ -18889,7 +18921,7 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
-  if (selects) return selects;
+  if (selects) return selects; // the lean pill is added (captioned) in addmVariantField, like ROM
   const notes = variationNotesFor(exerciseName);
   if (!notes.length) return "";
   const listId = `afNotes-${++afNoteSeq}`;
@@ -19303,6 +19335,105 @@ function openRomPicker(pill: HTMLElement): void {
   render();
   setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
+
+// ── Handstand LEAN pill + picker (hand-to-wall distance → canonical palm-base cm) ──
+// Owner spec (docs/handstand-lean-model.md): the forward LEAN is the distance from the
+// hands to the wall. Enter it from any of 4 hand POINTS, in cm OR as a yoga-block side; it
+// converts to the canonical palm-base cm via the athlete's ONE hand length, then snaps to
+// the family's nearest discrete lean level (handstandLean.ts). Replaces the plain lean select.
+const LEAN_POINTS: readonly HandPoint[] = ["fingertips", "fingerKnuckles", "knuckles", "base"];
+const LEAN_POINT_LBL: Record<HandPoint, string> = { fingertips: "tips", fingerKnuckles: "knuckle", knuckles: "palm-knuckle", base: "palm" };
+function leanLevelKeys(ex: string): string[] {
+  const fam = familyOf(ex); const lv = fam ? famLevels(fam, "lean") : null;
+  return lv ? Object.keys(lv) : [];
+}
+const leanPillLabel = (level: string): string => (level === "0cm" ? "lean" : `lean ${level}`);
+/** Whether a lift's family has a lean dim (→ show the lean pill instead of a plain select). */
+function hasLeanDim(ex: string): boolean { return leanLevelKeys(ex).length > 0; }
+function leanPillHtml(ex: string): string {
+  if (!hasLeanDim(ex)) return "";
+  return `<button type="button" class="wo-af-leanpill wo-af-dimpill" data-leanex="${escapeHtml(ex)}" data-leanlevel="0cm" data-leandefault="0cm" title="Forward lean — distance from your hands to the wall. Tap to enter it from any hand point, in cm or yoga blocks.">${escapeHtml(leanPillLabel("0cm"))}</button>`;
+}
+let leanPickerClose: (() => void) | null = null;
+function closeLeanPicker(): void { leanPickerClose?.(); }
+function openLeanPicker(pill: HTMLElement): void {
+  closeLeanPicker();
+  const ex = pill.dataset.leanex ?? "";
+  const keys = leanLevelKeys(ex);
+  const username = els.athlete.value;
+  let unit: "cm" | "block" = "cm";
+  let point: HandPoint = DEFAULT_HAND_POINT;
+  let reading = 0; // cm read at `point` (the cm unit)
+  let block: YogaBlockSide = "medium";
+  let hand = handLengthFor(username);
+  const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
+  const pop = document.createElement("div");
+  pop.className = "inc-pop rom-pop lean-pop";
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 240, h = pop.offsetHeight || 200;
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const commit = () => {
+    const level = snapToLeanLevelCm(canonical(), keys);
+    pill.dataset.leanlevel = level;
+    pill.textContent = leanPillLabel(level);
+    pill.classList.toggle("is-set", level !== (pill.dataset.leandefault ?? "0cm"));
+  };
+  const render = () => {
+    const canon = Math.round(canonical());
+    const level = snapToLeanLevelCm(canon, keys);
+    pop.innerHTML =
+      `<div class="inc-units">` +
+      `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-leanunit="cm">cm</button>` +
+      `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-leanunit="block">block</button>` +
+      `</div>` +
+      (unit === "cm"
+        ? `<div class="inc-valrow"><button type="button" class="inc-step" data-leanstep="-1" aria-label="Lower">−</button>` +
+          `<input type="number" class="inc-val lean-val" step="1" value="${reading}" inputmode="decimal" aria-label="Distance to the wall" />` +
+          `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-leanstep="1" aria-label="Higher">+</button></div>`
+        : `<div class="rom-ref-chips lean-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-leanblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`) +
+      `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span><div class="rom-ref-chips">` +
+      LEAN_POINTS.map((p) => `<button type="button" class="rom-ref-chip${p === point ? " is-on" : ""}" data-leanpoint="${p}">${escapeHtml(LEAN_POINT_LBL[p])}</button>`).join("") + `</div></div>` +
+      `<div class="rom-ref lean-hand"><span class="rom-ref-lbl muted">your hand (tips→palm)</span>` +
+      `<input type="number" class="rom-ref-input lean-hand-val" step="1" min="1" value="${hand}" aria-label="Your hand length, fingertips to palm-base (cm)" /><span class="rom-unit-lbl muted">cm</span></div>` +
+      `<div class="inc-eq muted">= ${canon}cm from the palm → tag ${level}</div>` +
+      `<button type="button" class="inc-floor" data-leandefaultbtn>no lean (default)</button>`;
+    place();
+  };
+  pop.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const u = t.closest<HTMLElement>("[data-leanunit]");
+    if (u?.dataset.leanunit) { unit = u.dataset.leanunit === "block" ? "block" : "cm"; render(); commit(); return; }
+    const s = t.closest<HTMLElement>("[data-leanstep]");
+    if (s?.dataset.leanstep) { reading = Math.max(0, Math.round(reading + Number(s.dataset.leanstep))); render(); commit(); return; }
+    const bl = t.closest<HTMLElement>("[data-leanblock]");
+    if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; render(); commit(); return; }
+    const pt = t.closest<HTMLElement>("[data-leanpoint]");
+    if (pt?.dataset.leanpoint) { point = pt.dataset.leanpoint as HandPoint; render(); commit(); return; }
+    if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; render(); commit(); return; }
+  });
+  pop.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    const vi = t.closest<HTMLInputElement>(".lean-val");
+    if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); commit(); pop.querySelector(".inc-eq")!.textContent = `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`; } return; }
+    const hi = t.closest<HTMLInputElement>(".lean-hand-val");
+    if (hi) { const v = parseFloat(hi.value); if (Number.isFinite(v) && v > 0) { hand = v; setHandLength(username, v); commit(); pop.querySelector(".inc-eq")!.textContent = `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`; } return; }
+  });
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeLeanPicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeLeanPicker(); };
+  leanPickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); leanPickerClose = null;
+  };
+  document.body.appendChild(pop);
+  render();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
+}
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
   // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
@@ -19321,9 +19452,13 @@ function addmVariantField(ex: string): string {
   const incline = isInclineLevelExercise(ex)
     ? cap("height", `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`)
     : "";
+  // Forward-LEAN pill (handstand families) — its own rich hand-point/cm/block distance picker
+  // (handstandLean.ts), captioned like the others. Always shown (lean is the point of wall-taps);
+  // it replaces the plain lean select in the ADD path (variantSelectsHtml skips lean there).
+  const lean = hasLeanDim(ex) ? cap("fwd lean", leanPillHtml(ex)) : "";
   // No inline "＋ tag" button — the passive-tag PALETTE above the sets is the one place to add a
   // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
-  return dims + incline + rom;
+  return dims + incline + rom + lean;
 }
 /** Is a tag ACTIVE (shown inline next to the weight) for this exercise — i.e. the owner has
  * promoted it, OR it's a dim whose DEFAULT level is meaningful (non-gray, e.g. back-to-wall)?
@@ -19342,7 +19477,8 @@ function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
   const fam = familyOf(ex);
   const tags: { id: string; label: string }[] = [];
-  if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
+  // lean is excluded — it has its own always-shown rich pill (leanPillHtml), not a palette toggle.
+  if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
   tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   const pills = tags.map((t) => {
     const on = paletteTagActive(ex, fam, t.id);
@@ -19723,6 +19859,9 @@ function onAddModalClick(e: MouseEvent): void {
   // ROM pill → the unit (% / cm) + reference picker.
   const romPill = t.closest<HTMLElement>(".wo-af-rompill");
   if (romPill) { openRomPicker(romPill); return; }
+  // Lean pill → the hand-point + cm/block + hand-length distance picker.
+  const leanPill = t.closest<HTMLElement>(".wo-af-leanpill");
+  if (leanPill) { openLeanPicker(leanPill); return; }
   // Tag palette ＋/✓ : promote/demote a tag for this exercise so it shows (or hides) next to the
   // weight. The dim pills are always rendered (just hidden by syncAddmVtags when passive), so
   // toggling one just re-runs the visibility — typed weights/reps + other picked tags survive.
@@ -19982,6 +20121,11 @@ function onInlineAddGo(form: HTMLElement): boolean {
         const dim = s.dataset.dim!; const lvl = s.value;
         if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]);
       }
+      // The lean PILL (handstand families) carries its snapped canonical level on data-leanlevel —
+      // recorded as the `lean` tag when it's away from the default (0cm = no lean).
+      const leanPill = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+      const leanLvl = leanPill?.dataset.leanlevel;
+      if (leanLvl && leanLvl !== (leanPill!.dataset.leandefault ?? "0cm")) chosenDims.push(["lean", leanLvl]);
       // This line's ROM is a VARIATION, recorded as a per-set attribute below — NEVER as a note
       // (owner: "tags/variations are not notes; notes are user-only"). Read the pill into a rom
       // object: cm → always (a deliberate value); % → only when it differs from the default.

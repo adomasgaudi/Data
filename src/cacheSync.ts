@@ -83,7 +83,7 @@ export const GLOBAL_KEYS: ReadonlySet<string> = new Set([
   "colosseum.levelScales.v1", "colosseum.inclineScales.v1", "colosseum.machineMode.v1",
   "colosseum.machineWeights.v1", "colosseum.assistedHalve.v1", "colosseum.noteRenames.v1",
   "colosseum.notComparableNotes.v1", "colosseum.manualAthletes.v1", "colosseum.coaching.v1",
-  "colosseum.designTokens.v1",
+  "colosseum.designTokens.v1", "colosseum.handLength.v1",
 ]);
 
 /** The tier a localStorage key belongs to. "device" = the browser-only set (never synced) plus

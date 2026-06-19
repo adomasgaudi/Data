@@ -50,6 +50,21 @@ export function leanCanonicalFromBlock(side: YogaBlockSide, point: HandPoint, ha
   return leanCanonicalCm(YOGA_BLOCK_CM[side], point, handLengthCm);
 }
 
+/** Snap a canonical cm to the NEAREST existing lean level key (e.g. "0cm".."23cm"), so a
+ * converted reading maps onto the family's discrete `lean` levels without a resolver change.
+ * `levelKeys` are the lean dimension's keys; the numeric cm is parsed from each. */
+export function snapToLeanLevelCm(canonicalCm: number, levelKeys: readonly string[]): string {
+  let best = levelKeys[0] ?? "0cm";
+  let bestDiff = Infinity;
+  for (const k of levelKeys) {
+    const n = parseFloat(k); // "18cm" → 18, "-5cm" → -5
+    if (!Number.isFinite(n)) continue;
+    const d = Math.abs(n - canonicalCm);
+    if (d < bestDiff) { bestDiff = d; best = k; }
+  }
+  return best;
+}
+
 // ── Wall-tap CONTACT (what touches the wall × rest vs light tap) ────────────────
 // One tag for the handstand WALL-TAP touch variation. Two attributes (what contacts:
 // hips+shoulders vs shoulders-only; and contact: rest vs light tap) → 4 levels. Short

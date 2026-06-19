@@ -2895,15 +2895,17 @@ sup.wr-bw { font-size: 0.85em; }
 .inc-floor { font: inherit; font-size: 0.78rem; padding: 4px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .inc-floor:hover { color: var(--accent); background: var(--accent-soft); }
 /* ROM unit-pill — same compact look as the incline pill; tap → the %/cm + reference picker. */
-.addm-line-vars .wo-af-rompill {
+.addm-line-vars .wo-af-rompill, .addm-line-vars .wo-af-leanpill {
   flex: 0 0 auto; min-height: 0; width: auto;
   padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
   text-transform: uppercase; letter-spacing: 0.02em;
   border-radius: var(--r-xs); border: 1px solid var(--line);
   background: var(--line); color: var(--muted); cursor: pointer;
 }
-.addm-line-vars .wo-af-rompill:hover { border-color: var(--accent); color: var(--accent); }
-.addm-line-vars .wo-af-rompill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+.addm-line-vars .wo-af-rompill:hover, .addm-line-vars .wo-af-leanpill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Lean picker hand-length row (reuses .rom-ref styling); the cm input is narrow. */
+.lean-pop .lean-hand-val { width: 3rem; }
 /* ROM picker (reuses .inc-pop) reference row (cm mode): quick chips + a free-text "from…" field. */
 .rom-unit-lbl { font-size: 0.8rem; }
 .rom-ref { display: flex; flex-direction: column; gap: 5px; }
