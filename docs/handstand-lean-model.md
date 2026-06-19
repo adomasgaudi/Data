@@ -92,10 +92,15 @@ real / the exact ordering.)
 ---
 
 ## Open questions (lock before building)
-1. **Hand calibration model** — one length + ratios, or three measured offsets? Where stored?
-2. **Yoga block** — 3 sides of one block (≈5/15/23 cm) or 3 blocks? Exact cm of each?
-3. **Wall-tap contact tag** — confirm the 4 variations, short codes, difficulty order.
-4. Canonical = palm-base ✅ (owner stated). Default input reference = finger-knuckles ✅ (owner stated).
+1. **Hand calibration** — ✅ LOCKED: **one measurement** (fingertips→palm-base, owner ≈16cm),
+   stored per-person/synced; the in-between points are ESTIMATED as fractions of that length:
+   `fingertips = 1.0·L`, `finger-knuckles ≈ 0.7·L`, `knuckles ≈ 0.5·L`, `base = 0`
+   (anatomical ~half palm / half fingers — calibratable constants). canonical_cm = input + offset(point).
+2. **Yoga block** — ✅ LOCKED: **3 sides of ONE block ≈ 5 / 15 / 23 cm** (small/medium/large = the
+   side it stands on). block entry: canonical_cm = side_cm + offset(point).
+3. **Wall-tap contact** — ✅ LOCKED, easiest→hardest: hips+shoulders rest → shoulders rest →
+   hips+shoulders tap → shoulders tap (hips+shoulders easier than shoulders-only; rest easier than tap).
+4. Canonical = palm-base ✅. Default input reference = finger-knuckles ✅.
 
 ## Build sketch (after sign-off — one box at a time, deploy on opus)
 - [ ] Per-person hand-offset input (profile/Settings, synced).
