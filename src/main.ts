@@ -2811,7 +2811,7 @@ function setSetRom(id: string, rom: { unit: "pct" | "cm"; val: number; ref?: str
 /** A set's ROM as a chip + the note with any LEGACY "ROM…" token stripped out. ROM lives on the
  * per-set override now; older sets may still carry a "ROM X%"/"ROM Ncm" note from before this
  * change — we parse it for display so it shows as a chip (a variation), never as a user note. */
-function romOfSet(sid: string, notes: string | undefined): { chip: string; note: string } {
+function romOfSet(sid: string, notes: string | undefined): { chip: string; note: string; label: string } {
   let label = "", tip = "Range of motion for this set", from = "";
   const o = setOverrides[sid]?.rom;
   if (o) {
@@ -2826,7 +2826,7 @@ function romOfSet(sid: string, notes: string | undefined): { chip: string; note:
   if (from) tip += ` — measured from ${from}`;
   const note = (notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
   const chip = label ? `<span class="set-rom" title="${escapeHtml(tip)}">${escapeHtml(label)}</span>` : "";
-  return { chip, note };
+  return { chip, note, label };
 }
 
 /**
@@ -7941,38 +7941,43 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 // same. A dimension's BASELINE level is "just the exercise" (a free push-up) and is
 // NOT a tag: only levels that differ from the family's config default get a chip, and
 // every label comes from the shared AF_LEVEL_LBL map (afLevelText). (WO-235 #prune)
-function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>): string {
+/** A model-lift set's resolved variation vec — the note's implied vec + the per-set `__set:<id>`
+ * picked tags (so noteless picks resolve too). {} for a non-model lift. */
+function setVec(r: SetRecord): Record<string, unknown> {
+  const fam = familyOf(r.exerciseName);
+  if (!fam) return {};
+  const note = (r.notes ?? "").trim();
+  return {
+    ...(note ? { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) } : {}),
+    ...noteVecOverride(r.exerciseName, `__set:${setId(r)}`),
+  };
+}
+function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>): string {
   if (!fam) return "";
   const chips: string[] = [];
   const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
   // Render EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
   // show, not just support/band). A GRAY level (the obvious baseline, or an owner 👁 override) is
   // "just the exercise" and never a chip. The family "rom" depth dim is skipped — range is the
-  // universal ROM chip's job (rendered separately), so it never double-shows.
+  // universal ROM chip's job (rendered separately), so it never double-shows. `suppress` hides a
+  // dim whose value is already shown at the exercise header (hoisted common tag).
   for (const dim of AF_DIM_ORDER) {
     if (dim === "rom") continue;
     const v = vec[dim] != null ? String(vec[dim]) : null;
     if (!v || isGray(fam, dim, v)) continue;
+    if (suppress && suppress[dim] === v) continue;
     const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
     const txt = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
     push(cls, txt);
   }
   return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
 }
-function variationChipsHtml(r: SetRecord): string {
+function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): string {
   const fam = familyOf(r.exerciseName);
   if (!fam) return "";
-  // Picked tags on a model-lift set live under the per-set `__set:<id>` key — whether the set is
-  // NOTELESS or also carries a user note. A typed note may ALSO imply a vec. Merge both so every
-  // picked tag shows (the bug: keying only off r.notes hid all tags on a noteless set, e.g. a
-  // forearm-support pick that never wrote a note).
-  const note = (r.notes ?? "").trim();
-  const vec = {
-    ...(note ? { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) } : {}),
-    ...noteVecOverride(r.exerciseName, `__set:${setId(r)}`),
-  };
+  const vec = setVec(r);
   if (Object.keys(vec).length === 0) return "";
-  return variationChipsFromVec(fam, vec);
+  return variationChipsFromVec(fam, vec, suppress);
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
@@ -7989,7 +7994,7 @@ function variantTriggerData(s: SetRecord, sid: string): string {
   return `data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${scaleNote ? ` data-scaleedit-rawnote="${escapeHtml(scaleNote)}"` : ""}${lvlAttrs}`;
 }
 
-function setDisplay(raw: SetRecord): string {
+function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
   // compact line resolves the SAME effective note — and therefore the same
   // ×multiplier — as the expanded set rows (setRowsHtml, which also does this).
@@ -8006,7 +8011,8 @@ function setDisplay(raw: SetRecord): string {
   // ROM is a VARIATION chip shown with the tags — NEVER in the note (owner). romOfSet pulls it
   // from the per-set attribute (or strips a legacy "ROM…" token) and returns the USER note only.
   const romRes = romOfSet(setId(raw), s.notes);
-  const romChip = romRes.chip;
+  // Suppress the ROM chip when this set's ROM is the hoisted common one (shown at the header).
+  const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const note = romRes.note;
   // Bodyweight = no real added weight (0, 1, or unlogged null): the VARIATION (tag / ×N) is
   // the description and becomes the shaded base, with reps as the trailing superscript — so a
@@ -8029,7 +8035,7 @@ function setDisplay(raw: SetRecord): string {
     canEditCurrentAthlete()
       ? `<button type="button" class="wo-set-menu${hasVariant && S.showVariants ? " has-var" : ""}" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
       : h;
-  const chips = variationChipsHtml(s) + romChip; // support / band / lean chips (model lifts) + ROM chip
+  const chips = variationChipsHtml(s, suppress) + romChip; // variation chips (minus hoisted) + ROM chip
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
@@ -8116,7 +8122,7 @@ function groupByKey<T>(items: readonly T[], keyOf: (t: T) => string): T[][] {
  * sessions: week / 2-week modes tint one band per DAY; month / 3-month modes tint
  * one band per WEEK *and* split the days inside it with a faint divider — so both
  * the week and the separate days are indicated. Day mode = one session, no tint. */
-function setListHtml(setsAsc: readonly SetRecord[]): string {
+function setListHtml(setsAsc: readonly SetRecord[], suppress?: Record<string, string>): string {
   const mode = S.workoutViewMode;
   // Newest-first everywhere (matches the history order): reverse the date-sorted
   // sets so the latest day/week/set leads and a session's warmup reads at the end.
@@ -8127,27 +8133,68 @@ function setListHtml(setsAsc: readonly SetRecord[]): string {
     if (sets.length === 0) return "";
     const CAP = 14;
     const banded = groupByKey(sets.slice(0, CAP), (s) => s.date)
-      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s)).join(" ")}</span>`)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
       .join(" ");
     return banded + (sets.length > CAP ? ` <span class="muted wo-more">+${sets.length - CAP}</span>` : "");
   }
-  if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
+  if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s, suppress)).join(" ");
   const byWeekBand = mode === "month" || mode === "3month";
   if (!byWeekBand) {
     // Week / 2-week: one tinted band per day.
     return groupByKey(sets, (s) => s.date)
-      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s)).join(" ")}</span>`)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
       .join(" ");
   }
   // Month / 3-month: a tinted band per WEEK, the days inside split by a thin divider.
   return groupByKey(sets, (s) => mondayKey(s.date))
     .map((wk) => {
       const inner = groupByKey(wk, (s) => s.date)
-        .map((dg) => `<span class="wo-day" title="${escapeHtml(shortDate(dg[0]!.date))}">${dg.map((s) => setDisplay(s)).join(" ")}</span>`)
+        .map((dg) => `<span class="wo-day" title="${escapeHtml(shortDate(dg[0]!.date))}">${dg.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
         .join(`<span class="wo-day-sep" aria-hidden="true"></span>`);
       return `<span class="wo-sess" title="${escapeHtml(periodGroupLabel(mondayKey(wk[0]!.date), "week"))}">${inner}</span>`;
     })
     .join(" ");
+}
+/** The variation tags shared by a MAJORITY of an exercise's sets, to hoist up to the exercise
+ * header (owner: don't repeat the same tag on every set). Returns { dim → value } for each tag
+ * a strict majority share — plus "__rom" → the ROM label when a majority share that. A variable
+ * tag (e.g. ROM differing per set) has no majority value, so it's never hoisted. */
+function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fam = sets.length ? familyOf(sets[0]!.exerciseName) : null;
+  if (sets.length < 2) return out;
+  const total = sets.length;
+  const majority = (counts: Map<string, number>): string | null => {
+    let best: string | null = null, bestN = 0;
+    for (const [v, n] of counts) if (n > bestN) { best = v; bestN = n; }
+    return best && bestN > total / 2 ? best : null; // strict majority of ALL the exercise's sets
+  };
+  if (fam) {
+    for (const dim of AF_DIM_ORDER) {
+      if (dim === "rom") continue;
+      const counts = new Map<string, number>();
+      for (const s of sets) {
+        const v = setVec(s)[dim];
+        const sv = v != null ? String(v) : null;
+        if (sv && !isGray(fam, dim, sv)) counts.set(sv, (counts.get(sv) ?? 0) + 1);
+      }
+      const m = majority(counts);
+      if (m) out[dim] = m;
+    }
+  }
+  // ROM (the universal chip) — hoist its label when a majority share the same one.
+  const romCounts = new Map<string, number>();
+  for (const s of sets) { const l = romOfSet(setId(s), s.notes).label; if (l) romCounts.set(l, (romCounts.get(l) ?? 0) + 1); }
+  const rm = majority(romCounts);
+  if (rm) out["__rom"] = rm;
+  return out;
+}
+/** The hoisted common tags rendered as chips for the exercise header (variation chips + the ROM
+ * chip), or "" when nothing is shared by a majority. */
+function commonTagsChips(fam: string | null, common: Record<string, string>): string {
+  const vecChips = variationChipsFromVec(fam, common); // common is a {dim: value} map → renders the shared dims
+  const romChip = common["__rom"] ? `<span class="set-rom" title="Range of motion (most sets)">${escapeHtml(common["__rom"])}</span>` : "";
+  return vecChips + romChip;
 }
 
 // The golden "best RM" column normally shows each lift's estimated 1RM. The X-RM
@@ -8373,7 +8420,11 @@ function renderWorkoutsPage() {
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        const setsTxt = setListHtml(sets) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
+        // Hoist the tags a MAJORITY of these sets share up to the header (owner: don't repeat the
+        // same tag on every set); suppress them per-set so only the sets that DIFFER show their own.
+        const common = commonTagsFor(sets);
+        const commonChips = commonTagsChips(familyOf(exerciseName), common);
+        const setsTxt = setListHtml(sets, common) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
         const name = displayName(exerciseName);
         // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
         // each set keeps its real source lift in originalExerciseName. Show the distinct
@@ -8414,7 +8465,7 @@ function renderWorkoutsPage() {
         // The "+ set" button lives in its OWN right-hand grid column (3rd col of
         // .wo-ex-line), aligned to the name row — so every "+ set" lines up in a
         // column on the right instead of wrapping under each exercise's sets (owner).
-        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
