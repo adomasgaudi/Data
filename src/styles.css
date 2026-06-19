@@ -4287,6 +4287,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .ex-var-lvl.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .ex-var-lvl-f { opacity: 0.7; font-size: 0.92em; }
 .ex-var-lvl.is-on .ex-var-lvl-f { opacity: 0.85; }
+/* Level chip with an explanation: stack the name+factor over a small gray hint (owner: the
+   create/variation menu should explain each tag). */
+.ex-var-lvl:has(.ex-var-lvl-h) { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; white-space: normal; text-align: left; line-height: 1.2; }
+.ex-var-lvl-h { font-size: 0.86em; opacity: 0.6; }
+.ex-var-lvl.is-on .ex-var-lvl-h { opacity: 0.8; }
 .ex-var-product { margin-top: 0.15rem; font-size: 0.86rem; }
 .ex-var-product strong { color: var(--accent); }
 .ex-var-x { font-size: 0.86rem; font-weight: 700; color: var(--accent); }

@@ -2926,9 +2926,26 @@ function romOfSet(sid: string, notes: string | undefined): { chip: string; note:
   }
   if (from) tip += ` — measured from ${from}`;
   const note = (notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
-  const chip = label ? `<span class="set-rom" title="${escapeHtml(tip)}">${escapeHtml(label)}</span>` : "";
+  const chip = label ? `<span class="set-rom" title="${escapeHtml(label + (from ? ` — from ${from}` : ""))}">${escapeHtml(shortRomLabel(label))}</span>` : "";
   return { chip, note, label };
 }
+/** Compact ROM chip text for the collapsed history (owner: tags must be tiny, but still keep a
+ * 2–4 letter identifier of WHAT they are). Keeps the "ROM" identifier, drops "cm"/keeps "%", and
+ * abbreviates the reference word to its first letter: "ROM 30cm floor" → "ROM 30cm f". The full
+ * label stays in the chip's title + the picker. */
+function shortRomLabel(label: string): string {
+  const m = label.match(/^ROM\s*(\d+(?:\.\d+)?)\s*(cm|%)(?:\s+(.+))?$/i);
+  if (!m) return label;
+  const ref = m[3] ? ` ${m[3].trim()[0]!.toLowerCase()}` : "";
+  return `ROM ${m[1]}${m[2]!.toLowerCase()}${ref}`;
+}
+/** Short 2–4 letter dimension code prefixed to a value-style chip so a bare measurement
+ * (e.g. "30cm") says WHICH dimension it is (owner: "need a 2-4 letter identifier — what kind
+ * of 30cm is it"). Dims whose level label already self-identifies (support b2w, band N, ladder
+ * rung N, position, lean) get no code. */
+const DIM_CHIP_CODE: Record<string, string> = {
+  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD",
+};
 
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
@@ -8073,7 +8090,9 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
     if (!v || isGray(fam, dim, v)) continue;
     if (suppress && suppress[dim] === v) continue;
     const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
-    const txt = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
+    const base = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
+    const code = DIM_CHIP_CODE[dim];
+    const txt = code ? `${code} ${base}` : base;
     items.push({ cls, txt });
   }
   if (!items.length) return "";
@@ -8320,7 +8339,7 @@ function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
  * chip), or "" when nothing is shared by a majority. */
 function commonTagsChips(fam: string | null, common: Record<string, string>): string {
   const vecChips = variationChipsFromVec(fam, common); // common is a {dim: value} map → renders the shared dims
-  const romChip = common["__rom"] ? `<span class="set-rom" title="Range of motion (most sets)">${escapeHtml(common["__rom"])}</span>` : "";
+  const romChip = common["__rom"] ? `<span class="set-rom" title="${escapeHtml(common["__rom"])} — range of motion (most sets)">${escapeHtml(shortRomLabel(common["__rom"]))}</span>` : "";
   return vecChips + romChip;
 }
 
@@ -14755,10 +14774,17 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
         return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">band</span><div class="ex-var-dim-chips">${noneChip}${bandedBtn}</div></div>`;
       }
       const chips = Object.keys(levels)
-        .map(
-          (l) =>
-            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">${facLabel(l)}</span></button>`,
-        )
+        .map((l) => {
+          // Friendly label (not the raw key like "back_to_wall") + the level's explanation as a
+          // small gray sub-line, so the create/variation menu explains each tag (owner).
+          const hint = afLevelHint(dim, l);
+          return (
+            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}"${hint ? ` title="${escapeHtml(hint)}"` : ""}>` +
+            `<span class="ex-var-lvl-n">${escapeHtml(afLevelText(dim, l, fam))} <span class="ex-var-lvl-f">${facLabel(l)}</span></span>` +
+            (hint ? `<span class="ex-var-lvl-h">${escapeHtml(hint)}</span>` : "") +
+            `</button>`
+          );
+        })
         .join("");
       return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
@@ -18965,7 +18991,7 @@ const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "h
 // rendered ONLY in the open picker menu (e.g. "b2w" with hint "back to wall").
 type AfLevelLabel = { label: string; hint?: string };
 const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
-  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hanging" }, dips_bar: { label: "dips bar" } },
+  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hang", hint: "hanging" }, dips_bar: { label: "dips", hint: "dips bar" } },
   // Ladder leg grip + rung height (only meaningful on the ladder support).
   ladderGrip: { none: { label: "no support" }, lsit: { label: "L-shape", hint: "legs out in an L" }, hooked: { label: "hooked", hint: "legs hooked on a rung" } },
   ladderH: { none: { label: "any rung" }, lad3: { label: "rung 3" }, lad5: { label: "rung 5" }, lad6: { label: "rung 6" }, lad9: { label: "rung 9" } },
@@ -18979,7 +19005,7 @@ const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
   // A floor push-up is just "free" (the plain exercise, the default → never tags); on-knees is the only real variation.
   position: { floor: { label: "free" }, knees: { label: "knees" } },
   // Lever (plate distance from the grip) levels are cm, left as-is; reach (arm held out) reads in words.
-  reach: { tucked: { label: "tucked in" }, neutral: { label: "neutral" }, extended: { label: "extended" }, far: { label: "far out" } },
+  reach: { tucked: { label: "tuck", hint: "tucked in" }, neutral: { label: "neut", hint: "neutral" }, extended: { label: "ext", hint: "extended" }, far: { label: "far", hint: "far out" } },
 };
 // Wall-tap CONTACT levels: short chip code + the long explanation as the picker-menu hint,
 // built from the handstandLean SSOT so the labels can't drift. "none" = unset (the default,
