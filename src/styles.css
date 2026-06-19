@@ -2491,11 +2491,16 @@ select.subtle-select:hover, select.subtle-select:focus {
 .hh-card.hh-gap { background: none; border: none; border-left: 1px dashed var(--line); border-right: 1px dashed var(--line); border-radius: 0; display: flex; align-items: center; justify-content: center; }
 .hh-gap-dots { writing-mode: vertical-rl; color: var(--muted); font-size: 0.7rem; letter-spacing: 1px; }
 .wo-ex-body { min-width: 0; display: flex; align-items: baseline; gap: 0.3rem; flex-wrap: wrap; }
-/* Tags shared by the WHOLE exercise (hoisted from the sets) sit on the TITLE row, pushed to the
-   right end — so it reads as the group's tags, not one set's (owner). The per-set list then always
-   starts on its OWN line below the title + shared tags. */
-.wo-ex-body > .wo-ex-commontags { margin-left: auto; align-self: baseline; }
 .wo-ex-body > .wo-setlist { flex-basis: 100%; }
+/* Collapsed day view: the exercise NAME and its hoisted shared tags share ONE title row that
+   never wraps, with the per-set list on its own line below. The shared tags are pushed to the
+   right end and stack into their own compact column (owner: they belong to the whole exercise,
+   stay IN LINE to the right, never wrapping underneath the name). Scoped to .wo-ex-line so the
+   experimental horizontal-history cells keep their own layout. */
+.wo-ex-line > .wo-ex-body { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.wo-ex-titlerow { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 0.3rem; min-width: 0; }
+.wo-ex-titlerow > .wo-exname { flex: 0 1 auto; min-width: 0; }
+.wo-ex-titlerow > .wo-ex-commontags { margin-left: auto; flex: 0 1 auto; min-width: 0; }
 /* COLOUR RULE: calculated values are gold, editable values are blue. The ×mult
    and the day 1RM are computed, so they read gold. */
 /* Difficulty-multiplier tag (×1.3): a SMALL distinct pill matching the handstand
@@ -2529,11 +2534,22 @@ select.subtle-select:hover, select.subtle-select:focus {
 .rm-frac .rm-den { padding: 0 0.3rem; }
 /* Variation chips (b2w / f2w / ladder / free / band …) shown per set. */
 /* Tags wrap into tight rows (owner: they're short vertically but wide horizontally, so stack
-   them close — two rows beat one long horizontal run). Tight row-gap, normal column-gap. */
-.wo-var-chips { display: inline-flex; flex-wrap: wrap; align-content: flex-start; gap: 1px 3px; margin-right: 4px; vertical-align: middle; }
+   them close — two rows beat one long horizontal run). Tight row-gap, normal column-gap. The
+   max-width caps the block at ~2 columns so a many-tag set stacks compactly instead of running
+   off as one long line; the weight stays glued beside it via .wo-set-core. */
+.wo-var-chips { display: inline-flex; flex-wrap: wrap; align-content: flex-start; gap: 1px 3px; margin-right: 4px; vertical-align: middle; max-width: 6.5rem; }
 .wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; }
 .wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
 .wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
+/* Overflow tags collapse behind a ＋N "see more" chip (max 6 visible). Tapping ＋N adds
+   .show-all (openSetMenuClick) → the hidden tags appear and a "−" collapses them again. */
+.wo-var-more, .wo-var-less { cursor: pointer; color: var(--accent); background: var(--accent-soft); }
+.wo-var-hidden, .wo-var-chips.show-all .wo-var-more { display: none; }
+.wo-var-chips.show-all .wo-var-hidden, .wo-var-chips.show-all .wo-var-less { display: inline-block; }
+.wo-var-less { display: none; }
+/* Glue the tag block + weight^reps so the weight can never wrap to its own line away from the
+   tags (owner). The chips box wraps its OWN tags internally; the weight sits centred beside it. */
+.wo-set-core { display: inline-flex; align-items: center; flex-wrap: nowrap; vertical-align: top; }
 /* Owner sets-table layout: the tags + multipliers sit NEXT TO the rep count (weight cell);
    the 1RM stands alone in its column; the descriptive variation info rides in the Vol cell
    (falling back to the volume number). */

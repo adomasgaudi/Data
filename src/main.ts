@@ -7952,11 +7952,16 @@ function setVec(r: SetRecord): Record<string, unknown> {
     ...noteVecOverride(r.exerciseName, `__set:${setId(r)}`),
   };
 }
+/** How many variation chips show before the rest collapse behind a "see more" (＋N)
+ * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
+ * off as a long horizontal line. >6 is rare (handstands at most), so the overflow is tucked
+ * away and revealed in place by tapping ＋N. Applies to both per-set chips AND the hoisted
+ * common tags (commonTagsChips renders through here). */
+const MAX_VAR_CHIPS = 6;
 function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>): string {
   if (!fam) return "";
-  const chips: string[] = [];
-  const push = (cls: string, txt: string) => chips.push(`<span class="wo-var-chip${cls}">${escapeHtml(txt)}</span>`);
-  // Render EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
+  const items: { cls: string; txt: string }[] = [];
+  // Collect EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
   // show, not just support/band). A GRAY level (the obvious baseline, or an owner 👁 override) is
   // "just the exercise" and never a chip. The family "rom" depth dim is skipped — range is the
   // universal ROM chip's job (rendered separately), so it never double-shows. `suppress` hides a
@@ -7968,9 +7973,25 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
     if (suppress && suppress[dim] === v) continue;
     const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
     const txt = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
-    push(cls, txt);
+    items.push({ cls, txt });
   }
-  return chips.length ? `<span class="wo-var-chips">${chips.join("")}</span>` : "";
+  if (!items.length) return "";
+  const chip = (it: { cls: string; txt: string }, extra = "") =>
+    `<span class="wo-var-chip${it.cls}${extra}">${escapeHtml(it.txt)}</span>`;
+  let body: string;
+  if (items.length > MAX_VAR_CHIPS) {
+    // 5 real tags + a ＋N "see more"; the rest ride hidden until ＋N is tapped (toggles
+    // .show-all via openSetMenuClick), then a "−" collapses them again.
+    const shown = items.slice(0, MAX_VAR_CHIPS - 1).map((it) => chip(it)).join("");
+    const rest = items.slice(MAX_VAR_CHIPS - 1).map((it) => chip(it, " wo-var-hidden")).join("");
+    const hiddenN = items.length - (MAX_VAR_CHIPS - 1);
+    const more = `<span class="wo-var-chip wo-var-more" role="button" tabindex="0" title="Show ${hiddenN} more tag${hiddenN === 1 ? "" : "s"}">+${hiddenN}</span>`;
+    const less = `<span class="wo-var-chip wo-var-less" role="button" tabindex="0" title="Show fewer tags">−</span>`;
+    body = shown + more + rest + less;
+  } else {
+    body = items.map((it) => chip(it)).join("");
+  }
+  return `<span class="wo-var-chips">${body}</span>`;
 }
 function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): string {
   const fam = familyOf(r.exerciseName);
@@ -8035,6 +8056,11 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
     canEditCurrentAthlete()
       ? `<button type="button" class="wo-set-menu${hasVariant && S.showVariants ? " has-var" : ""}" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
       : h;
+  // Glue the tag block + weight^reps together (owner: "you cannot wrap the weight away from
+  // the tags — they have to be in line"). An inline-flex row keeps the chips box (which wraps
+  // its OWN tags into tight rows) and the weight^reps side-by-side, so the weight can never
+  // drop onto a line of its own when the tags wrap.
+  const core = (h: string): string => `<span class="wo-set-core">${h}</span>`;
   const chips = variationChipsHtml(s, suppress) + romChip; // variation chips (minus hoisted) + ROM chip
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
@@ -8059,7 +8085,7 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
   // show "UN" with the reps instead of a weight number.
   if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
-    return finish(effWrap(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`));
+    return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`)));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -8085,10 +8111,10 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
       const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
       const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
       const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-      return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${weightHtml}${tag}${mach}`));
+      return finish(effWrap(core(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${weightHtml}${tag}${mach}`)));
     }
     // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
-    return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${weightHtml}${mach}`));
+    return finish(effWrap(core(bw ? `${chips}${repsSup}${mach}` : `${chips}${weightHtml}${mach}`)));
   }
   // A NOTE never sits in the tag/weight slot (owner: "the note shouldn't be in the same
   // position as the tags; write it as a very small text right underneath the weight — under
@@ -8099,7 +8125,7 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
     : "";
   const stack = (chip: string): string => (noteSub ? `<span class="wo-set-stack"><span class="wo-set-main">${chip}</span>${noteSub}</span>` : chip);
   // Tags + weight^reps on top (a bodyweight set just reads 0²⁰), the note tiny underneath.
-  return finish(effWrap(stack(`${chips}${weightHtml}${mach}`)));
+  return finish(effWrap(stack(core(`${chips}${weightHtml}${mach}`))));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -8465,7 +8491,11 @@ function renderWorkoutsPage() {
         // The "+ set" button lives in its OWN right-hand grid column (3rd col of
         // .wo-ex-line), aligned to the name row — so every "+ set" lines up in a
         // column on the right instead of wrapping under each exercise's sets (owner).
-        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""} <span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
+        // The name (+ its flags) and the shared tags share ONE title row that never wraps —
+        // the shared tags are pushed to the right and stack into their own compact column, so
+        // they stay IN LINE with the exercise instead of wrapping underneath it (owner). The
+        // per-set list sits on its own line below.
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -10075,6 +10105,12 @@ function deleteSetById(id: string): void {
 /** Tap a COLLAPSED-view set chip → open its small action menu (owner: duplicate /
  * change variant / add a suggested set). */
 function openSetMenuClick(target: HTMLElement): boolean {
+  // Tap a ＋N / − chip → expand/collapse the overflow tags IN PLACE (owner), without
+  // opening the set action menu. Handled here (before the set-menu check) so it works
+  // whether the chips sit in a collapsed set pill, the hoisted common tags, or an
+  // expanded set row.
+  const moreLess = target.closest<HTMLElement>(".wo-var-more, .wo-var-less");
+  if (moreLess) { moreLess.closest(".wo-var-chips")?.classList.toggle("show-all"); return true; }
   const btn = target.closest<HTMLElement>(".wo-set-menu");
   if (!btn?.dataset.setmenu) return false;
   openSetActionMenu(btn);
