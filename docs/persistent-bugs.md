@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-49 — Add-set TAG palette row reads as "out of bounds" (a chip clipped flush at the right edge)
+
+- **First seen / reported:** 2026-06-19, mobile (Brave, Android, b.2.9.256), Add set — HS-Push Up. Owner #persistent: "css is going out of bounds fix" — the top TAGS palette row (`✓ SUPPORT · + SHOULDER GAP · + FOREARM SUPPORT · + TEM…`) shows its last chip sliced off at the right edge with no scroll cue.
+- **Class, not a true overflow:** sibling of PB-24 (add-set popup horizontal overflow). The palette `.addm-passive` is INTENTIONALLY a `flex-wrap:nowrap; overflow-x:auto` scroll row (rule #cram: many tags → ONE horizontally-scrolling row, never a wrapped block), contained by `.addm-card`'s `overflow-x:hidden` + viewport cap (the PB-24 hardening). So nothing actually escapes the card — but a chip clipped HARD at the row's right edge, with no fade / trailing room, reads as broken / out-of-bounds.
+- **Root cause (perception, not geometry):** a horizontal scroll row with no "swipe for more" affordance looks like a layout bug. There was no trailing padding and no edge fade, so the cut chip butted the row edge.
+- **Fix (b.2.9.257, UI-35):** `.addm-passive` gains `padding-right: 0.6rem` (trailing room at scroll-end) + a right-edge `mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent)` so the last visible chip fades into a clear scroll cue instead of a hard cut. The mask sits on the element's border box, so it always marks the right VISIBLE edge regardless of scroll position. Comment `PB-49` at the fix site.
+- **Watch:** before treating an add-modal "out of bounds" as a layout bug, confirm whether the element is a deliberate scroll row (rule #cram) — if so the fix is a scroll AFFORDANCE (fade + trailing pad), not wrapping or shrinking. A hard-clipped chip with no fade is the tell. If it recurs, FIRST read the `.addm-ver` build stamp in the screenshot (here b.2.9.256) — a stale cache was PB-24's real root.
+- **Recurrences:** 0 (first report for this element; class-sibling of PB-24 / the out-of-bounds family).
+
+---
+
 ## PB-48 — Add-set: gray "NONE" tags leak next to the weight + tags sit ABOVE the weight
 
 - **First seen / reported:** 2026-06-19, mobile (Brave, Android, coloseum.netlify.app b.2.9.247), Add set — Handstand kicks. Owner #persistent (two annotated screenshots): (1) "the tags are still ABOVE the weight — they should always be on the LEFT of the weight; if more tags than fit, they WRAP but stay left of the weight." (2) "I'm seeing all kinds of tags that are NOT selected in the menu above — if not selected most should be PASSIVE; I should not see any gray tag unless I select it at the top. If I switch OFF forearm support I STILL see the tag next to the weight." Recurrence **2** (WO-253 b.2.9.240, WO-254 b.2.9.243 both tried to hide the gray tags and did NOT hold on device).

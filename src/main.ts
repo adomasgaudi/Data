@@ -2947,7 +2947,7 @@ function shortRomLabel(label: string): string {
  * of 30cm is it"). Dims whose level label already self-identifies (support b2w, band N, ladder
  * rung N, position, lean) get no code. */
 const DIM_CHIP_CODE: Record<string, string> = {
-  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD",
+  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD", forearmSupport: "FA",
 };
 
 /**
