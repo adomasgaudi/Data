@@ -19400,17 +19400,37 @@ function ghostSetsHtml(exerciseName: string, date: string): string {
 // default, inviting a change. PASSIVE tags = ones NOT shown until you PROMOTE them with ＋
 // (so e.g. ROM stops nagging you with a meaningless "90%" on every lift). A promotion is
 // remembered PER EXERCISE — "full ROM is an exception for this lift" sticks. Saved on device.
-const ADDM_PASSIVE_KEY = "colosseum.addmPassive.v1";
-const addmPassivePromoted = loadJsonObject<Record<string, string[]>>(ADDM_PASSIVE_KEY);
-/** The passive tags promoted (made active) for an exercise — e.g. ["rom"]. */
-function passivePromoted(ex: string): string[] { return addmPassivePromoted[ex] ?? []; }
-function isPassivePromoted(ex: string, id: string): boolean { return passivePromoted(ex).includes(id); }
-/** Toggle a passive tag's promotion for an exercise (persisted). */
-function togglePassivePromoted(ex: string, id: string): void {
-  const cur = new Set(passivePromoted(ex));
-  if (cur.has(id)) cur.delete(id); else cur.add(id);
-  if (cur.size) addmPassivePromoted[ex] = [...cur]; else delete addmPassivePromoted[ex];
-  saveJson(ADDM_PASSIVE_KEY, addmPassivePromoted);
+// PB-48 follow-up (owner): a tag is now a per-exercise SHOWN/HIDDEN override, not just a "promote
+// to add" list — so the owner can DESELECT a tag whose default is a meaningful value (e.g. support
+// = back-to-wall) and make it PASSIVE, as long as the tag has an OBVIOUS (gray) baseline to fall
+// back to. With no override a tag follows its DEFAULT (a meaningful non-gray default shows; a gray
+// default / ROM is passive). A tag with NO obvious/gray level can't be passive → always shown (you
+// can't deselect it). Migrated from the old promoted-list store (membership ⇒ shown:true).
+const ADDM_TAGSHOWN_KEY = "colosseum.addmTagShown.v1";
+const addmTagShown = loadJsonObject<Record<string, Record<string, boolean>>>(ADDM_TAGSHOWN_KEY);
+(function migrateOldPromotedList() {
+  let old: Record<string, string[]> | null = null;
+  try { const s = localStorage.getItem("colosseum.addmPassive.v1"); if (s) old = JSON.parse(s); } catch { /* ignore */ }
+  if (!old) return;
+  for (const ex of Object.keys(old)) { const m = (addmTagShown[ex] ??= {}); for (const id of old[ex] ?? []) if (m[id] === undefined) m[id] = true; }
+  saveJson(ADDM_TAGSHOWN_KEY, addmTagShown);
+  try { localStorage.removeItem("colosseum.addmPassive.v1"); } catch { /* ignore */ }
+})();
+/** Does a dimension have any OBVIOUS (gray) level — a baseline to be PASSIVE with? If not, the tag
+ * can never be deselected (it's always shown), because there's no "nothing special" level to hide
+ * behind. The owner marks which level is obvious via the 👁 toggle in the tag's menu. */
+function famHasGrayLevel(fam: string, dim: string): boolean {
+  return Object.keys(famLevels(fam, dim)).some((l) => isGray(fam, dim, l));
+}
+/** Can this tag be DESELECTED (made passive)? Only if it has an obvious baseline (ROM always can). */
+function tagDeselectable(fam: string | null, id: string): boolean {
+  return id === "rom" || (!!fam && famHasGrayLevel(fam, id));
+}
+/** Set a tag's explicit SHOWN state for an exercise (persisted); clears the store when empty. */
+function setTagShown(ex: string, id: string, shown: boolean): void {
+  const m = (addmTagShown[ex] ??= {});
+  m[id] = shown;
+  saveJson(ADDM_TAGSHOWN_KEY, addmTagShown);
 }
 /** The ROM pill (a passive tag): only rendered on a line when ROM is promoted for the lift. */
 /** The compact label for a ROM pill: "90%" (percent) or "20cm" (centimetres). */
@@ -19618,7 +19638,7 @@ function addmVariantField(ex: string): string {
   const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
   // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
   // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
-  const rom = ex && isPassivePromoted(ex, "rom") ? cap("ROM", romPillHtml(ex)) : "";
+  const rom = ex && tagActive(ex, familyOf(ex), "rom") ? cap("ROM", romPillHtml(ex)) : "";
   // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
   // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
   // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
@@ -19633,13 +19653,17 @@ function addmVariantField(ex: string): string {
   // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
   return dims + incline + rom + lean;
 }
-/** Is a tag ACTIVE (shown inline next to the weight) for this exercise — i.e. the owner has
- * promoted it, OR it's a dim whose DEFAULT level is meaningful (non-gray, e.g. back-to-wall)?
- * A gray-default dim (the obvious baseline) stays PASSIVE until promoted, and a passive tag is
- * NEVER shown next to the weight (owner). The SINGLE source of truth for both the palette ✓/＋
- * and the inline pill's visibility, so they can't disagree. */
+/** Is a tag ACTIVE (shown inline next to the weight) for this exercise? The SINGLE source of truth
+ * for both the palette ✓/＋ and the inline pill's visibility, so they can't disagree.
+ *  - A tag with NO obvious (gray) baseline can never be passive → ALWAYS shown (not deselectable).
+ *  - Otherwise the owner's explicit shown/hidden override wins (so a meaningful-default tag like
+ *    support=b2w CAN be deselected → passive → reverts to its obvious baseline).
+ *  - With no override, a dim whose DEFAULT level is meaningful (non-gray, e.g. b2w) shows; a gray
+ *    default / ROM is passive until ＋added. */
 function tagActive(ex: string, fam: string | null, id: string): boolean {
-  if (isPassivePromoted(ex, id)) return true;
+  if (!tagDeselectable(fam, id)) return true; // no obvious baseline → can't be passive → always on
+  const ov = addmTagShown[ex]?.[id];
+  if (ov !== undefined) return ov; // owner's explicit ✓/＋ choice
   if (id === "rom") return false; // ROM has no "meaningful default" — passive until ＋added
   return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
 }
@@ -19657,7 +19681,13 @@ function passivePaletteHtml(ex: string): string {
   tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   const pills = tags.map((t) => {
     const on = tagActive(ex, fam, t.id);
-    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
+    // A tag with no obvious baseline can't be deselected (it has no "nothing special" level to fall
+    // back to) — show it ✓ and LOCKED so the owner isn't confused why tapping does nothing.
+    const locked = on && !tagDeselectable(fam, t.id);
+    const title = locked
+      ? `${t.label} — always tagged (no obvious default to fall back to)`
+      : on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`;
+    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}${locked ? " is-locked" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(title)}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
   }).join("");
   return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
 }
@@ -20101,39 +20131,35 @@ function onAddModalClick(e: MouseEvent): void {
   // Lean pill → the hand-point + cm/block + hand-length distance picker.
   const leanPill = t.closest<HTMLElement>(".wo-af-leanpill");
   if (leanPill) { openLeanPicker(leanPill); return; }
-  // Tag palette ＋/✓ : promote/demote a tag for this exercise so it shows (or hides) next to the
-  // weight. The dim pills are always rendered (just hidden by syncAddmVtags when passive), so
-  // toggling one just re-runs the visibility — typed weights/reps + other picked tags survive.
-  // ROM is the exception (rendered only when on), so insert/remove its captioned pill in place.
+  // Tag palette ＋/✓ : SHOW or HIDE a tag for this exercise next to the weight. Hiding (deselect)
+  // is allowed only when the tag has an obvious baseline to fall back to (tagDeselectable); a
+  // locked tag does nothing. PB-48: a hidden tag is REMOVED from the DOM (insert/remove the one
+  // pill), so it can't leak — and every other line's picks survive (no full rebuild).
   const passBtn = t.closest<HTMLElement>(".addm-passive-pill");
   if (passBtn?.dataset.passive) {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
     if (ex) {
       const id = passBtn.dataset.passive;
-      togglePassivePromoted(ex, id);
+      const fam = familyOf(ex);
+      const shown = tagActive(ex, fam, id);
+      if (shown && !tagDeselectable(fam, id)) return; // locked — can't deselect (no obvious baseline)
+      setTagShown(ex, id, !shown);
+      const nowOn = !shown;
       if (id === "rom") {
-        const on = isPassivePromoted(ex, "rom");
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
-          if (on && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
-          else if (!on && existing) existing.closest(".addm-vtag")?.remove();
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
+          else if (!nowOn && existing) existing.closest(".addm-vtag")?.remove();
         }
-      } else {
-        // PB-48: promoting a dim INSERTS its captioned pill (seeded with your most-used level);
-        // demoting REMOVES it — so a passive tag is never in the DOM and can't leak by the weight.
-        // Inserting/removing the one pill keeps every other line's picks intact (no full rebuild).
-        const fam = familyOf(ex);
-        if (fam) {
-          const nowActive = tagActive(ex, fam, id);
-          for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
-            const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
-            if (nowActive && !existing) {
-              const html = dimVtagHtml(ex, fam, id);
-              const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
-              if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
-              else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
-            } else if (!nowActive && existing) existing.remove();
-          }
+      } else if (fam) {
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
+          if (nowOn && !existing) {
+            const html = dimVtagHtml(ex, fam, id);
+            const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+            if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+            else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+          } else if (!nowOn && existing) existing.remove();
         }
       }
       const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");

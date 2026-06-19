@@ -2825,7 +2825,10 @@ sup.wr-bw { font-size: 0.85em; }
    LINE carries its OWN .addm-line-vars — a TAG BLOCK of variant/ROM pills + a ＋ tag button on
    the LEFT, with the weight/reps/RIR/✕ grouped on the right (.addm-line-main). Many tags (e.g.
    handstands) wrap within the block; the right group drops below only when out of room. */
-.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; flex: 1 1 auto; min-width: 0; gap: 0.3rem; }
+/* flex: 0 1 auto (don't GROW): the tag block hugs its tags so the weight follows right after them
+   instead of being shoved to the far-right card edge (owner: "the css goes too far to the right").
+   min-width:0 still lets it shrink + wrap its tags onto more left-hand rows when there are many. */
+.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; flex: 0 1 auto; min-width: 0; gap: 0.3rem; }
 .addm-line-vars:empty { display: none; }
 /* dissolve the .wo-af-dims wrapper so its dim/tag columns join the tag wrap directly, beside the ROM */
 .addm-line-vars .wo-af-dims { display: contents; }
@@ -2982,6 +2985,10 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-passive-pill:hover { border-color: var(--accent); color: var(--accent); }
 .addm-passive-pill.is-on { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
+/* Locked = always-tagged (no obvious baseline to fall back to), so it can't be deselected — reads
+   as a calm fixed chip, not a tappable toggle. */
+.addm-passive-pill.is-locked { cursor: default; opacity: 0.8; }
+.addm-passive-pill.is-locked:hover { border-color: var(--accent); color: #fff; }
 .addm-cog-pill {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
   padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);
@@ -3019,7 +3026,8 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-line { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; }
 /* A faint dashed divider between sets so it's clear which tags belong to which set (owner). */
 .addm-lines > .addm-line + .addm-line { border-top: 1px dashed var(--line); padding-top: 0.6rem; }
-.addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; margin-left: auto; }
+/* No margin-left:auto — the weight group sits right after the tags, not pinned to the far edge. */
+.addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
 /* PB-43 — END the escalation war. The weight/reps box was rewritten 6× (chip → outlined →
    plain-text "remove the input look" → "invisible" → visible-box …), ping-ponging between
    "looks like an input" and "I can't see/find it". The owner's reconciling spec: TWO small
