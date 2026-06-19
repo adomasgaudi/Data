@@ -9232,9 +9232,13 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
   // Per-set range of motion is logged as a universal "ROM X%" note token (any
   // exercise); show it as its own chip and peel it out of the displayed note text.
-  const romMatch = (s.notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
-  const romTag = romMatch ? `<span class="set-rom" title="Range of motion for this set">ROM ${romMatch[1]}%</span>` : "";
-  const notesNoRom = (s.notes ?? "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
+  // ROM token: percent ("ROM 90%") or cm with an optional reference ("ROM 20cm from floor").
+  const romCm = (s.notes ?? "").match(/\bROM\s*(\d+)\s*cm(?:\s+from\s+([^,·]+))?/i);
+  const romPctM = (s.notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
+  const romTag = romCm
+    ? `<span class="set-rom" title="Range of motion for this set${romCm[2] ? ` — measured from ${romCm[2].trim()}` : ""}">ROM ${romCm[1]}cm${romCm[2] ? ` ${romCm[2].trim()}` : ""}</span>`
+    : romPctM ? `<span class="set-rom" title="Range of motion for this set">ROM ${romPctM[1]}%</span>` : "";
+  const notesNoRom = (s.notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
   // load for X reps, computed from this set's 1RM. Shown as value^X (matching the weight
@@ -18564,9 +18568,16 @@ function copyLineVariation(from: HTMLElement, to: HTMLElement): void {
     const v = s.dataset.dim ? srcByDim.get(s.dataset.dim) : undefined;
     if (v != null && [...s.options].some((o) => o.value === v)) s.value = v;
   }
-  const fromRom = from.querySelector<HTMLSelectElement>(".wo-af-rom");
-  const toRom = to.querySelector<HTMLSelectElement>(".wo-af-rom");
-  if (fromRom && toRom && [...toRom.options].some((o) => o.value === fromRom.value)) toRom.value = fromRom.value;
+  // ROM is a unit-pill (button) now — copy its unit / value / reference + label.
+  const fromRom = from.querySelector<HTMLElement>(".wo-af-rompill");
+  const toRom = to.querySelector<HTMLElement>(".wo-af-rompill");
+  if (fromRom && toRom) {
+    toRom.dataset.romunit = fromRom.dataset.romunit ?? "pct";
+    toRom.dataset.romval = fromRom.dataset.romval ?? toRom.dataset.romval ?? "";
+    toRom.dataset.romref = fromRom.dataset.romref ?? "";
+    toRom.textContent = romPillLabel(toRom.dataset.romunit, Number(toRom.dataset.romval) || 0);
+    toRom.classList.toggle("is-set", fromRom.classList.contains("is-set"));
+  }
 }
 
 /** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
@@ -19042,11 +19053,89 @@ function togglePassivePromoted(ex: string, id: string): void {
   saveJson(ADDM_PASSIVE_KEY, addmPassivePromoted);
 }
 /** The ROM pill (a passive tag): only rendered on a line when ROM is promoted for the lift. */
+/** The compact label for a ROM pill: "90%" (percent) or "20cm" (centimetres). */
+function romPillLabel(unit: string, val: number): string {
+  return unit === "cm" ? `${val}cm` : `${val}%`;
+}
 function romPillHtml(ex: string): string {
   const romDef = romDefaultFor(ex || "");
-  const romOpts = [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
-    .map((p) => `<option value="${p}"${p === romDef ? " selected" : ""}>${p}%${p === 100 ? " (full)" : ""}</option>`).join("");
-  return `<select class="wo-af-rom wo-af-dim wo-af-dimpill" data-romdefault="${romDef}" title="Range of motion" aria-label="Range of motion">${romOpts}</select>`;
+  // ROM is now a unit-pill (owner): tap it to set the range as a PERCENT or in CM, and for cm pick
+  // what it's measured FROM (the floor, your body, or any other reference). Stored as a note token
+  // ("ROM 90%" / "ROM 20cm from floor"); it's a recorded label, not a difficulty multiplier.
+  return `<button type="button" class="wo-af-rompill wo-af-rom" data-romunit="pct" data-romval="${romDef}" data-romref="" data-romdefault="${romDef}" title="Range of motion — tap to set as % or in cm (measured from the floor, your body, or another reference)">${romPillLabel("pct", romDef)}</button>`;
+}
+// Floating ROM picker for the add-set ROM pill (NOT a native control). Pick the UNIT (% or cm);
+// in cm you also choose what it's measured FROM (floor / body / any typed reference). Mirrors the
+// incline picker. Outside-tap / Esc closes it.
+let romPickerClose: (() => void) | null = null;
+function closeRomPicker(): void { romPickerClose?.(); }
+function openRomPicker(pill: HTMLElement): void {
+  closeRomPicker();
+  let unit = pill.dataset.romunit === "cm" ? "cm" : "pct";
+  let val = Number(pill.dataset.romval) || 0;
+  let ref = pill.dataset.romref || "floor";
+  const def = Number(pill.dataset.romdefault) || 0;
+  const REFS = ["floor", "body", "top", "bar"]; // common references; the text field allows any other
+  const pop = document.createElement("div");
+  pop.className = "inc-pop rom-pop";
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 220, h = pop.offsetHeight || 170;
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const commit = () => {
+    pill.dataset.romunit = unit; pill.dataset.romval = String(val); pill.dataset.romref = unit === "cm" ? ref : "";
+    pill.textContent = romPillLabel(unit, val);
+    pill.classList.toggle("is-set", unit === "cm" || val !== def); // cm is always a deliberate value
+  };
+  const render = () => {
+    pop.innerHTML =
+      `<div class="inc-units">` +
+      `<button type="button" class="inc-unit${unit === "pct" ? " is-on" : ""}" data-romunit="pct">%</button>` +
+      `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-romunit="cm">cm</button>` +
+      `</div>` +
+      `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
+      `<input type="number" class="inc-val rom-val" step="${unit === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
+      `<span class="rom-unit-lbl muted">${unit === "cm" ? "cm" : "%"}</span>` +
+      `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>` +
+      (unit === "cm"
+        ? `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
+          `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
+          `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`
+        : `<div class="inc-eq muted">% of the full range of motion</div>`) +
+      `<button type="button" class="inc-floor" data-romdefaultbtn>default (${def}%)</button>`;
+    place();
+  };
+  pop.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const u = t.closest<HTMLElement>("[data-romunit]");
+    if (u?.dataset.romunit) { unit = u.dataset.romunit === "cm" ? "cm" : "pct"; render(); commit(); return; }
+    const s = t.closest<HTMLElement>("[data-romstep]");
+    if (s?.dataset.romstep) { const d = unit === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); render(); commit(); return; }
+    const rc = t.closest<HTMLElement>(".rom-ref-chip");
+    if (rc?.dataset.romref) { ref = rc.dataset.romref; render(); commit(); return; }
+    if (t.closest("[data-romdefaultbtn]")) { unit = "pct"; val = def; ref = "floor"; render(); commit(); return; }
+  });
+  pop.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    const vi = t.closest<HTMLInputElement>(".rom-val");
+    if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { val = Math.max(0, v); commit(); } return; }
+    const ri = t.closest<HTMLInputElement>(".rom-ref-input");
+    if (ri) { ref = ri.value.trim() || "floor"; commit(); for (const c of pop.querySelectorAll<HTMLElement>(".rom-ref-chip")) c.classList.toggle("is-on", c.dataset.romref === ref); }
+  });
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeRomPicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeRomPicker(); };
+  romPickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); romPickerClose = null;
+  };
+  document.body.appendChild(pop);
+  render();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
@@ -19398,6 +19487,9 @@ function onAddModalClick(e: MouseEvent): void {
   // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
   const incPill = t.closest<HTMLElement>(".wo-af-incpill");
   if (incPill) { openInclinePicker(incPill); return; }
+  // ROM pill → the unit (% / cm) + reference picker.
+  const romPill = t.closest<HTMLElement>(".wo-af-rompill");
+  if (romPill) { openRomPicker(romPill); return; }
   // Passive-tag palette ＋ (e.g. ＋ ROM): promote/demote the tag for this exercise and add or
   // remove its pill on EVERY set line in place (so typed weights/reps + other tags survive).
   const passBtn = t.closest<HTMLElement>(".addm-passive-pill");
@@ -19602,14 +19694,19 @@ function onInlineAddGo(form: HTMLElement): boolean {
         const dim = s.dataset.dim!; const lvl = s.value;
         if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]);
       }
-      // This line's ROM → "ROM X%" appended to its note only when it differs from the
-      // exercise's default (default-ROM sets stay clean). The free-text note rides alongside.
+      // This line's ROM → a note token. PERCENT: "ROM X%" only when it differs from the exercise's
+      // default (default-ROM sets stay clean). CM: "ROM Ncm from <ref>" always (a deliberate value).
+      // The free-text note rides alongside.
       let note = sharedNote;
-      const romSel = ln.querySelector<HTMLSelectElement>(".wo-af-rom");
-      if (romSel) {
-        const romPct = parseInt(romSel.value, 10);
-        const romDef = parseInt(romSel.dataset.romdefault ?? "", 10);
-        if (Number.isFinite(romPct) && romPct !== romDef) note = note ? `${note} ROM ${romPct}%` : `ROM ${romPct}%`;
+      const romPill = ln.querySelector<HTMLElement>(".wo-af-rompill");
+      if (romPill) {
+        const unit = romPill.dataset.romunit === "cm" ? "cm" : "pct";
+        const v = parseFloat(romPill.dataset.romval ?? "");
+        const romDef = parseInt(romPill.dataset.romdefault ?? "", 10);
+        let tok = "";
+        if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); tok = ref ? `ROM ${v}cm from ${ref}` : `ROM ${v}cm`; } }
+        else if (Number.isFinite(v) && v !== romDef) tok = `ROM ${v}%`;
+        if (tok) note = note ? `${note} ${tok}` : tok;
       }
       // This line's incline/height (push-ups): a non-floor cm/SQ/Smith level is pinned to the
       // created set's per-set override below. Floor (0cm) = the default, left unset.

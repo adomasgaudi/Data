@@ -2864,6 +2864,24 @@ sup.wr-bw { font-size: 0.85em; }
 .inc-eq { text-align: center; font-size: 0.8rem; }
 .inc-floor { font: inherit; font-size: 0.78rem; padding: 4px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .inc-floor:hover { color: var(--accent); background: var(--accent-soft); }
+/* ROM unit-pill — same compact look as the incline pill; tap → the %/cm + reference picker. */
+.addm-line-vars .wo-af-rompill {
+  flex: 0 0 auto; min-height: 0; width: auto;
+  padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
+  text-transform: uppercase; letter-spacing: 0.02em;
+  border-radius: var(--r-xs); border: 1px solid var(--line);
+  background: var(--line); color: var(--muted); cursor: pointer;
+}
+.addm-line-vars .wo-af-rompill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-rompill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* ROM picker (reuses .inc-pop) reference row (cm mode): quick chips + a free-text "from…" field. */
+.rom-unit-lbl { font-size: 0.8rem; }
+.rom-ref { display: flex; flex-direction: column; gap: 5px; }
+.rom-ref-lbl { font-size: 0.7rem; }
+.rom-ref-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.rom-ref-chip { font: inherit; font-size: 0.72rem; padding: 3px 8px; border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--panel); color: var(--muted); cursor: pointer; }
+.rom-ref-chip.is-on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rom-ref-input { font: inherit; font-size: 0.85rem; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); box-sizing: border-box; }
 .wo-addform input {
   width: 4.4rem; font: inherit; font-size: 1.04rem; padding: 3px 8px;
   border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: inherit;
