@@ -2402,7 +2402,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .set-weekdiv > td { color: var(--text); border-top: 2px solid var(--accent); }
 /* Compact-line note preview: stays on ONE chip (truncated in JS) so a long note can
    never wrap the day row into a tall block. */
-.wo-note { font-style: italic; white-space: nowrap; max-width: 12rem; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
+/* A set's note rides as a TINY caption UNDER its chip (owner: never in the tag/weight slot,
+   a very small one-line text right under the weight, no extra height). The chip's top row
+   (tags + weight^reps) is unchanged; the note line is muted, small and truncated. */
+.wo-set-stack { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: top; }
+.wo-set-note-sub { font-size: 0.55em; line-height: 1; font-style: italic; color: var(--muted); max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: -2px; }
 /* Per-set variation multiplier shown in the compact workout list (e.g. ×0.6). */
 /* Each exercise line is a 3-column grid: the day's record 1RM in its OWN fixed
    column (right-aligned), then the name + sets, then the "+ set" button in its

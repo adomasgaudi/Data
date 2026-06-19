@@ -8038,15 +8038,16 @@ function setDisplay(raw: SetRecord): string {
     // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
     return finish(effWrap(bw ? `${chips}${repsSup}${mach}` : `${chips}${weightHtml}${mach}`));
   }
-  if (bw && note) {
-    // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
-    // SHORT preview where a weight chip would sit (full note on hover + in the
-    // expanded rows) — a long note used to dump inline and wrap into a huge block,
-    // breaking the compact day line. Keep it the width of a normal weight^reps.
-    const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
-    return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
-  }
-  return finish(effWrap(`${chips}${weightHtml}${mach}`));
+  // A NOTE never sits in the tag/weight slot (owner: "the note shouldn't be in the same
+  // position as the tags; write it as a very small text right underneath the weight — under
+  // the tag + weight if there are tags — not instead of it, and no extra height"). So the chip
+  // shows tags + weight^reps as normal, and the note is a tiny truncated caption BELOW it.
+  const noteSub = note
+    ? `<span class="wo-set-note-sub" title="${escapeHtml(note)}">${escapeHtml(note.length > 16 ? `${note.slice(0, 16)}…` : note)}</span>`
+    : "";
+  const stack = (chip: string): string => (noteSub ? `<span class="wo-set-stack"><span class="wo-set-main">${chip}</span>${noteSub}</span>` : chip);
+  // Tags + weight^reps on top (a bodyweight set just reads 0²⁰), the note tiny underneath.
+  return finish(effWrap(stack(`${chips}${weightHtml}${mach}`)));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
