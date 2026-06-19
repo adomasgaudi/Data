@@ -8183,6 +8183,23 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
     : `<button type="button" class="wo-1rm wo-summary" data-wosummary="1" title="${escapeHtml(m.name)} this day — tap to change what this column shows">${inner}</button>`;
 }
 
+// Workout history: FREEZE the exercise sort order across in-place edits (delete a set, change
+// an RIR, edit a note) so the list doesn't JUMP under your finger (owner: "deleting shouldn't
+// auto re-sort — re-sort on sparser moments like refresh / changing pages"). The order is
+// remembered per (athlete · sort mode · view · day): it re-sorts when any of those change, or
+// when cleared on a sparse event (opening the history page, a data refresh). A delete leaves
+// the freeze intact, so the surviving rows keep their places instead of reordering.
+let woSortFreeze = new Map<string, string[]>();
+function clearWorkoutSortFreeze(): void { woSortFreeze.clear(); }
+function applyWoSortFreeze(date: string, sorted: ExerciseCount[]): ExerciseCount[] {
+  const key = `${els.athlete.value}|${woSortMode}|${S.workoutViewMode}|${date}`;
+  const frozen = woSortFreeze.get(key);
+  if (!frozen) { woSortFreeze.set(key, sorted.map((e) => e.exerciseName)); return sorted; }
+  const idx = new Map(frozen.map((n, i) => [n, i] as const));
+  // Each exercise keeps its frozen slot; anything new (not yet frozen) sorts to the END in its
+  // freshly-computed order (a stable sort preserves that among the equal Infinity keys).
+  return [...sorted].sort((a, b) => (idx.get(a.exerciseName) ?? Infinity) - (idx.get(b.exerciseName) ?? Infinity));
+}
 function renderWorkoutsPage() {
   // Which days/weeks are expanded RIGHT NOW — captured by DATE from the live DOM before
   // workoutGroups is rebuilt below (rows index into the CURRENT groups). The expanded day
@@ -8217,7 +8234,7 @@ function renderWorkoutsPage() {
         const cmp = (x: ExerciseCount, y: ExerciseCount): number =>
           prioCmp ? prioCmp(x.exerciseName, y.exerciseName)
             : (metric!.get(y.exerciseName) ?? -Infinity) - (metric!.get(x.exerciseName) ?? -Infinity);
-        return { ...g, exercises: [...g.exercises].sort(cmp) };
+        return { ...g, exercises: applyWoSortFreeze(g.date, [...g.exercises].sort(cmp)) };
       });
     }
   }
@@ -17834,6 +17851,7 @@ async function syncFromGitHub(): Promise<void> {
     // Newer data than the build carries — rebuild the records and re-render the views.
     data = buildLoaded(fresh);
     clearMachineCache();
+    clearWorkoutSortFreeze(); // a data refresh is a "sparse" moment → re-sort the history fresh
     loadedRecords = data.records; // immutable base for spelling-split re-derivation
     mergeManualSets();
     populateExercisePicker();
@@ -24713,6 +24731,7 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
  * a list row jumping to Exercises). Does NOT switch the top tab — callers that
  * need the Athlete panel visible should switchTopTab("athlete") first. */
 function showSubtab(name: string) {
+  clearWorkoutSortFreeze(); // changing pages is a "sparse" moment → re-sort the history fresh
   for (const n of ["workouts", "exercises"]) {
     const panel = document.getElementById(`sub-${n}`);
     if (panel) panel.hidden = n !== name;
