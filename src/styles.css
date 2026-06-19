@@ -3759,6 +3759,17 @@ body.view-s2 .wa-sel-group { display: none; }
 .xdd-rpe .rpe-opt-lbl { font-weight: 600; }
 .xdd-rpe .rpe-opt-sub { font-size: 0.62rem; color: var(--muted); font-weight: 400; }
 .xdd-rpe .set-rpe-opt.is-active .rpe-opt-sub { color: inherit; opacity: 0.8; }
+/* A selected band shows a ✓ (multi-select: tap two when unsure of the feel, owner). */
+.xdd-rpe .set-rpe-opt.is-active { position: relative; padding-right: 22px; }
+.xdd-rpe .set-rpe-opt.is-active::after { content: "✓"; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.8rem; font-weight: 700; }
+.xdd-rpe .rpe-clear { flex-direction: row; }
+/* Footer: the value calculations use (gray range-average) + a "specify" toggle to type an exact RIR. */
+.xdd-rpe .rpe-foot { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-top: 1px solid var(--line); }
+.xdd-rpe .rpe-avg { font-size: 0.72rem; color: var(--muted); margin-right: auto; }
+.xdd-rpe .rpe-avg b { color: var(--text); font-weight: 700; }
+.xdd-rpe .rpe-exact { width: 3.4rem; margin-right: auto; padding: 2px 5px; font-size: 0.82rem; border: 1px solid var(--accent); border-radius: var(--r-xs); }
+.xdd-rpe .rpe-specify { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--accent); background: var(--accent-soft); border: none; border-radius: var(--r-xs); padding: 3px 7px; min-height: var(--tap-min); cursor: pointer; }
+.xdd-rpe .rpe-specify.is-on { color: #fff; background: var(--accent); }
 /* Index: expandable per-exercise info panel. */
 .bw-ex-name { cursor: pointer; user-select: none; }
 /* The short code shown beside the full exercise name in the Index list. */

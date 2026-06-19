@@ -2137,16 +2137,64 @@ const RIR_ID_MIGRATE: Record<string, string> = {
 };
 /** Look up a band by its stored id. */
 const rirBand = (id: string | undefined) => RIR_BANDS.find((b) => b.id === id);
-const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
-/** The descriptive label for a band id (for the closed pill / read-only cell), or the raw id. */
-const rirLabel = (id: string | undefined): string => (id ? rirBand(id)?.label ?? id : "–");
-/** Representative RIR for a logged band id — the band's precomputed GEOMETRIC mean (the scale is
- * logarithmic, owner). Unknown/legacy ids fall back to a parsed geo-mean. Null if unparseable. */
-function rirBandMid(id: string | undefined): number | null {
-  if (!id) return null;
-  const b = rirBand(id);
-  if (b) return b.rep;
-  const [lo, hi] = id.split(/[–-]/).map((n) => parseFloat(n));
+// A logged RIR grade: ONE or TWO bands (the owner is unsure of the feel → picks two adjacent
+// ones), plus an optional EXACT override (a typed reps-in-reserve that replaces the range's
+// average). Encoded as a STRING in rpeGrades so the persisted/synced store stays a simple
+// Record<string,string>:  "4–8" · "2.8–4.8|4–8" · "4–8=5" · "2.8–4.8|4–8=5".
+type RirGrade = { bands: string[]; exact: number | null };
+/** Parse a stored grade string into bands (known ids, canonical hardest→easiest order, max 2) +
+ * an optional exact override. Null when it carries neither — i.e. ungraded. */
+function parseRirGrade(s: string | undefined): RirGrade | null {
+  if (!s) return null;
+  let body = s; let exact: number | null = null;
+  const eq = s.indexOf("=");
+  if (eq >= 0) { const n = parseFloat(s.slice(eq + 1)); exact = Number.isFinite(n) ? n : null; body = s.slice(0, eq); }
+  const picked = body.split("|");
+  const bands = RIR_BANDS.filter((b) => picked.includes(b.id)).map((b) => b.id).slice(0, 2);
+  return bands.length === 0 && exact === null ? null : { bands, exact };
+}
+function formatRirGrade(g: RirGrade): string {
+  const body = g.bands.join("|");
+  return g.exact !== null ? `${body}=${g.exact}` : body;
+}
+/** Format an RIR number compactly (≤1 decimal, no trailing .0). */
+const fmtRir = (v: number): string => (Math.round(v * 10) / 10).toString();
+/** Toggle a band in a grade (tap to add / remove); capped at TWO — adding a third drops the older
+ * of the existing pair. Returns the new grade, or null when it empties out. */
+function toggleRirBand(g: RirGrade | null, id: string): RirGrade | null {
+  const cur = g ? [...g.bands] : [];
+  const exact = g?.exact ?? null;
+  const next = cur.includes(id) ? cur.filter((b) => b !== id) : cur.length < 2 ? [...cur, id] : [cur[1]!, id];
+  const sorted = RIR_BANDS.filter((b) => next.includes(b.id)).map((b) => b.id);
+  return sorted.length === 0 && exact === null ? null : { bands: sorted, exact: sorted.length ? exact : null };
+}
+/** The representative RIR a grade contributes to EVERY calculation: the exact override if set, else
+ * the GEOMETRIC mean of the combined span of its band(s) — log scale, so two ranges average toward
+ * their overlap (15–30 + 30–100 → ~39, near 30), not the linear midpoint (owner). */
+function rirGradeRep(g: RirGrade): number | null {
+  if (g.exact !== null) return g.exact;
+  const bs = g.bands.map((id) => rirBand(id)).filter((b): b is (typeof RIR_BANDS)[number] => !!b);
+  if (bs.length === 0) return null;
+  const lo = Math.min(...bs.map((b) => b.lo)), hi = Math.max(...bs.map((b) => b.hi));
+  return lo > 0 ? GEO(lo, hi) : (lo + hi) / 2;
+}
+/** The descriptive label for a stored grade (closed pill / read-only cell): the exact value if
+ * specified, else the band label(s) joined ("2–4/4–8"). Falls back to the raw string / "–". */
+function rirLabel(grade: string | undefined): string {
+  if (!grade) return "–";
+  const g = parseRirGrade(grade);
+  if (!g) return grade;
+  if (g.exact !== null) return fmtRir(g.exact);
+  return g.bands.map((id) => rirBand(id)?.label ?? id).join("/") || "–";
+}
+/** Representative RIR for a logged grade — the band's GEOMETRIC mean / combined span / exact
+ * override (the scale is logarithmic, owner). Legacy raw range strings fall back to a parsed
+ * geo-mean. Null if unparseable. (Name kept for the many call sites.) */
+function rirBandMid(grade: string | undefined): number | null {
+  if (!grade) return null;
+  const g = parseRirGrade(grade);
+  if (g) return rirGradeRep(g);
+  const [lo, hi] = grade.split(/[–-]/).map((n) => parseFloat(n));
   if (lo === undefined || !Number.isFinite(lo)) return null;
   if (hi === undefined || !Number.isFinite(hi)) return lo;
   return lo > 0 ? GEO(lo, hi) : (lo + hi) / 2;
@@ -2390,8 +2438,9 @@ function setSetNotComparable(id: string, on: boolean): void {
 }
 function setRpe(id: string, v: string | null) {
   if (!canEditCurrentAthlete()) return;
-  if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
-  else rpeGrades[id] = v;
+  const g = v === null ? null : parseRirGrade(v);
+  if (!g) delete rpeGrades[id];
+  else rpeGrades[id] = formatRirGrade(g); // normalise to the canonical encoding
   saveJson(RPE_STORE_KEY, rpeGrades);
 }
 
@@ -9677,34 +9726,60 @@ function rirBandOptHtml(b: (typeof RIR_BANDS)[number], active: boolean): string 
     `<span class="rpe-opt-lbl">${escapeHtml(b.label)}</span>${sub}</button>`
   );
 }
+/** The RIR picker MENU inner HTML, shared by the per-set and add-modal pickers: a "clear" row,
+ * every band (MULTI-selectable — tap two when unsure, owner), then a footer showing the value the
+ * calculations use (the range's gray log-average) with a "specify" toggle that swaps it for a typed
+ * exact RIR. `g` = the current grade (null = none picked); `assumedRep` = the faded fallback value. */
+function rpeMenuHtml(g: RirGrade | null, assumedRep: number | null): string {
+  const has = (id: string) => !!g && g.bands.includes(id);
+  const opts =
+    `<button type="button" class="xdd-opt set-rpe-opt rpe-clear${!g ? " is-active" : ""}" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
+    RIR_BANDS.map((b) => rirBandOptHtml(b, has(b.id))).join("");
+  const hasBands = !!g && g.bands.length > 0;
+  if (!hasBands) return opts;
+  const exactOn = g!.exact !== null;
+  const rep = rirGradeRep(g!);
+  const avgTxt = rep != null ? fmtRir(rep) : (assumedRep != null ? fmtRir(assumedRep) : "–");
+  // Footer: the value the calc uses + a "specify" toggle (type an exact RIR over the range average).
+  const spec = `<button type="button" class="rpe-specify${exactOn ? " is-on" : ""}" data-rirspec aria-pressed="${exactOn}" title="Type an exact reps-in-reserve instead of the range's average">${exactOn ? "exact" : "specify"}</button>`;
+  const input = exactOn
+    ? `<input type="number" class="rpe-exact" inputmode="decimal" step="0.5" min="0" value="${g!.exact}" aria-label="Exact reps in reserve" />`
+    : `<span class="rpe-avg" title="The value calculations use — the logarithmic average of the picked range">avg <b>${escapeHtml(avgTxt)}</b></span>`;
+  return opts + `<div class="rpe-foot">${input}${spec}</div>`;
+}
+
 function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: string): string {
-  const band = rirBand(grade);
-  // No graded value → show the ASSUMED band (faded/dashed) instead of "–", so every set
-  // carries a RIR. Picking one writes to rpeGrades and it becomes REAL (solid). The
-  // assumed id rides on data-assumed so a clear (re-render) can restore the assumption.
-  const assumed = !band && assumedId ? rirBand(assumedId) : undefined;
-  const shown = band ?? assumed;
-  const label = shown ? shown.label : "–";
-  // Each option: the descriptive label BIG, the actual rep-range tiny + gray under it (owner).
-  const menu =
-    `<button type="button" class="xdd-opt set-rpe-opt${!band ? " is-active" : ""}" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
-    RIR_BANDS.map((b) => rirBandOptHtml(b, shown?.id === b.id)).join("");
-  const cls = band ? " is-set" : assumed ? " is-assumed" : "";
-  const aria = band ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";
+  const g = parseRirGrade(grade);
+  // No graded value → show the ASSUMED band (faded/dashed) instead of "–", so every set carries a
+  // RIR. Picking turns it REAL (solid). The assumed id rides on data-assumed so clear can restore it.
+  const assumedRep = assumedId ? rirBandMid(assumedId) : null;
+  const label = g ? rirLabel(grade) : rirLabel(assumedId);
+  const cls = g ? " is-set" : assumedId ? " is-assumed" : "";
+  const aria = g ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";
   return (
     `<div class="xdd xdd-rpe${cls}" data-setid="${escapeHtml(sid)}" data-assumed="${escapeHtml(assumedId ?? "")}">` +
     `<button type="button" class="xdd-btn set-rpe-btn" aria-label="${aria}" title="${escapeHtml(aria)}">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
-    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `<div class="xdd-menu" hidden role="listbox">${rpeMenuHtml(g, assumedRep)}</div>` +
     `</div>`
   );
 }
+/** Re-render a per-set RIR dropdown in place from the saved grade, and RE-OPEN its menu — used after
+ * a band toggle / specify tap so the multi-select stays open (rule 24: a setting tap inside a menu
+ * must not collapse it). */
+function rerenderRpeOpen(dd: HTMLElement, sid: string): void {
+  const assumed = dd.dataset.assumed || undefined;
+  const parent = dd.parentElement;
+  dd.outerHTML = rpeDropdownHtml(sid, rpeGrades[sid] || undefined, assumed);
+  const fresh = parent?.querySelector<HTMLElement>(`.xdd-rpe[data-setid="${CSS.escape(sid)}"]`);
+  if (fresh) { fresh.classList.add("open"); fresh.querySelector<HTMLElement>(".xdd-menu")?.removeAttribute("hidden"); }
+}
 
-/** Click inside a set's RIR dropdown: toggle the menu open, or apply a picked
- * band (save it, re-render the cell, refresh the drill-in graph). Returns true if
- * it handled the click. Shared by both sets tables. */
+/** Click inside a set's RIR dropdown: toggle the menu open, toggle a band (multi-select, keeps the
+ * menu open), clear, or toggle the exact-value override. Returns true if it handled the click. */
 function onSetRpeClick(target: HTMLElement): boolean {
   const dd = target.closest<HTMLElement>(".xdd-rpe");
   if (!dd?.dataset.setid) return false;
+  const sid = dd.dataset.setid;
   const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
   // Tapping the closed button toggles this menu (and closes any other open one).
   if (target.closest(".set-rpe-btn")) {
@@ -9714,17 +9789,32 @@ function onSetRpeClick(target: HTMLElement): boolean {
     dd.classList.toggle("open", opening);
     return true;
   }
-  // Tapping a band applies it.
-  const opt = target.closest<HTMLElement>(".set-rpe-opt");
-  if (opt?.dataset.rir !== undefined) {
-    const v = opt.dataset.rir === "" ? null : opt.dataset.rir;
-    setRpe(dd.dataset.setid, v);
-    // Swap in a freshly-rendered dropdown so the button label + is-set/is-assumed update.
-    // Clearing (v=null) falls back to the assumed band carried on data-assumed.
-    dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined, dd.dataset.assumed || undefined);
+  // "specify" → turn the range's average into a typed exact value (or back to the average).
+  if (target.closest("[data-rirspec]")) {
+    const g = parseRirGrade(rpeGrades[sid]);
+    if (g && g.bands.length) {
+      g.exact = g.exact !== null ? null : (rirGradeRep({ bands: g.bands, exact: null }) ?? null);
+      if (g.exact !== null) g.exact = Math.round(g.exact * 10) / 10;
+      setRpe(sid, formatRirGrade(g));
+      rerenderRpeOpen(dd, sid);
+    }
     return true;
   }
-  return true; // a click inside the open menu (e.g. on a gap) — swallow it
+  // Tapping a band toggles it (clear empties the grade and closes; a band keeps the menu open).
+  const opt = target.closest<HTMLElement>(".set-rpe-opt");
+  if (opt?.dataset.rir !== undefined) {
+    const id = opt.dataset.rir;
+    if (id === "") {
+      setRpe(sid, null);
+      dd.outerHTML = rpeDropdownHtml(sid, undefined, dd.dataset.assumed || undefined);
+      return true;
+    }
+    const g2 = toggleRirBand(parseRirGrade(rpeGrades[sid]), id);
+    setRpe(sid, g2 ? formatRirGrade(g2) : null);
+    rerenderRpeOpen(dd, sid);
+    return true;
+  }
+  return true; // a click inside the open menu (e.g. on the exact input / a gap) — swallow it
 }
 
 /** Close every open RIR dropdown menu (used before opening one, and on outside click). */
@@ -10475,6 +10565,19 @@ function toggleSetNotComparable(target: HTMLElement): boolean {
 /** A set-edit input changed: save the override (weight/reps/bodyweight/scale) and
  * re-render so the new value flows everywhere (1RM, volume, leaderboard, graphs). */
 function onSetEditInput(e: Event): void {
+  // Exact RIR override typed into a set's RIR picker footer (the "specify" input).
+  const rirInp = (e.target as HTMLElement).closest<HTMLInputElement>(".rpe-exact");
+  if (rirInp) {
+    const dd = rirInp.closest<HTMLElement>(".xdd-rpe");
+    if (dd?.dataset.setid) {
+      const g = parseRirGrade(rpeGrades[dd.dataset.setid]) ?? { bands: [], exact: null };
+      const n = parseFloat(rirInp.value);
+      g.exact = Number.isFinite(n) ? n : null;
+      setRpe(dd.dataset.setid, g.bands.length || g.exact !== null ? formatRirGrade(g) : null);
+      scheduleRender();
+    }
+    return;
+  }
   // Note text field (string) — edits the original CSV note for this set.
   const noteInp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-note");
   if (noteInp?.dataset.setid !== undefined) {
@@ -17771,7 +17874,7 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
-    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note, .set-side-input")) { onSetEditInput(e); return; }
+    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note, .set-side-input, .rpe-exact")) { onSetEditInput(e); return; }
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
@@ -19173,15 +19276,24 @@ function addmAssumedRirBand(ex: string, date: string, weight: number | null, rep
  * ASSUMED band (faded) until the owner picks one, then it becomes a chosen value recorded on
  * the new set. No setId — the value is read on Add and written to the created set's id. */
 function addmRirHtml(assumedId: string): string {
-  const label = rirLabel(assumedId);
-  const menu =
-    `<button type="button" class="xdd-opt set-rpe-opt" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
-    RIR_BANDS.map((b) => rirBandOptHtml(b, b.id === assumedId)).join("");
   return (
     `<div class="xdd xdd-rpe addm-rir is-assumed" data-addmrir data-assumed="${escapeHtml(assumedId)}">` +
-    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve — assumed from reps & 1RM; tap to set" title="RIR — assumed from your reps & 1RM; tap to set">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
-    `<div class="xdd-menu" hidden role="listbox">${menu}</div></div>`
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve — assumed from reps & 1RM; tap to set" title="RIR — assumed from your reps & 1RM; tap to set">${escapeHtml(rirLabel(assumedId))}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${rpeMenuHtml(null, rirBandMid(assumedId))}</div></div>`
   );
+}
+/** Re-render an add-modal RIR pill in place from its data-picked grade (the menu element is kept,
+ * so an open menu stays open across a band toggle — rule 24). */
+function updateAddmRir(dd: HTMLElement): void {
+  const grade = dd.dataset.picked || "";
+  const g = parseRirGrade(grade);
+  const assumed = dd.dataset.assumed || "";
+  dd.classList.toggle("is-set", !!g);
+  dd.classList.toggle("is-assumed", !g);
+  const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
+  if (btn) btn.innerHTML = `${escapeHtml(g ? rirLabel(grade) : rirLabel(assumed))}<span class="xdd-caret">▾</span>`;
+  const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+  if (menu) menu.innerHTML = rpeMenuHtml(g, rirBandMid(assumed));
 }
 /** Fill / refresh each add-line's RIR picker. A line with no picker yet gets one; a line whose
  * picker the owner hasn't manually set tracks the live assumed band as the reps change. */
@@ -19201,11 +19313,9 @@ function syncAddmRir(form: HTMLElement): void {
     const dd = slot.querySelector<HTMLElement>(".addm-rir");
     if (!dd) { slot.innerHTML = addmRirHtml(assumed); continue; }
     if (dd.dataset.picked) continue; // the owner set it → leave their choice alone
-    // Not picked → track the live assumed band: update the button label + the menu's active row.
+    // Not picked → track the live assumed band: refresh the faded label + menu from it.
     dd.dataset.assumed = assumed;
-    const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
-    if (btn) btn.innerHTML = `${escapeHtml(rirLabel(assumed))}<span class="xdd-caret">▾</span>`;
-    for (const o of dd.querySelectorAll<HTMLElement>(".set-rpe-opt")) o.classList.toggle("is-active", o.dataset.rir === assumed);
+    updateAddmRir(dd);
   }
 }
 /** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
@@ -19811,6 +19921,20 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
   // Live ghost preview: every input/change/click in the popup re-derives the pending set(s)
   // and re-renders the history ghost. Seed it now, and scroll the lift's row up into view so
   // the ghost is visible above the bottom-docked popup (owner).
+  // Exact-RIR override typed into an add-line's picker footer: update its data-picked grade + the
+  // button label live, WITHOUT rebuilding the menu (so the input keeps focus while typing).
+  wrap.addEventListener("input", (e) => {
+    const ri = (e.target as HTMLElement).closest<HTMLInputElement>(".rpe-exact");
+    if (!ri) return;
+    const dd = ri.closest<HTMLElement>(".addm-rir");
+    if (!dd) return;
+    const g = parseRirGrade(dd.dataset.picked) ?? { bands: [], exact: null };
+    const n = parseFloat(ri.value);
+    g.exact = Number.isFinite(n) ? n : null;
+    if (g.bands.length || g.exact !== null) dd.dataset.picked = formatRirGrade(g); else delete dd.dataset.picked;
+    const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
+    if (btn) btn.innerHTML = `${escapeHtml(rirLabel(dd.dataset.picked || dd.dataset.assumed || ""))}<span class="xdd-caret">▾</span>`;
+  });
   wrap.addEventListener("input", syncPendingFromModal);
   wrap.addEventListener("change", syncPendingFromModal);
   // ⚙ cog number fields (machine weight / ÷) persist on change; the live preview then follows.
@@ -19978,30 +20102,43 @@ function onAddModalClick(e: MouseEvent): void {
     }
     return;
   }
-  // Add-line RIR picker: toggle its menu, or apply a picked band (which becomes the new set's
-  // recorded RIR; "clear" reverts to the live assumed value).
+  // Add-line RIR picker: toggle the menu, toggle bands (multi-select, owner), "specify" an exact
+  // value, or "clear". The chosen grade rides on data-picked (encoded) and is read on Add.
   const rirDd = t.closest<HTMLElement>(".addm-rir");
   if (rirDd) {
     const menu = rirDd.querySelector<HTMLElement>(".xdd-menu")!;
+    if (t.closest("[data-rirspec]")) {
+      const g = parseRirGrade(rirDd.dataset.picked);
+      if (g && g.bands.length) {
+        g.exact = g.exact !== null ? null : (rirGradeRep({ bands: g.bands, exact: null }) ?? null);
+        if (g.exact !== null) g.exact = Math.round(g.exact * 10) / 10;
+        rirDd.dataset.picked = formatRirGrade(g);
+        updateAddmRir(rirDd);
+        syncPendingFromModal();
+      }
+      return;
+    }
     const optEl = t.closest<HTMLElement>(".set-rpe-opt");
     if (optEl) {
-      const val = optEl.dataset.rir ?? "";
-      if (val) { rirDd.dataset.picked = val; rirDd.classList.remove("is-assumed"); rirDd.classList.add("is-set"); }
-      else { delete rirDd.dataset.picked; rirDd.classList.remove("is-set"); rirDd.classList.add("is-assumed"); }
-      const shown = val || (rirDd.dataset.assumed ?? "");
-      const btn = rirDd.querySelector<HTMLElement>(".set-rpe-btn");
-      if (btn) btn.innerHTML = `${escapeHtml(rirBand(shown)?.id ?? "–")}<span class="xdd-caret">▾</span>`;
-      for (const o of rirDd.querySelectorAll<HTMLElement>(".set-rpe-opt")) o.classList.toggle("is-active", o.dataset.rir === val);
-      menu.setAttribute("hidden", "");
-      rirDd.classList.remove("open");
+      const id = optEl.dataset.rir ?? "";
+      if (id === "") {
+        delete rirDd.dataset.picked;
+        updateAddmRir(rirDd);
+        menu.setAttribute("hidden", ""); rirDd.classList.remove("open"); // clear closes
+      } else {
+        const g2 = toggleRirBand(parseRirGrade(rirDd.dataset.picked), id);
+        if (g2) rirDd.dataset.picked = formatRirGrade(g2); else delete rirDd.dataset.picked;
+        updateAddmRir(rirDd); // keeps the menu open for a second pick
+      }
       syncPendingFromModal();
-    } else {
-      const opening = menu.hasAttribute("hidden");
-      for (const m of form.querySelectorAll<HTMLElement>(".addm-rir .xdd-menu")) m.setAttribute("hidden", "");
-      for (const d of form.querySelectorAll<HTMLElement>(".addm-rir")) d.classList.remove("open");
-      menu.toggleAttribute("hidden", !opening);
-      rirDd.classList.toggle("open", opening);
+      return;
     }
+    if (t.closest(".rpe-foot")) return; // tapping the avg / exact input — keep the menu open
+    const opening = menu.hasAttribute("hidden");
+    for (const m of form.querySelectorAll<HTMLElement>(".addm-rir .xdd-menu")) m.setAttribute("hidden", "");
+    for (const d of form.querySelectorAll<HTMLElement>(".addm-rir")) d.classList.remove("open");
+    menu.toggleAttribute("hidden", !opening);
+    rirDd.classList.toggle("open", opening);
     return;
   }
   const chip = t.closest<HTMLElement>(".addm-chip");
