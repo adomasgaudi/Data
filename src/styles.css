@@ -2823,7 +2823,10 @@ sup.wr-bw { font-size: 0.85em; }
 /* A SET dimension (away from default) reads in its history-tag colour: support→accent,
    band→gold (matching .wo-var-sup / .wo-var-band) so the add pills look like the final
    tags. The is-set class rides on the <select>; its xdd twin is the next element sibling. */
-.addm-line-vars .wo-af-dim.is-set[data-dim="support"] + .xdd .xdd-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* Owner: a gray tag = an obvious unselected default (hidden until ＋reveal). ANY visible/SELECTED
+   tag — a non-obvious default like b2w OR a value you changed (30cm…) — reads in COLOUR, not gray.
+   So every `.is-set` dim pill is accented; band keeps its gold. */
+.addm-line-vars .wo-af-dim.is-set + .xdd .xdd-btn { background: var(--accent); border-color: var(--accent); color: #fff; }
 .addm-line-vars .wo-af-dim.is-set[data-dim="band"] + .xdd .xdd-btn { background: var(--gold); border-color: var(--gold); color: #fff; }
 .addm-line-vars .wo-af-dimpill .xdd-btn:hover,
 .addm-line-vars .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); }

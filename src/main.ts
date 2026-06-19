@@ -18614,7 +18614,10 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // per-set edit card/popover (DEDUP-2 owner: "the edit menu should be the same as the
 // add one") — so EVERY dimension a lift has lives here, including the ladder sub-dims
 // (grip + rung height) that used to be in the old rich popover only.
-const AF_DIM_ORDER = ["lever", "reach", "support", "ladderGrip", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "position"];
+// ladderGrip (L-shape / hooked / no support) is INFREQUENT (owner: "it shouldn't be the second
+// tag"), so it sits LATE in the order — its obvious "no support" default stays gray/hidden and it
+// only shows when you ＋reveal, after the common dims.
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "continuity", "band", "ladderGrip", "position"];
 const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
 // ONE canonical label per (dimension, level), shared by the history TAG
 // (variationChipsHtml) and the add-set PICKER so the two can never drift — the
