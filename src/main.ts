@@ -18883,7 +18883,7 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
         return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`;
       })
       .join("");
-    return `<select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select>`;
+    return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></span>`;
   }).join("");
   return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
 }
@@ -19027,35 +19027,22 @@ const numOrNull = (v: string | undefined): number | null => { const n = parseFlo
 /** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
  * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
 function syncAddmVtags(form: HTMLElement): void {
-  // Owner: ONE styled set of tags PER set line, not a picker row plus a duplicate preview,
-  // and not one block shared across sets. Each line carries its OWN .addm-line-vars; within
-  // it each variation dimension is its own pill (the xdd-enhanced <select>). We SHOW only the
-  // ones SET away from their default, hiding the rest unless that line's ＋ ("show all") is on
-  // — so each set shows only its own set tags, tap one to change it, ＋ reveals the rest. The
-  // selects stay the source of truth read on Add (onInlineAddGo) — capture is unchanged.
-  for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
-    const showAll = slot.classList.contains("show-all");
-    let hideable = 0; // gray dims that ＋tag could reveal (so we never show a dead button)
-    for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
-      const isRom = sel.classList.contains("wo-af-rom"); // a PROMOTED passive tag — always shown
-      const fam = sel.dataset.ex ? familyOf(sel.dataset.ex) : null;
-      const dim = sel.dataset.dim ?? "";
-      // GRAY = the obvious baseline (or an owner override): hidden until ＋reveal. A meaningful
-      // value (incl. a non-baseline default like b2w) is NOT gray, so it stays visible.
-      const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? sel.dataset.romdefault ?? "");
-      // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
-      sel.classList.toggle("is-set", !gray);
-      setEnhancedSelectHidden(sel, !isRom && gray && !showAll);
-      if (!isRom && gray) hideable++;
-    }
-    // ＋tag reveals the gray dims; HIDE the button when there's nothing to reveal (owner: "+ tag
-    // does nothing" — it was a dead button when every dim was already shown), and relabel it
-    // to "− less" while expanded so it reads as the collapse toggle.
-    const addTagBtn = slot.querySelector<HTMLElement>(".addm-add-tag");
-    if (addTagBtn) {
-      addTagBtn.hidden = hideable === 0 && !showAll;
-      addTagBtn.textContent = showAll ? "− less" : "＋ tag";
-    }
+  // Owner: next to the weight, show ONLY the tags that matter — the ones whose VALUE is
+  // meaningful (set away from the obvious baseline, e.g. b2w) OR that the owner PROMOTED for
+  // this lift via the palette above. Every possible dim is rendered (so editing a set can
+  // prefill any of them), but a passive one is hidden by toggling a class on its WRAPPER
+  // (.addm-vtag) — done on the wrapper, not the xdd twin, so it works even before the <select>
+  // is enhanced into its pill (the old per-twin hide raced the async enhancement and let the
+  // gray "NONE" tags leak through). The selects stay the source read on Add (onInlineAddGo).
+  for (const sel of form.querySelectorAll<HTMLSelectElement>(".addm-line-vars .wo-af-dim")) {
+    const ex = sel.dataset.ex ?? "";
+    const fam = ex ? familyOf(ex) : null;
+    const dim = sel.dataset.dim ?? "";
+    const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? "");
+    const promoted = ex && dim ? isPassivePromoted(ex, dim) : false;
+    // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
+    sel.classList.toggle("is-set", !gray);
+    sel.closest<HTMLElement>(".addm-vtag")?.classList.toggle("addm-vtag--off", gray && !promoted);
   }
 }
 
@@ -19321,30 +19308,47 @@ function addmVariantField(ex: string): string {
   // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
   // no header/labels. Wrapped inline so it flows before the weight in one row.
   const dims = vf.includes("wo-af-dims") ? vf : "";
-  // ROM is a PASSIVE tag now (owner: "90% as a default doesn't make sense, don't always ask me"):
+  // Each tag rides in a little column: a tiny gray CAPTION naming what it is (owner: "above the
+  // tag, very small gray letters — lean / rom …") over the pill. cap() wraps the ROM / incline
+  // pills the same way the dim pills are wrapped in variantSelectsHtml.
+  const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
+  // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
   // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
-  const rom = ex && isPassivePromoted(ex, "rom") ? romPillHtml(ex) : "";
-  // Owner: show only the tags you've SET (away from default); a ＋ reveals the rest to add one.
-  const addBtn = `<button type="button" class="addm-add-tag" title="Add a variation tag (band, lean…)" aria-label="Add a variation tag">＋ tag</button>`;
+  const rom = ex && isPassivePromoted(ex, "rom") ? cap("ROM", romPillHtml(ex)) : "";
   // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
   // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
   // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
   const incline = isInclineLevelExercise(ex)
-    ? `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`
+    ? cap("height", `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`)
     : "";
-  return dims + incline + rom + addBtn;
+  // No inline "＋ tag" button — the passive-tag PALETTE above the sets is the one place to add a
+  // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
+  return dims + incline + rom;
 }
-/** The PASSIVE-tag palette shown ABOVE the set lines: a ＋ for each promotable passive tag
- * (ROM today; machine base weight / ÷ multiplier live in the ⚙ cog). Promoting one adds it as
- * an active pill to every set line; tapping an active one removes it again. */
+/** Is a tag ACTIVE (shown inline next to the weight) for this exercise — i.e. the owner has
+ * promoted it, OR it's a dim whose DEFAULT level is meaningful (non-gray, e.g. back-to-wall)?
+ * A gray-default dim (the obvious baseline) stays passive until promoted. */
+function paletteTagActive(ex: string, fam: string | null, id: string): boolean {
+  if (isPassivePromoted(ex, id)) return true;
+  if (id === "rom") return false; // ROM has no "meaningful default" — passive until ＋added
+  return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
+}
+/** The PASSIVE-tag palette shown ABOVE the set lines: ＋ for EVERY tag the exercise can carry
+ * (each family variation dimension + ROM), labelled by what it IS (owner: "a list of all the
+ * tags above the sets — press ＋ to add one next to the weight"). A ✓ marks the ones already
+ * active; tapping toggles whether the tag shows on the set lines. Machine base weight / ÷
+ * multiplier still live in the ⚙ cog. */
 function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
-  const tags: { id: string; label: string }[] = [{ id: "rom", label: "ROM" }];
+  const fam = familyOf(ex);
+  const tags: { id: string; label: string }[] = [];
+  if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
+  tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   const pills = tags.map((t) => {
-    const on = isPassivePromoted(ex, t.id);
-    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag to this exercise`}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
+    const on = paletteTagActive(ex, fam, t.id);
+    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
   }).join("");
-  return `<div class="addm-passive" aria-label="Add a passive tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
+  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}</div>`;
 }
 /** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
 function inclinePillLabel(dim: LevelDim, val: number): string {
@@ -19713,22 +19717,16 @@ function onAddModalClick(e: MouseEvent): void {
   if (t === wrap) { closeAddModal(); return; } // backdrop tap
   const form = wrap.querySelector<HTMLElement>(".wo-addform");
   if (!form) return;
-  // ＋ tag: reveal ALL variation dimensions for THAT set line (so you can set a default one)
-  // — tap again to collapse back to only the tags you've set (owner: one styled tag set per
-  // set, ＋ to add more). Per-line now, so it only affects the line whose ＋ you tapped.
-  if (t.closest(".addm-add-tag")) {
-    t.closest<HTMLElement>(".addm-line-vars")?.classList.toggle("show-all");
-    syncAddmVtags(form);
-    return;
-  }
   // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
   const incPill = t.closest<HTMLElement>(".wo-af-incpill");
   if (incPill) { openInclinePicker(incPill); return; }
   // ROM pill → the unit (% / cm) + reference picker.
   const romPill = t.closest<HTMLElement>(".wo-af-rompill");
   if (romPill) { openRomPicker(romPill); return; }
-  // Passive-tag palette ＋ (e.g. ＋ ROM): promote/demote the tag for this exercise and add or
-  // remove its pill on EVERY set line in place (so typed weights/reps + other tags survive).
+  // Tag palette ＋/✓ : promote/demote a tag for this exercise so it shows (or hides) next to the
+  // weight. The dim pills are always rendered (just hidden by syncAddmVtags when passive), so
+  // toggling one just re-runs the visibility — typed weights/reps + other picked tags survive.
+  // ROM is the exception (rendered only when on), so insert/remove its captioned pill in place.
   const passBtn = t.closest<HTMLElement>(".addm-passive-pill");
   if (passBtn?.dataset.passive) {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
@@ -19738,8 +19736,8 @@ function onAddModalClick(e: MouseEvent): void {
         const on = isPassivePromoted(ex, "rom");
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
-          if (on && !existing) slot.querySelector(".addm-add-tag")?.insertAdjacentHTML("beforebegin", romPillHtml(ex));
-          else if (!on && existing) { (existing.nextElementSibling?.classList.contains("xdd") ? existing.nextElementSibling : null)?.remove(); existing.remove(); }
+          if (on && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
+          else if (!on && existing) existing.closest(".addm-vtag")?.remove();
         }
       }
       const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");

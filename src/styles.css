@@ -2825,10 +2825,16 @@ sup.wr-bw { font-size: 0.85em; }
    LINE carries its OWN .addm-line-vars — a TAG BLOCK of variant/ROM pills + a ＋ tag button on
    the LEFT, with the weight/reps/RIR/✕ grouped on the right (.addm-line-main). Many tags (e.g.
    handstands) wrap within the block; the right group drops below only when out of room. */
-.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: center; flex: 1 1 auto; min-width: 0; gap: 0.3rem; }
+.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; flex: 1 1 auto; min-width: 0; gap: 0.3rem; }
 .addm-line-vars:empty { display: none; }
-/* dissolve the .wo-af-dims wrapper so its dim pills join the tag wrap directly, beside the ROM pill */
+/* dissolve the .wo-af-dims wrapper so its dim/tag columns join the tag wrap directly, beside the ROM */
 .addm-line-vars .wo-af-dims { display: contents; }
+/* Each tag is a little COLUMN: a tiny gray CAPTION naming what it is (owner: "above the tag,
+   very small gray letters — lean / rom") over the pill. A PASSIVE tag (at its obvious baseline
+   and not promoted) hides the whole column via .addm-vtag--off. */
+.addm-vtag { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; flex: 0 0 auto; min-width: 0; }
+.addm-vtag--off { display: none; }
+.addm-vtag-cap { font-size: 0.5rem; line-height: 1; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding-left: 2px; white-space: nowrap; }
 /* Each tag/ROM pill in the line (the dim pills live inside .wo-af-dims, the ROM pill is a sibling) */
 .addm-line-vars select { font: inherit; font-size: 0.82rem; padding: 2px 6px; }
 .addm-line-vars .xdd-btn { font-size: 0.82rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-pill); }
@@ -2855,16 +2861,6 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-line-vars .wo-af-dimpill.xdd.open .xdd-btn { border-color: var(--accent); }
 .addm-line-vars .wo-af-dimpill .xdd-caret { font-size: 0.55rem; opacity: 0.7; }
 .addm-line-vars .xdd { flex: 0 0 auto; }
-/* ＋ tag — reveal the dims still at their default so you can add one (owner: only the tags
-   you've set show; tap ＋ to add more). A subtle dashed pill matching the tag density. */
-.addm-add-tag {
-  flex: 0 0 auto; padding: 1px 6px; line-height: 1.5;
-  font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em;
-  border: 1px dashed var(--line); border-radius: var(--r-xs);
-  background: none; color: var(--muted); cursor: pointer;
-}
-.addm-add-tag:hover { border-color: var(--accent); color: var(--accent); }
-.addm-line-vars.show-all .addm-add-tag { border-style: solid; color: var(--accent); border-color: var(--accent); }
 /* INCLINE / height pill (push-ups) — same small history-tag look as the dim pills; a non-floor
    height lights up in the accent colour. Tap → the cm / SQ / Smith picker popup (.inc-pop). */
 .addm-line-vars .wo-af-incpill {
@@ -2970,11 +2966,14 @@ sup.wr-bw { font-size: 0.85em; }
   position: fixed; z-index: 221; margin: 0; max-height: 70vh; overflow: auto;
   border-radius: 10px; background: var(--panel); box-shadow: 0 8px 24px rgba(0,0,0,0.18);
 }
-/* PASSIVE-tag palette above the sets: ＋ ROM (and future common passive tags). A ＋ promotes the
-   tag to an active pill on every set line; once on it shows ✓ and removes on a second tap. */
-.addm-passive { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0.1rem 0.35rem; }
+/* TAG palette above the sets: a ＋ for EVERY tag the exercise can carry (owner: "a list of all
+   the tags above the sets"). A ＋ promotes the tag to a pill on every set line; once on it shows
+   ✓ and removes on a second tap. Many tags now → ONE horizontally-scrolling row (rule #cram),
+   the label pinned at the left so the pills swipe under it. */
+.addm-passive { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0.1rem 0.35rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.addm-passive::-webkit-scrollbar { display: none; }
 .addm-passive:empty { display: none; }
-.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 auto; }
 .addm-passive-pill {
   flex: 0 0 auto; padding: 2px 8px; font: inherit; font-size: 0.62rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.02em; cursor: pointer;
