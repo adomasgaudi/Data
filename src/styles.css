@@ -1843,6 +1843,14 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
   background: var(--accent); color: #fff; font-size: 0.9rem; font-weight: 700; cursor: pointer;
 }
 .set-act-add:active { opacity: 0.85; }
+/* Two bottom buttons (owner): edit THIS set vs add a NEW set with the dialed reps/weight. */
+.set-act-btns { display: flex; gap: 6px; margin-top: 2px; }
+.set-act-btns .set-act-add, .set-act-btns .set-act-edit { flex: 1 1 0; margin-top: 0; }
+.set-act-edit {
+  min-height: var(--tap-min); border: 1px solid var(--accent); border-radius: var(--r-pill);
+  background: var(--panel); color: var(--accent); font-size: 0.9rem; font-weight: 700; cursor: pointer;
+}
+.set-act-edit:active { opacity: 0.85; }
 .scale-edit-hd { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.3rem; }
 .scale-edit-title { font-size: 0.82rem; font-weight: 700; overflow-wrap: anywhere; }
 .scale-edit-close { font: inherit; cursor: pointer; color: var(--muted); background: none; border: 1px solid var(--line); border-radius: 7px; padding: 0 7px; line-height: 1.6; }

@@ -10006,17 +10006,24 @@ function handleSetAct(item: HTMLElement): void {
     return;
   }
   if (act === "edit") {
-    // Open the FULL per-set editor (owner). It lives in the EXPANDED day rows, so jump to the
-    // set's day (which expands it + renders the set rows), then open + anchor this set's editor.
+    // Open the NEW add/edit sheet — identical to the + set / + exercise menu (tags, RIR, machine,
+    // variation pickers) — prefilled with this set's weight/reps, replacing the OLD expanded per-set
+    // editor (owner: "this is an old menu, replace it with the new one").
     const src = liveRecords().find((r) => setId(r) === sid);
-    if (!src?.date) return;
-    openSetEditId = sid;
-    if (jumpToWorkoutDate(src.date)) {
-      reopenSetEdit(); // un-hide + anchor the editor for openSetEditId
-      setTimeout(() => document.addEventListener("click", setEditOutside, true), 0); // outside-tap closes it
-    } else {
-      openSetEditId = null; // the set's day isn't in the current (Workouts) view
-    }
+    if (!src) return;
+    openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) });
+    return;
+  }
+  if (act === "ruleredit") {
+    // Apply the dialed reps/weight to the TAPPED set (edit in place), via the same per-set
+    // override the expanded editor uses. The free-text note / tags are untouched.
+    const menu = document.getElementById("setActionMenu");
+    if (!menu) return;
+    const repR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="rep"]');
+    const wtR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="wt"]');
+    if (repR) setSetOverrideField(sid, "reps", rulerValue(repR));
+    if (wtR) setSetOverrideField(sid, "weight", rulerValue(wtR));
+    scheduleRender();
     return;
   }
   if (act === "ruleradd") {
@@ -10090,17 +10097,21 @@ function openSetActionMenu(anchor: HTMLElement): void {
   const menu = document.createElement("div");
   menu.id = "setActionMenu";
   menu.className = "set-act-menu set-act-menu--rulers";
+  // No Duplicate button (owner): "+ Add set" with unchanged values already duplicates the set.
   menu.innerHTML =
     `<div class="set-act-icons">` +
-    ico("dup", "⧉", "Duplicate set") +
     (hasVar ? ico("variant", "✎", "Change variant") : "") +
-    ico("edit", "⚙", "Edit set — open the full editor") +
+    ico("edit", "⚙", "Open the full add menu (tags, RIR…) for this lift") +
     ico("del", "✕", "Delete set", " set-act-ico--del") +
     `</div>` +
-    `<div class="set-act-sec">Add a set</div>` +
+    `<div class="set-act-sec">Change reps / weight, then edit this set or add a new one</div>` +
     rulerHtml("rep", repMin, repStep, repCount, repIdx, "reps") +
     wtRuler +
-    `<button type="button" class="set-act-add" data-setact="ruleradd" data-sid="${escapeHtml(sid)}">＋ Add set</button>`;
+    // Two buttons (owner): apply the dialed reps/weight to THIS set, or add a NEW set with them.
+    `<div class="set-act-btns">` +
+    `<button type="button" class="set-act-edit" data-setact="ruleredit" data-sid="${escapeHtml(sid)}">✎ Edit set</button>` +
+    `<button type="button" class="set-act-add" data-setact="ruleradd" data-sid="${escapeHtml(sid)}">＋ Add set</button>` +
+    `</div>`;
   document.body.appendChild(menu);
   clampMenuIntoView(menu, anchor);
   // Centre each ruler on its current value and keep the readout live as you swipe.
@@ -19309,12 +19320,14 @@ function closeAddModal(): void {
   if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); window.scrollTo(0, y); } } // drop the ghost
 }
 /** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
-function openAddModal(exerciseName: string | null, date: string): void {
+function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }): void {
   closeAddModal();
   const isNew = !exerciseName;
   const ex = exerciseName ?? "";
   const today = todayIso();
-  const { prefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
+  const { prefill: suggPrefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
+  // An explicit prefill (e.g. the cog opening this sheet from a tapped set) wins over the suggestion.
+  const prefill = prefillOverride ?? suggPrefill;
   // Variant = structured dim pickers for modelled lifts only (never conflated with notes).
   // They live PER set-line now (afLine → addmVariantField), so each set has its own tags;
   // the new-lift popup rebuilds every line's pickers when you PICK an exercise.
