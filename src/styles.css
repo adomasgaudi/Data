@@ -2078,16 +2078,26 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .vtag-pick:hover { background: var(--accent-soft); color: var(--accent); }
 .vtag-opt.is-active .vtag-pick { color: var(--accent); font-weight: 700; }
 .vtag-mult-lbl { color: var(--muted); font-size: 0.8em; font-weight: 600; margin-left: 0.3em; }
-.vtag-default, .vtag-editbtn, .vtag-gray {
-  flex: 0 0 auto; border: none; background: none; cursor: pointer; color: var(--muted);
-  min-width: var(--tap-min); min-height: var(--tap-min); border-radius: var(--r-pill); font-size: 0.95rem; line-height: 1;
+/* Minimalist line-icon action buttons (show-in-history · default · rename) — no emoji. */
+.vtag-iconbtn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; cursor: pointer; color: var(--muted);
+  min-width: var(--tap-min); min-height: var(--tap-min); border-radius: var(--r-pill);
 }
-.vtag-default.is-on { color: var(--lens-combine); } /* gold ★ = the exercise's default tag */
+.vtag-ico { width: 1.05rem; height: 1.05rem; display: block; }
+.vtag-default.is-on { color: var(--lens-combine); } /* filled star = the exercise's default tag */
 .vtag-editbtn.is-on { color: var(--accent); }
-.vtag-gray.is-on { color: var(--accent); } /* 👁 = shown as a history tag; 🚫 = gray (editor-only) */
-.vtag-default:hover, .vtag-editbtn:hover, .vtag-gray:hover { color: var(--accent); background: var(--accent-soft); }
+.vtag-gray.is-on { color: var(--accent); } /* eye = shown as a history tag; eye-off = editor-only */
+.vtag-iconbtn:hover { color: var(--accent); background: var(--accent-soft); }
 .vtag-opt.is-default { background: color-mix(in srgb, var(--lens-combine) 12%, transparent); border-radius: 6px; }
 .vtag-opt.is-gray .vtag-pick { opacity: 0.55; } /* a gray (editor-only) level reads faded in the menu */
+/* Tag-menu header: what this tag controls + a legend for the three row icons (owner). */
+.vtag-legend { padding: 6px 8px 7px; border-bottom: 1px solid var(--line); margin-bottom: 3px; }
+.vtag-legend-dim { font-weight: 700; font-size: 0.82rem; text-transform: capitalize; color: var(--text); }
+.vtag-legend-sub { font-size: 0.7rem; color: var(--muted); margin-top: 1px; line-height: 1.35; }
+.vtag-legend-row { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 5px; font-size: 0.66rem; color: var(--muted); }
+.vtag-legend-row span { display: inline-flex; align-items: center; gap: 3px; }
+.vtag-legend-row .vtag-ico { width: 0.85rem; height: 0.85rem; }
 .vtag-edit { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 6px 6px; }
 .vtag-efld { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--muted); }
 .vtag-name, .vtag-mult { font: inherit; font-size: 0.85rem; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); box-sizing: border-box; }

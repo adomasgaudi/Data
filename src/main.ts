@@ -18821,6 +18821,7 @@ function syncAddmVtags(form: HTMLElement): void {
   // selects stay the source of truth read on Add (onInlineAddGo) — capture is unchanged.
   for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
     const showAll = slot.classList.contains("show-all");
+    let hideable = 0; // gray dims that ＋tag could reveal (so we never show a dead button)
     for (const sel of slot.querySelectorAll<HTMLSelectElement>(".wo-af-dim")) {
       const isRom = sel.classList.contains("wo-af-rom"); // a PROMOTED passive tag — always shown
       const fam = sel.dataset.ex ? familyOf(sel.dataset.ex) : null;
@@ -18831,6 +18832,15 @@ function syncAddmVtags(form: HTMLElement): void {
       // is-set drives the history-tag COLOUR (support→accent, band→gold) on the visible pill.
       sel.classList.toggle("is-set", !gray);
       setEnhancedSelectHidden(sel, !isRom && gray && !showAll);
+      if (!isRom && gray) hideable++;
+    }
+    // ＋tag reveals the gray dims; HIDE the button when there's nothing to reveal (owner: "+ tag
+    // does nothing" — it was a dead button when every dim was already shown), and relabel it
+    // to "− less" while expanded so it reads as the collapse toggle.
+    const addTagBtn = slot.querySelector<HTMLElement>(".addm-add-tag");
+    if (addTagBtn) {
+      addTagBtn.hidden = hideable === 0 && !showAll;
+      addTagBtn.textContent = showAll ? "− less" : "＋ tag";
     }
   }
 }
@@ -24568,6 +24578,20 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   const isVtag = (): boolean => sel.classList.contains("wo-af-dimpill") && !!vtagDim && !!vtagFam();
   let vtagEditLevel: string | null = null;
 
+  // Minimalist line icons for the tag editor (owner: no emoji eyes / pencil — a stylish,
+  // minimal scheme). 1em, inherit colour, stroke-based so they read as clean glyphs.
+  const vtagIco = (kind: "show" | "hide" | "star" | "starOn" | "edit"): string => {
+    const svg = (inner: string, fill = "none") =>
+      `<svg class="vtag-ico" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+    switch (kind) {
+      case "show": return svg(`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/>`);
+      case "hide": return svg(`<path d="M2 12s3.6-6.5 10-6.5c1.7 0 3.2.3 4.5.9M22 12s-3.6 6.5-10 6.5c-1.7 0-3.2-.3-4.5-.9"/><path d="M4 4l16 16"/>`);
+      case "star": return svg(`<path d="M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.2 18.3l.9-5.1L4.3 9.5l5.2-.8z"/>`);
+      case "starOn": return svg(`<path d="M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.2 18.3l.9-5.1L4.3 9.5l5.2-.8z"/>`, "currentColor");
+      case "edit": return svg(`<path d="M14.5 6.5l3 3M4 20l1-4L16 5a1.5 1.5 0 0 1 3 3L8 19z"/>`);
+    }
+  };
+
   const vtagOptHtml = (o: HTMLOptionElement): string => {
     const fam = vtagFam()!;
     const lvl = o.value;
@@ -24589,9 +24613,9 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       (factor !== undefined ? ` <span class="vtag-mult-lbl">×${factor}</span>` : "") +
       (hint ? ` <span class="xdd-opt-hint">${escapeHtml(hint)}</span>` : "") +
       `</button>` +
-      `<button type="button" class="vtag-gray${gray ? "" : " is-on"}" data-vtag-gray="${escapeHtml(lvl)}" aria-pressed="${!gray}" title="${gray ? "Hidden from the history (only shows in this editor) — tap to SHOW it as a tag" : "Shown as a history tag — tap to HIDE it (gray: only in the editor)"}">${gray ? "🚫" : "👁"}</button>` +
-      `<button type="button" class="vtag-default${isDefault ? " is-on" : ""}" data-vtag-default="${escapeHtml(lvl)}" aria-pressed="${isDefault}" title="${isDefault ? "The default tag for this exercise" : "Set as the default tag for this exercise"}">${isDefault ? "★" : "☆"}</button>` +
-      `<button type="button" class="vtag-editbtn${editing ? " is-on" : ""}" data-vtag-edit="${escapeHtml(lvl)}" title="Edit this tag's name and multiplier">✎</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-gray${gray ? "" : " is-on"}" data-vtag-gray="${escapeHtml(lvl)}" aria-pressed="${!gray}" title="${gray ? "Hidden from your history — only shows here in the editor. Tap to SHOW it as a tag." : "Shown as a tag in your history. Tap to HIDE it (keep it editor-only)."}">${gray ? vtagIco("hide") : vtagIco("show")}</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-default${isDefault ? " is-on" : ""}" data-vtag-default="${escapeHtml(lvl)}" aria-pressed="${isDefault}" title="${isDefault ? "This is the DEFAULT for this exercise (pre-selected on new sets)." : "Make this the default for this exercise (pre-selected on new sets)."}">${isDefault ? vtagIco("starOn") : vtagIco("star")}</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-editbtn${editing ? " is-on" : ""}" data-vtag-edit="${escapeHtml(lvl)}" title="Rename this tag or change its ×difficulty multiplier">${vtagIco("edit")}</button>` +
       editRow +
       `</div>`
     );
@@ -24621,9 +24645,16 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     const search = sel.querySelectorAll("option").length > 8
       ? `<input type="text" class="xdd-search" placeholder="Search…" aria-label="Search options" autocomplete="off" />`
       : "";
+    // For the tag editor, a header naming WHAT this tag controls + a one-line legend for the
+    // three per-row icons (owner: "more text describing what each tag does; the icons are unclear").
+    const vtagHead = isVtag()
+      ? `<div class="vtag-legend"><div class="vtag-legend-dim">${escapeHtml(AF_DIM_LBL[vtagDim] ?? vtagDim)}</div>` +
+        `<div class="vtag-legend-sub">Pick how this set was done. The ×number is its difficulty vs the plain lift.</div>` +
+        `<div class="vtag-legend-row"><span>${vtagIco("show")} show in history</span><span>${vtagIco("star")} default</span><span>${vtagIco("edit")} rename / ×</span></div></div>`
+      : "";
     dd.innerHTML =
       `<button type="button" class="xdd-btn">${escapeHtml(sel.selectedOptions[0]?.textContent ?? "")}<span class="xdd-caret">▾</span></button>` +
-      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${search}${menu}</div>`;
+      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${search}${vtagHead}${menu}</div>`;
   };
   sync();
 
