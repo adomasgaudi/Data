@@ -1556,6 +1556,17 @@ function famLevels(family: string, dim: string): Record<string, number> {
 function leanFactorFor(family: string, support: string, level: string): number {
   return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
 }
+/** A hand is ~16cm: the forward-lean table is keyed on the lean measured at the BASE
+ * of the palm, but the owner measures (and wants to read) it from the FINGERTIPS,
+ * which sit ~16cm closer to the shoulders. So shift the DISPLAYED cm down by 16 —
+ * keeping 0cm = no lean and clamping at 0 so a small palm-lean never reads negative.
+ * Pure display: the stored level keys and difficulty factors are untouched. */
+const FINGER_LEAN_OFFSET_CM = 16;
+function leanDisplayCm(level: string): string {
+  const n = parseInt(level, 10);
+  if (!Number.isFinite(n)) return level;
+  return `${Math.max(0, n - FINGER_LEAN_OFFSET_CM)}cm`;
+}
 function saveFamFactors(): void {
   saveJson(FAM_FACTORS_KEY, famFactorOverrides);
 }
@@ -6983,7 +6994,9 @@ function variationChipsHtml(r: SetRecord): string {
   const sup = String(vec.support ?? "free");
   chips.push(`<span class="wo-var-chip wo-var-sup">${escapeHtml(SUP[sup] ?? sup)}</span>`);
   if (vec.band && vec.band !== "none") chips.push(`<span class="wo-var-chip wo-var-band">band ${escapeHtml(String(vec.band))}</span>`);
-  if (vec.lean && vec.lean !== "0cm") chips.push(`<span class="wo-var-chip">lean ${escapeHtml(String(vec.lean))}</span>`);
+  // Lean is shown measured from the fingertips (~16cm less than the palm-keyed table);
+  // a lean that clamps to 0cm at the fingertips reads as "no lean", so no chip.
+  if (vec.lean && parseInt(String(vec.lean), 10) > FINGER_LEAN_OFFSET_CM) chips.push(`<span class="wo-var-chip">lean ${escapeHtml(leanDisplayCm(String(vec.lean)))}</span>`);
   return `<span class="wo-var-chips">${chips.join("")}</span>`;
 }
 
@@ -11137,7 +11150,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
     const readout = noLean
       ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
-      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
+      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(leanDisplayCm(lk))}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
     return (
       `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}${noLean ? " ex-pad-nolean" : ""}"><span class="ex-var-dim-lbl">${noLean ? "depth (free — no lean)" : "depth × lean"}</span>` +
       `<div class="ex-pad-readout">${readout}</div>` +
@@ -12714,7 +12727,7 @@ async function init() {
     const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
-    set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+    set(".ex-sl-rk", rk); set(".ex-sl-lk", leanDisplayCm(lk)); set(".ex-sl-mult", `×${mult}`);
     set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
     if (fill) {
@@ -14333,8 +14346,12 @@ const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
   band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
   position: { floor: "floor (on feet)", knees: "on knees" },
 };
-/** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
-function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
+/** Readable label for a dimension level. Lean cm is shown from the fingertips
+ * (~16cm less than the palm-keyed table); other cm levels like "+23cm" stay as-is. */
+function afLevelText(dim: string, level: string): string {
+  if (dim === "lean") return leanDisplayCm(level);
+  return AF_LEVEL_LBL[dim]?.[level] ?? level;
+}
 /** The variation field for the inline add form. For a lift with a VARIATION MODEL
  * (a family), it's a row of structured pickers — the real variables (support, ROM,
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
