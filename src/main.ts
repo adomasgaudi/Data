@@ -1356,7 +1356,7 @@ function applyNameModeChange(): void {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
-  window.scrollTo(0, y);
+  restoreScrollY(y);
 }
 /** Light up the active name-mode button in the Settings picker. */
 function syncNameModeButtons(): void {
@@ -10321,7 +10321,7 @@ function deleteSetById(id: string): void {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   renderHealth();
-  window.scrollTo(0, y);
+  restoreScrollY(y);
 }
 
 /** Tap a COLLAPSED-view set chip → open its small action menu (owner: duplicate /
@@ -10550,7 +10550,7 @@ function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
     if (document.getElementById("workoutsTable")) renderWorkoutsPage();
     if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
     refreshExerciseInfo();
-    window.scrollTo(0, y);
+    restoreScrollY(y);
   };
   refresh();
   showToast(`Added ${displayName(exerciseName)} set (${reps}×${fmt(weight)})`, "Undo", () => {
@@ -10607,7 +10607,7 @@ function duplicateSetFromId(id: string): void {
     if (document.getElementById("workoutsTable")) renderWorkoutsPage();
     if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
     refreshExerciseInfo();
-    window.scrollTo(0, y);
+    restoreScrollY(y);
   };
   refresh();
   // A tap adds data, so make it recoverable: a 10s Undo that removes the copy (it's the
@@ -10645,7 +10645,7 @@ function toggleSetNotComparable(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -10711,7 +10711,7 @@ function toggleUnilateralExercise(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -10727,7 +10727,7 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -10746,7 +10746,7 @@ function toggleSetMachineGravity(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -15079,7 +15079,7 @@ function onBwInputChange(e: Event) {
       // Tier offers an "↺ Auto" option that drops the override (back to the guess).
       setMetaSet(kind, name, sel.value === "auto" ? [] : [sel.value]);
       renderBwParts();
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       renderLeaderboard();
     }
     return;
@@ -15687,6 +15687,23 @@ function renderAll() {
 // (e.g. reopenIndexDetail / renderExerciseDetail right after).
 let pendingRender: (() => void) | null = null;
 let renderRafQueued = false;
+// NEVER fight an active user scroll. Render paths capture scrollY and re-apply it after
+// a rebuild to keep your place — but during load/sync that fires WHILE you're scrolling
+// and yanks you back: the "page jumps around when I scroll while it's still loading" bug
+// (#persistent PB-50, #debug). A real scroll gesture (wheel/touch) stamps the time; any
+// programmatic scroll-restore is SKIPPED for a short window after, so the user wins.
+let lastUserScrollAt = -1e9;
+for (const ev of ["wheel", "touchstart", "touchmove"] as const)
+  window.addEventListener(ev, () => { lastUserScrollAt = performance.now(); }, { passive: true, capture: true });
+// Don't let the browser re-apply a remembered scroll position after the async app
+// finishes building — that late restore is itself a "jump on open" (PB-50).
+try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch { /* ignore */ }
+const userScrollingNow = (): boolean => performance.now() - lastUserScrollAt < 600;
+/** Restore window scroll to `y` to preserve place across a rebuild — but yield to a live
+ *  user scroll (don't yank them back). Used by every "capture y → render → restore" path. */
+function restoreScrollY(y: number): void {
+  if (!userScrollingNow()) window.scrollTo(0, y);
+}
 /** Defer ANY heavy render to the next frame, coalesced + scroll-preserving. The
  * latest fn queued in a frame is the one that runs (one render per frame), and the
  * scroll position is captured now and restored after — so a tap repaints its own
@@ -15700,8 +15717,8 @@ function deferRender(fn: () => void): void {
     renderRafQueued = false;
     const f = pendingRender; pendingRender = null;
     f?.();
-    window.scrollTo(0, y);
-    requestAnimationFrame(() => window.scrollTo(0, y)); // charts can reflow async
+    restoreScrollY(y);
+    requestAnimationFrame(() => restoreScrollY(y)); // charts can reflow async
   });
 }
 function scheduleRender(after?: () => void): void {
@@ -15753,8 +15770,8 @@ function refreshAfterDifficultyEdit(): void {
   refreshExerciseInfo();
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  window.scrollTo(0, y);
-  requestAnimationFrame(() => window.scrollTo(0, y));
+  restoreScrollY(y);
+  requestAnimationFrame(() => restoreScrollY(y));
 }
 
 // Editing model ×factors should feel instant: each change just saves + recolours
@@ -15770,7 +15787,7 @@ function scheduleModelFactorsApply(): void {
     renderAll();
     if (document.getElementById("workoutsTable")) renderWorkoutsPage();
     if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
-    window.scrollTo(0, y);
+    restoreScrollY(y);
   }, 600);
 }
 
@@ -16766,7 +16783,7 @@ async function init() {
       renderAll();
       if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
       if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-      window.scrollTo(0, y);
+      restoreScrollY(y);
       return;
     }
     // "Compare" toggle (graph bar, beside Graph options / Legend): show/hide the
@@ -17514,8 +17531,8 @@ async function init() {
     const keepScroll = (fn: () => void) => {
       const y = window.scrollY;
       fn();
-      window.scrollTo(0, y);
-      requestAnimationFrame(() => window.scrollTo(0, y));
+      restoreScrollY(y);
+      requestAnimationFrame(() => restoreScrollY(y));
     };
     if (target.closest("[data-heatall]")) {
       waSelected = [];
@@ -18206,7 +18223,7 @@ async function init() {
       const sy = window.scrollY;
       setBwReviewOpen(true);
       toggleActiveOverride(keep.dataset.askeep, "include");
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       return;
     }
     // "⤳ merge?" — flag / unflag a lift for the merge-review queue (top of the Index).
@@ -18215,7 +18232,7 @@ async function init() {
       const sy = window.scrollY;
       toggleMergeReview(mflag.dataset.mergeflag);
       renderBwParts();
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       return;
     }
     // (Tier quick-edit is now a .xdd dropdown — handled by the bw-attr-edit change
@@ -18368,7 +18385,7 @@ function applyRefresh(): void {
   renderWorkoutAnalysis();
   renderStatus();
   renderDataTab();
-  window.scrollTo(0, y); // user CHOSE to refresh → keep their place, don't fling to top
+  restoreScrollY(y); // user CHOSE to refresh → keep their place, don't fling to top
   if (bar) bar.hidden = true;
 }
 
@@ -19536,7 +19553,7 @@ function scheduleGhostRender(): void {
     if (!document.getElementById("workoutsTable")) return;
     const y = window.scrollY;
     renderWorkoutsPage();
-    window.scrollTo(0, y);
+    restoreScrollY(y);
   }, 130);
 }
 /** Update the live ghost-set preview WITHOUT rebuilding the page (the old per-keystroke full
@@ -20113,7 +20130,7 @@ function closeAddModal(): void {
   addModalEl = null;
   addmStrength = null; // drop the cached strength map (recomputed on next open)
   document.removeEventListener("keydown", addModalEsc, true);
-  if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); window.scrollTo(0, y); } } // drop the ghost
+  if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); restoreScrollY(y); } } // drop the ghost
 }
 /** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
 function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }, edit?: { sid: string; note: string; rawNote: string }): void {
@@ -20678,7 +20695,7 @@ function applySetEdit(form: HTMLElement): boolean {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 function onInlineAddGo(form: HTMLElement): boolean {
@@ -22945,7 +22962,7 @@ function scheduleWaGraph(): void {
   waGraphRaf = requestAnimationFrame(() => { // would shift the page; pin scroll.
     waGraphRaf = 0;
     renderWaGraph();
-    if (window.scrollY !== y) window.scrollTo(0, y);
+    if (window.scrollY !== y) restoreScrollY(y);
   });
 }
 // A chart-ONLY re-plot, set up at the end of each renderWaGraph: re-runs the SVG

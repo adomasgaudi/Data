@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-50 — Page jumps around while it loads/syncs on open (scroll-restore fights the user)
+
+- **First seen / reported:** 2026-06-22, mobile (coloseum.netlify.app, opening via a `?u=` link). Owner #persistent #debug: "it still loads on first open and then jumps; if I try to scroll away while it's loading/synchronising it jumps around." First fix attempt (NAV-71, b.2.9.261) staged the three *background* syncs (GitHub CSV / Supabase manual sets / KV merge) behind a refresh bar so they no longer auto-rebuild or reload — but it still jumped.
+- **Root cause (the part NAV-71 missed):** the jump isn't only the background rebuilds — it's the **scroll-preserve idiom itself**. ~20 render paths (`deferRender`, the graph re-plot pin, set-edit rebuilds, …) do `const y = scrollY; …render…; window.scrollTo(0, y)` on a rAF to keep your place across a rebuild. During the heavy first render / async chart reflow, one of these fires *while you are actively scrolling* and `scrollTo(0, y)` yanks you back to the captured position → the "jumps around when I scroll while it's loading" report. The browser's own `history.scrollRestoration` (default `auto`) re-applying a remembered position after the async app finishes building is a second, smaller source.
+- **Fix (b.2.9.263, NAV-72):** never fight an active user scroll. A real scroll gesture (`wheel`/`touchstart`/`touchmove`, capture+passive) stamps `lastUserScrollAt`; a new `restoreScrollY(y)` skips the `scrollTo` when the user scrolled within the last 600ms, and EVERY `window.scrollTo(0, y|sy)` restore now routes through it (so no render path can yank a live scroll). Also set `history.scrollRestoration = "manual"` so the browser doesn't re-apply a remembered scroll after the build. Interactive edits (tap → rebuild) are unaffected — the user isn't scrolling then, so the restore still runs.
+- **Watch:** the scroll-preserve pattern is correct for a tap-triggered rebuild but WRONG during load/async reflow — it must always yield to a live gesture. If a jump recurs, instrument with `dbg()` at each render path's restore and confirm whether `restoreScrollY` is being skipped as intended; check the build stamp first (a stale Netlify cache can serve old JS). If the FIRST paint itself is slow/heavy (separate from the scroll-yank), that's the next lever — chunk/lazy-render the initial view.
+- **Recurrences:** 1 (NAV-71 refresh-bar staging didn't cover the scroll-restore fight; NAV-72 is the root fix).
+
+---
+
 ## PB-49 — Add-set TAG palette row reads as "out of bounds" (a chip clipped flush at the right edge)
 
 - **First seen / reported:** 2026-06-19, mobile (Brave, Android, b.2.9.256), Add set — HS-Push Up. Owner #persistent: "css is going out of bounds fix" — the top TAGS palette row (`✓ SUPPORT · + SHOULDER GAP · + FOREARM SUPPORT · + TEM…`) shows its last chip sliced off at the right edge with no scroll cue.
