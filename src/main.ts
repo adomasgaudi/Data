@@ -1765,6 +1765,41 @@ function saveLastAthlete(username: string) {
   }
 }
 
+// ---- Athlete in the URL: ?u=<username> so a user can be bookmarked / shared, or
+// the URL typed/edited to jump straight to someone. replaceState keeps it in sync
+// without spamming history; the hash (view deep-links) is preserved. ----
+const ATHLETE_URL_PARAM = "u";
+
+/** Reflect the shown athlete in the URL (?u=username), preserving everything else. */
+function syncAthleteUrl(username: string): void {
+  try {
+    const url = new URL(window.location.href);
+    if (username) url.searchParams.set(ATHLETE_URL_PARAM, username);
+    else url.searchParams.delete(ATHLETE_URL_PARAM);
+    if (url.toString() !== window.location.href) history.replaceState(history.state, "", url.toString());
+  } catch {
+    /* URL/history API unavailable — selection still applies, just no URL sync */
+  }
+}
+
+/** A username requested via ?u=, matched leniently against the roster (exact
+ * username, then exact display name, then a username prefix — all case-insensitive),
+ * so a typed link like ?u=adomas resolves. Returns the canonical username or null. */
+function athleteFromUrl(users: { username: string; user: string }[]): string | null {
+  try {
+    const raw = new URL(window.location.href).searchParams.get(ATHLETE_URL_PARAM);
+    const q = (raw ?? "").trim().toLowerCase();
+    if (!q) return null;
+    const hit =
+      users.find((u) => u.username.toLowerCase() === q) ??
+      users.find((u) => u.user.toLowerCase() === q) ??
+      users.find((u) => u.username.toLowerCase().startsWith(q));
+    return hit?.username ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ---- Group view: which people were picked, remembered across reloads ----
 const TEAM_STORE_KEY = "colosseum.teamPicks.v1";
 
@@ -4323,6 +4358,7 @@ function syncAthleteChips() {
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
   saveLastAthlete(els.athlete.value); // remember across reloads
+  syncAthleteUrl(els.athlete.value); // keep ?u=<username> in the URL for sharing/jumping
   // The M/W toggle auto-follows whoever is selected (it's always Men or Women).
   const sex = athProfile(els.athlete.value)?.sex;
   if (sex === "m" || sex === "f") athleteSexFilter = sex;
@@ -11907,11 +11943,16 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Pick the athlete to show on load: the one remembered from last visit if it's
-  // still in the data, otherwise default to Indre.
+  // Pick the athlete to show on load: a ?u=<username> in the URL wins (a typed/shared
+  // jump-to-user link), then the one remembered from last visit if it's still in the
+  // data, otherwise default to Indre. A locked user/spectator view ignores ?u= — it
+  // only ever shows its own athlete (rule: locked views never peek at others).
+  const urlUser = lockedUsername() === null ? athleteFromUrl(users) : null;
   const remembered = loadLastAthlete();
   const rememberedUser = remembered ? users.find((u) => u.username === remembered) : undefined;
-  if (rememberedUser) {
+  if (urlUser) {
+    els.athlete.value = urlUser;
+  } else if (rememberedUser) {
     els.athlete.value = rememberedUser.username;
   } else {
     const indre = users.find((u) => u.username.toLowerCase() === "indre_ju");
