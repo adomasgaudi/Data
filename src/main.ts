@@ -13785,16 +13785,23 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
   type BarColor = { r: number; g: number; b: number };
   type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number; shTip: { X: number; Y: number } };
-  // COLOUR: a clean cool→warm SEQUENTIAL ramp (deep teal → warm brick-red), not a hue-wheel
-  // rainbow — redder with more reps, and darkened as weight rises. Richer chroma; the
-  // world-fixed light then brightens/darkens each face for form. (Owner: nicer colour theory.)
+  // COLOUR: a cool→warm ramp (deep teal → warm brick-red) where RED = a HIGHER ESTIMATED
+  // 1RM for that weight×reps cell (owner: "the red should be the 1RM calc for that w × reps,
+  // not the rep amount"). So the strongest combos glow red; easy light/high-rep sets stay
+  // teal — normalised across the cells shown. World-fixed light then shades each face.
   const wRange = Math.max(1, d.hiW - d.loW);
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
   const COOL: [number, number, number] = [40, 132, 150];
   const WARM: [number, number, number] = [198, 74, 52];
+  const mapFormula = currentFormula();
+  const e1rmOf = (w: number, reps: number): number => estimate1RM(w, reps, mapFormula) ?? 0;
+  let e1rmLo = Infinity, e1rmHi = -Infinity;
+  for (const p of d.pts) { const e = e1rmOf(p.w, p.reps); if (e < e1rmLo) e1rmLo = e; if (e > e1rmHi) e1rmHi = e; }
+  const e1rmRange = Math.max(1e-6, e1rmHi - e1rmLo);
   const barColor = (w: number, reps: number): BarColor => {
-    const wf = clamp01((w - d.loW) / wRange), rf = d.maxReps > 0 ? clamp01(reps / d.maxReps) : 0;
-    const dk = 1 - 0.4 * wf; // darker as weight rises
+    const wf = clamp01((w - d.loW) / wRange);
+    const rf = clamp01((e1rmOf(w, reps) - e1rmLo) / e1rmRange); // RED = higher estimated 1RM
+    const dk = 1 - 0.4 * wf; // a touch darker as raw weight rises (form cue)
     return { r: (COOL[0] + (WARM[0] - COOL[0]) * rf) * dk, g: (COOL[1] + (WARM[1] - COOL[1]) * rf) * dk, b: (COOL[2] + (WARM[2] - COOL[2]) * rf) * dk };
   };
   const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
@@ -13944,14 +13951,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
       const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
       out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" fill-opacity="${f.op.toFixed(2)}" stroke="${edge}" stroke-width="0.5" stroke-opacity="${f.op.toFixed(2)}" stroke-linejoin="round"/>`;
     }
-    // SECTIONED height (owner: "sectioned heights instead of numbers, so I see how many"): a thin
-    // cross-section ring at each count level lets you count the units; thinned out on tall bars.
-    const ringStep = bar.count > 12 ? 2 : 1;
-    for (let k = ringStep; k < bar.count; k += ringStep) {
-      const yk = cy0 + mapH(k);
-      const rc = [rot(bar.cx - hwx, yk, bar.cz - hwz), rot(bar.cx + hwx, yk, bar.cz - hwz), rot(bar.cx + hwx, yk, bar.cz + hwz), rot(bar.cx - hwx, yk, bar.cz + hwz)];
-      out += `<polygon points="${rc.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ")}" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="0.5"/>`;
-    }
+    // (Owner removed the white cross-section rings that segmented each tower — solid bars now.)
     // Transparent hit-circle at the bar top carries the hover tooltip (count is in the tip).
     out += `<circle cx="${sx(bar.head.X).toFixed(1)}" cy="${sy(bar.head.Y).toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
   }
@@ -13965,6 +13965,15 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   out += lbl(axO, 0, 13, `${d.hiW}kg`);
   out += lbl(axR, 0, 13, `${d.maxReps} reps`);
   out += lbl(axS, 0, -5, `${d.maxCount}× done`);
+  // Intermediate NUMBERS along the weight (front) and reps (side) axes (owner: "I don't see
+  // numbers along the x and y axes") — at ¼/½/¾ between the corners, so each bar's weight/rep
+  // is readable. White-haloed (lbl) so they read over the towers.
+  for (let i = 1; i <= 3; i++) {
+    const w = d.loW + (d.hiW - d.loW) * (i / 4);
+    out += lbl(rot(mapX(w), cy0, gz0), 0, 13, `${Math.round(w)}`);
+    const r = (d.maxReps * i) / 4;
+    out += lbl(rot(gx0, cy0, mapZ(r)), 0, 13, `${Math.round(r)}`);
+  }
   return out;
 }
 
