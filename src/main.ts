@@ -18747,6 +18747,17 @@ function showSyncStatus(type: "up" | "down" | "err", msg: string): void {
 }
 
 /** Push all local manual entries to the shared Supabase sets table. */
+// Device-local record of which manual sets we've already uploaded (mid → content hash of
+// the last-uploaded row), so a refresh pushes only NEW/CHANGED sets instead of re-uploading
+// ALL of them every time (the "284 synced after just a refresh" bug). Never synced.
+const MANUAL_SYNCED_KEY = "colosseum._manualSynced.v1";
+function loadManualSynced(): Record<string, string> {
+  try { const o = JSON.parse(localStorage.getItem(MANUAL_SYNCED_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+}
+function saveManualSynced(m: Record<string, string>): void {
+  try { localStorage.setItem(MANUAL_SYNCED_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
 async function syncManualToSupabase(): Promise<void> {
   if (manualEntries.length === 0) return;
   // Back-fill seq for entries added before the seq field existed.
@@ -18756,24 +18767,31 @@ async function syncManualToSupabase(): Promise<void> {
   });
   if (seqDirty) saveManualLocal();
   try {
-    const rows = manualEntries
+    const rowOf = (m: ManualEntry) => ({
+      user_id: m.username,
+      username: m.username,
+      date: m.date,
+      bodyweight: null as number | null,
+      exercise_name: m.exerciseName,
+      set_number: m.seq!,
+      weight: m.weight,
+      reps: m.reps,
+      notes: (m.notes ?? "") + `||mid:${m.id}`,
+      dropset: false,
+      percentile: null as number | null,
+    });
+    // Only upload sets that are NEW or whose content changed since we last uploaded them —
+    // not the whole list every refresh. The hash covers every field that lands in the row.
+    const synced = loadManualSynced();
+    const pending = manualEntries
       .filter((m) => m.seq !== undefined)
-      .map((m) => ({
-        user_id: m.username,
-        username: m.username,
-        date: m.date,
-        bodyweight: null as number | null,
-        exercise_name: m.exerciseName,
-        set_number: m.seq!,
-        weight: m.weight,
-        reps: m.reps,
-        notes: (m.notes ?? "") + `||mid:${m.id}`,
-        dropset: false,
-        percentile: null as number | null,
-      }));
-    if (rows.length > 0) {
-      await upsertSets(rows);
-      showSyncStatus("up", `⬆ ${rows.length} synced`);
+      .map((m) => { const row = rowOf(m); return { mid: m.id, row, hash: JSON.stringify(row) }; })
+      .filter((x) => synced[x.mid] !== x.hash);
+    if (pending.length > 0) {
+      await upsertSets(pending.map((x) => x.row));
+      for (const x of pending) synced[x.mid] = x.hash;
+      saveManualSynced(synced);
+      showSyncStatus("up", `⬆ ${pending.length} synced`);
     } else {
       showSyncStatus("up", "⬆ nothing to upload");
     }
