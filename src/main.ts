@@ -10108,13 +10108,12 @@ function afterModelPick(): void {
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
 function toggleScaleEditor(target: HTMLElement): boolean {
   if (target.closest(".scale-edit-close")) { closeScaleEditor(); return true; }
-  // `.set-scale.is-editable` = the expanded-row chip; `.wo-set-variant` = the
-  // collapsed-line quick-edit chip (history ⚙ → Var). Both carry the same data.
-  const btn = target.closest<HTMLElement>(".set-scale.is-editable, .wo-set-variant");
+  // The only editable scale chip is the EXPANDED set row's ×N chip (`.set-scale.is-editable`
+  // in a `tr.set-main`), and it falls through to toggleSetEdit → the unified Add/Edit card
+  // (DEDUP-5: there is ONE editor; the old standalone popover is no longer reachable). The
+  // legacy `.wo-set-variant` collapsed chip is gone (no longer emitted).
+  const btn = target.closest<HTMLElement>(".set-scale.is-editable");
   if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
-  // DEDUP-2: an EXPANDED set row's ×N chip now falls through to toggleSetEdit, which opens
-  // the unified card whose inline model edits the same variation — so there's ONE editor, not
-  // two. The collapsed `wo-set-variant` chip (no card there) still uses the standalone popover.
   if (btn.classList.contains("set-scale") && btn.closest("tr.set-main")) return false;
   if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
     closeScaleEditor();
@@ -10360,13 +10359,6 @@ function handleSetAct(item: HTMLElement): void {
   if (!sid) return;
   const act = item.dataset.setact;
   if (act === "dup") { duplicateSetFromId(sid); return; }
-  if (act === "variant") {
-    // Re-find the live set button (it still carries the data-scaleedit-* attrs) and open
-    // the same variant editor the expanded-row chip uses.
-    const src = document.querySelector<HTMLElement>(`.wo-set-menu[data-setmenu="${CSS.escape(sid)}"]`);
-    if (src) openVariantFromAttrs(src);
-    return;
-  }
   if (act === "del") {
     const src = liveRecords().find((r) => setId(r) === sid);
     deleteSetsWithUndo([sid], src ? displayName(src.exerciseName) : "set");
@@ -10413,13 +10405,6 @@ function handleSetAct(item: HTMLElement): void {
     return;
   }
   if (act === "sugg") { addSuggestedSet(sid, item.dataset.mode ?? "same"); return; }
-}
-/** Open the floating variant editor from a button carrying data-scaleedit-* attrs. */
-function openVariantFromAttrs(btn: HTMLElement): void {
-  if (!btn.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return;
-  const ld = btn.dataset.scaleeditLeveldim, lv = btn.dataset.scaleeditLevelvalue, ll = btn.dataset.scaleeditLevellabel;
-  const level = ld && lv !== undefined && ll !== undefined ? { dim: ld as LevelDim, value: Number(lv), label: ll } : undefined;
-  openScaleEditor(btn.dataset.scaleeditEx, btn.dataset.scaleeditNote, btn, level, { setId: btn.dataset.scaleeditSetid, rawNote: btn.dataset.scaleeditRawnote });
 }
 /** The value currently centred under a scrollable ruler (its snapped tick). */
 function rulerValue(ruler: HTMLElement): number {

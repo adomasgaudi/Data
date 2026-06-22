@@ -85,13 +85,20 @@ Owner #prune on "there shouldn't be two separate set-editing views" + "don't sho
   read/write, and the commit logic. Parameterise as `openFloatingPicker(pill, config)` where
   config = { className, initialState, render(state), onClick, onInput, commit }. HIGH confidence;
   pure refactor (no behaviour change), good test-by-build candidate. Biggest line-count win.
-- 🟠 **DEDUP-5** `[set-editor / add-modal]` (SP:8) — **Collapsed-set quick-edit still opens the OLD
-  popover, not the add/edit modal (rule 65, owner: "edit == add").** PB-46/DEDUP-2 routed the
-  EXPANDED-card edit through `openAddModal` edit-mode, but the COLLAPSED-set quick-edit chip
-  (`wo-set-variant`) still calls the legacy `openScaleEditor`/`renderScaleEditor` popover. So two
-  edit UIs survive for the same thing. Retire the popover and route the collapsed quick-edit to
-  the same `openAddModal` edit-mode. Verify nothing else still calls `openScaleEditor`/
-  `toggleScaleEditor` before deleting. HIGH confidence it should unify; medium effort.
+- ✅ **DEDUP-5 (mostly DONE, b.2.9.272)** `[set-editor / add-modal]` — **The old popover is already
+  UNREACHABLE — verified all three entry points are dead.** `.wo-set-variant` is no longer emitted
+  anywhere; the `act:"variant"` set-menu action is no longer emitted (→ `openVariantFromAttrs`
+  dead); and the only live editable chip (`.set-scale.is-editable`) is rendered inside `tr.set-main`
+  (setRowsHtml), where `toggleScaleEditor` returns false → it falls through to the unified
+  `openAddModal` edit card. So the user never reaches a second editor (rule 65 goal met). Trimmed
+  the dead entry points: removed the `variant` handleSetAct branch, `openVariantFromAttrs`, and
+  `.wo-set-variant` from the `toggleScaleEditor` selector. **Remainder → DEDUP-5b** (below).
+- 🟢 **DEDUP-5b** `[set-editor]` (SP:5) — **Remove the now-unreachable popover INTERNALS.**
+  `openScaleEditor` + the `else` (popover) branch of `renderScaleEditor` + the `.scale-edit-close`
+  handling are dead at runtime but still REFERENCED (so tsc doesn't flag them), and are ENTANGLED
+  with the in-card model that legitimately shares `renderScaleEditor`/`closeScaleEditor`/the
+  variation handlers. Untangling needs care (and on-device verification of the in-card editor),
+  so it's deferred from DEDUP-5. Low priority — it's invisible dead code, not a user-facing dup.
 - 🟡 **DEDUP-6** `[set-editor / add-modal]` (SP:8) — **Two render paths for the SAME variation
   picker.** The per-set card builds its dim dropdowns / ROM·lean·band pills via
   `renderCardVarModel` → `renderScaleEditor` (driven by the `scaleEditState` global, re-renders on
