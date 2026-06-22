@@ -17,6 +17,13 @@
   </head>
   <body>
 
+    <!-- Background-sync "new data / new version" bar: shown when a quiet sync finds
+         fresher data, so the view never rebuilds/reloads under you. Tap to apply. -->
+    <button id="refreshBar" class="refresh-bar" type="button" hidden aria-live="polite">
+      <span class="refresh-bar-txt">New data available</span>
+      <span class="refresh-bar-act">Tap to refresh ⟳</span>
+    </button>
+
     <div id="loginGate" class="login-gate">
       <div class="login-card">
         <div class="login-logo" aria-hidden="true">
@@ -55,7 +62,7 @@
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
         </div>
-        <div class="title-ver"><span class="version">b.2.9.260</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.261</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
 
       </div>
       <div class="topbar-right">

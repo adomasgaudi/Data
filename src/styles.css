@@ -222,6 +222,22 @@ body {
 .gh-sync--ok::before { content: "✓"; }
 .gh-sync--err { color: #b84040; background: color-mix(in srgb, #b84040 14%, transparent); }
 @keyframes gh-spin { to { transform: rotate(360deg); } }
+/* Background-sync "new data / new version" bar (NAV): a quiet sync stages fresher
+   data instead of rebuilding the view under you; this bar invites a manual refresh,
+   so the page never jumps or reloads on its own. Sticky at the very top. */
+.refresh-bar {
+  position: sticky; top: 0; z-index: 90; /* above content, BELOW the login gate (100) */
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: 100%; min-height: var(--tap-min); box-sizing: border-box;
+  padding: 0.4rem 0.75rem; border: 0; border-bottom: 1px solid var(--line);
+  background: var(--accent); color: #fff;
+  font: inherit; font-size: 0.8rem; cursor: pointer;
+  animation: refresh-bar-in 0.18s ease;
+}
+.refresh-bar[hidden] { display: none; }
+.refresh-bar-txt { font-weight: 600; }
+.refresh-bar-act { font-weight: 700; }
+@keyframes refresh-bar-in { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 /* Loading "hydration" pill — shown briefly during a deferred rebuild (e.g. after a
    delete) so a heavy re-render reads as "updating", not frozen. (PB-26 part 3.) */
 .hydrating-pill {

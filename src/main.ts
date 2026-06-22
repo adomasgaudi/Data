@@ -18318,14 +18318,51 @@ async function init() {
   setupLanguage();
   initI18n();
 
+  // Tapping the top "new data" bar applies every staged background update at once
+  // (the only moment the view rebuilds) — see stageRefresh/applyRefresh.
+  document.getElementById("refreshBar")?.addEventListener("click", applyRefresh);
+
   // Once the dashboard is up with the bundled data, quietly pull the LATEST ud.csv
-  // from GitHub and hot-swap it in if it changed — with a spinner next to the title.
+  // from GitHub; if it changed, STAGE it for a manual refresh (no live hot-swap).
   void syncFromGitHub();
 }
 
-/** Fetch the latest data from GitHub and, if it differs from what's bundled, swap it
- * in and re-render. A small badge by the title shows the live state (⟳ while fetching,
- * ✓ when synced). All failures are silent — the bundled data just stays. */
+// ── Background-sync "refresh" bar ───────────────────────────────────────────────
+// A background sync that finds fresher data must NEVER rebuild or reload the view
+// under the user (that's the page-jump the owner reported). Instead it STAGES the
+// update here and shows the sticky top bar; the view rebuilds ONLY when the user taps
+// it — keeping scroll/typing rock-stable meanwhile. `apply` mutates in-memory state
+// (the unified render runs after); pass "reload" for a change that only takes effect
+// on a full reload (a KV cache merge, which in-memory stores read at boot only).
+const refreshAppliers: (() => void)[] = [];
+let refreshNeedsReload = false;
+function stageRefresh(apply: (() => void) | "reload"): void {
+  if (apply === "reload") refreshNeedsReload = true;
+  else refreshAppliers.push(apply);
+  const bar = document.getElementById("refreshBar");
+  if (bar) bar.hidden = false;
+}
+/** Apply every staged background update at once (the one moment the view rebuilds),
+ *  or reload if a staged change needs it. Keeps the current scroll position. */
+function applyRefresh(): void {
+  const bar = document.getElementById("refreshBar");
+  if (refreshNeedsReload) { location.reload(); return; }
+  const fns = refreshAppliers.splice(0);
+  const y = window.scrollY;
+  for (const fn of fns) fn(); // in-memory state swaps only
+  populateExercisePicker();
+  renderAll();
+  renderWorkoutAnalysis();
+  renderStatus();
+  renderDataTab();
+  window.scrollTo(0, y); // user CHOSE to refresh → keep their place, don't fling to top
+  if (bar) bar.hidden = true;
+}
+
+/** Fetch the latest data from GitHub and, if it differs from what's bundled, STAGE it
+ * for a manual refresh (the top bar) rather than swapping it in live. A small badge by
+ * the title shows the live state (⟳ while fetching, ✓ when synced). All failures are
+ * silent — the bundled data just stays. */
 async function syncFromGitHub(): Promise<void> {
   const ind = document.getElementById("ghSync");
   if (ind) {
@@ -18336,20 +18373,17 @@ async function syncFromGitHub(): Promise<void> {
   const fresh = await fetchLatestCsv();
   if (fresh == null) { if (ind) ind.hidden = true; return; } // offline / unavailable: keep bundled
   if (fresh !== data.rawCsv) {
-    // Newer data than the build carries — rebuild the records and re-render the views.
-    data = buildLoaded(fresh);
-    clearMachineCache();
-    clearWorkoutSortFreeze(); // a data refresh is a "sparse" moment → re-sort the history fresh
-    loadedRecords = data.records; // immutable base for spelling-split re-derivation
-    mergeManualSets();
-    populateExercisePicker();
-    renderAll();
-    renderLeaderboard();
-    renderPersonalRecords();
-    renderWorkoutAnalysis();
-    renderStatus();
-    renderDataTab();
-    if (ind) { ind.className = "gh-sync gh-sync--ok"; ind.title = "Loaded the latest data from GitHub."; ind.textContent = "GitHub"; }
+    // Newer data than the build carries — STAGE it (don't rebuild under the user); the
+    // top refresh bar lets them apply it when they choose, so the view never jumps.
+    const freshCsv = fresh;
+    stageRefresh(() => {
+      data = buildLoaded(freshCsv);
+      clearMachineCache();
+      clearWorkoutSortFreeze(); // a data refresh is a "sparse" moment → re-sort the history fresh
+      loadedRecords = data.records; // immutable base for spelling-split re-derivation
+      mergeManualSets();
+    });
+    if (ind) { ind.className = "gh-sync gh-sync--ok"; ind.title = "Newer data is available — tap the bar at the top to refresh."; ind.textContent = "GitHub"; }
   } else if (ind) {
     ind.className = "gh-sync gh-sync--ok";
     ind.title = "Already on the latest data from GitHub.";
@@ -18744,9 +18778,8 @@ async function loadManualFromSupabase(): Promise<void> {
       added++;
     }
     if (added > 0) {
-      saveManualLocal();
-      mergeManualSets();
-      scheduleRender();
+      saveManualLocal(); // persist now; fold into the live view only on a manual refresh
+      stageRefresh(() => { mergeManualSets(); });
       showSyncStatus("down", `⬇ ${added} new`);
     }
   } catch { /* Supabase unreachable — local data is fine */ }
@@ -18836,7 +18869,7 @@ async function pullMergeKv(): Promise<void> {
       showSyncStatus("up", `⬆ ${toPush.length} synced`);
     } catch (e) { console.error("[kv pull-push]", e); } // base stays → retried next load
   }
-  if (localChanged > 0) location.reload(); // re-read every in-memory store from the merged cache
+  if (localChanged > 0) stageRefresh("reload"); // merged cache is on disk; re-read it on a manual refresh, not under the user
 }
 
 function saveManualLocal() {
