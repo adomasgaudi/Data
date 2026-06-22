@@ -19655,10 +19655,51 @@ function romPillHtml(ex: string): string {
 // Floating ROM picker for the add-set ROM pill (NOT a native control). Pick the UNIT (% or cm);
 // in cm you also choose what it's measured FROM (floor / body / any typed reference). Mirrors the
 // incline picker. Outside-tap / Esc closes it.
-let romPickerClose: (() => void) | null = null;
-function closeRomPicker(): void { romPickerClose?.(); }
+// ── Shared floating value-picker lifecycle (DEDUP-4, rule 65) ────────────────────
+// ROM / lean / incline / multiplier pickers were four copies of one popover skeleton
+// (create div, clamp under the pill, outside-tap + Esc to close, deferred listener
+// attach). This factory owns that lifecycle; each picker passes only what's unique:
+// its className, an innerHTML renderer, and click/input handlers. Only one floating
+// picker is open at a time (opening any closes the previous). `rerender` rebuilds the
+// body + re-clamps; `onInput` gets `pop` so it can patch single elements without a
+// full rebuild (keeping input focus).
+let floatingPickerClose: (() => void) | null = null;
+function closeFloatingPicker(): void { floatingPickerClose?.(); }
+function openFloatingPicker(
+  pill: HTMLElement,
+  cfg: {
+    className: string;
+    renderHtml: () => string;
+    onClick?: (target: HTMLElement, rerender: () => void) => void;
+    onInput?: (target: HTMLElement, pop: HTMLElement, rerender: () => void) => void;
+  },
+): void {
+  closeFloatingPicker();
+  const pop = document.createElement("div");
+  pop.className = cfg.className;
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 220, h = pop.offsetHeight || 180;
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const rerender = () => { pop.innerHTML = cfg.renderHtml(); place(); };
+  if (cfg.onClick) pop.addEventListener("click", (e) => cfg.onClick!(e.target as HTMLElement, rerender));
+  if (cfg.onInput) pop.addEventListener("input", (e) => cfg.onInput!(e.target as HTMLElement, pop, rerender));
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeFloatingPicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeFloatingPicker(); };
+  floatingPickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); floatingPickerClose = null;
+  };
+  document.body.appendChild(pop);
+  rerender();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
+}
 function openRomPicker(pill: HTMLElement): void {
-  closeRomPicker();
   // Owner: ROM can be entered in cm OR in yoga blocks (like the lean picker), and for handstands
   // measured FROM the floor or your HEAD. `mode` drives the picker UI (% / cm / block); a block
   // resolves to its cm height, so storage stays {unit:"cm"|"pct", val, ref} — no schema change.
@@ -19669,72 +19710,51 @@ function openRomPicker(pill: HTMLElement): void {
   const REFS = ["floor", "head", "body", "top", "bar"]; // floor / head lead for handstands; text field allows any other
   const BLOCKS: YogaBlockSide[] = ["small", "medium", "large"];
   const committedUnit = (): "pct" | "cm" => (mode === "pct" ? "pct" : "cm");
-  const pop = document.createElement("div");
-  pop.className = "inc-pop rom-pop";
-  const place = () => {
-    const r = pill.getBoundingClientRect();
-    const w = pop.offsetWidth || 220, h = pop.offsetHeight || 170;
-    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
-    let top = r.bottom + 4;
-    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
-    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
-  };
   const commit = () => {
     const u = committedUnit();
     pill.dataset.romunit = u; pill.dataset.romval = String(val); pill.dataset.romref = u === "cm" ? ref : "";
     pill.textContent = romPillLabel(u, val);
     pill.classList.toggle("is-set", u === "cm" || val !== def); // cm is always a deliberate value
   };
-  const render = () => {
-    pop.innerHTML =
-      `<div class="inc-units">` +
-      `<button type="button" class="inc-unit${mode === "pct" ? " is-on" : ""}" data-rommode="pct">%</button>` +
-      `<button type="button" class="inc-unit${mode === "cm" ? " is-on" : ""}" data-rommode="cm">cm</button>` +
-      `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
-      `</div>` +
-      (mode === "block"
-        ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === YOGA_BLOCK_CM[b] ? " is-on" : ""}" data-romblock="${b}">${b} · ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
-        : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
-          `<input type="number" class="inc-val rom-val" step="${mode === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
-          `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
-          `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>`) +
-      (mode === "pct"
-        ? `<div class="inc-eq muted">% of the full range of motion</div>`
-        : `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
-          `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
-          `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`) +
-      `<button type="button" class="inc-floor" data-romdefaultbtn>default (${def}%)</button>`;
-    place();
-  };
-  pop.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const m = t.closest<HTMLElement>("[data-rommode]");
-    if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = YOGA_BLOCK_CM.medium; render(); commit(); return; }
-    const bl = t.closest<HTMLElement>("[data-romblock]");
-    if (bl?.dataset.romblock) { val = YOGA_BLOCK_CM[bl.dataset.romblock as YogaBlockSide]; render(); commit(); return; }
-    const s = t.closest<HTMLElement>("[data-romstep]");
-    if (s?.dataset.romstep) { const d = mode === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); render(); commit(); return; }
-    const rc = t.closest<HTMLElement>(".rom-ref-chip");
-    if (rc?.dataset.romref) { ref = rc.dataset.romref; render(); commit(); return; }
-    if (t.closest("[data-romdefaultbtn]")) { mode = "pct"; val = def; ref = "floor"; render(); commit(); return; }
+  const renderHtml = () =>
+    `<div class="inc-units">` +
+    `<button type="button" class="inc-unit${mode === "pct" ? " is-on" : ""}" data-rommode="pct">%</button>` +
+    `<button type="button" class="inc-unit${mode === "cm" ? " is-on" : ""}" data-rommode="cm">cm</button>` +
+    `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
+    `</div>` +
+    (mode === "block"
+      ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === YOGA_BLOCK_CM[b] ? " is-on" : ""}" data-romblock="${b}">${b} · ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
+      : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val rom-val" step="${mode === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
+        `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
+        `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>`) +
+    (mode === "pct"
+      ? `<div class="inc-eq muted">% of the full range of motion</div>`
+      : `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
+        `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
+        `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`) +
+    `<button type="button" class="inc-floor" data-romdefaultbtn>default (${def}%)</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const m = t.closest<HTMLElement>("[data-rommode]");
+      if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = YOGA_BLOCK_CM.medium; rerender(); commit(); return; }
+      const bl = t.closest<HTMLElement>("[data-romblock]");
+      if (bl?.dataset.romblock) { val = YOGA_BLOCK_CM[bl.dataset.romblock as YogaBlockSide]; rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>("[data-romstep]");
+      if (s?.dataset.romstep) { const d = mode === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); rerender(); commit(); return; }
+      const rc = t.closest<HTMLElement>(".rom-ref-chip");
+      if (rc?.dataset.romref) { ref = rc.dataset.romref; rerender(); commit(); return; }
+      if (t.closest("[data-romdefaultbtn]")) { mode = "pct"; val = def; ref = "floor"; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".rom-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { val = Math.max(0, v); commit(); } return; }
+      const ri = t.closest<HTMLInputElement>(".rom-ref-input");
+      if (ri) { ref = ri.value.trim() || "floor"; commit(); for (const c of pop.querySelectorAll<HTMLElement>(".rom-ref-chip")) c.classList.toggle("is-on", c.dataset.romref === ref); }
+    },
   });
-  pop.addEventListener("input", (e) => {
-    const t = e.target as HTMLElement;
-    const vi = t.closest<HTMLInputElement>(".rom-val");
-    if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { val = Math.max(0, v); commit(); } return; }
-    const ri = t.closest<HTMLInputElement>(".rom-ref-input");
-    if (ri) { ref = ri.value.trim() || "floor"; commit(); for (const c of pop.querySelectorAll<HTMLElement>(".rom-ref-chip")) c.classList.toggle("is-on", c.dataset.romref === ref); }
-  });
-  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeRomPicker(); };
-  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeRomPicker(); };
-  romPickerClose = () => {
-    document.removeEventListener("click", onOutside, true);
-    document.removeEventListener("keydown", onEsc, true);
-    pop.remove(); romPickerClose = null;
-  };
-  document.body.appendChild(pop);
-  render();
-  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 
 // ── Custom MULTIPLIER pill + picker (owner: "every tag is a multiplier; I should SEE the total
@@ -19766,10 +19786,7 @@ function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement): numb
 function customMultPillHtml(): string {
   return `<button type="button" class="wo-af-multpill" data-multval="" data-multmode="mult" title="The set's total ×multiplier (the product of its tags). Tap to add your OWN — multiply on top of the tags, or replace the total.">×1</button>`;
 }
-let customMultPickerClose: (() => void) | null = null;
-function closeCustomMultPicker(): void { customMultPickerClose?.(); }
 function openCustomMultPicker(pill: HTMLElement): void {
-  closeCustomMultPicker();
   const ln = pill.closest<HTMLElement>(".addm-line");
   const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
   const ex = form ? addmCogEx(form) : "";
@@ -19777,25 +19794,14 @@ function openCustomMultPicker(pill: HTMLElement): void {
   let val = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
   let mode: "mult" | "abs" = pill.dataset.multmode === "abs" ? "abs" : "mult";
   const tagTotal = ln ? addLineTagScale(ex, ln) : 1;
-  const pop = document.createElement("div");
-  pop.className = "inc-pop mult-pop";
-  const place = () => {
-    const r = pill.getBoundingClientRect();
-    const w = pop.offsetWidth || 200, h = pop.offsetHeight || 160;
-    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
-    let top = r.bottom + 4;
-    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
-    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
-  };
   const commit = () => {
     if (Number.isFinite(val) && val > 0) pill.dataset.multval = String(val); else pill.dataset.multval = "";
     pill.dataset.multmode = mode;
     if (form) syncPendingFromModal(); // refreshes the pill label via syncAddmReal
   };
-  const render = () => {
+  const renderHtml = () => {
     const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal;
-    pop.innerHTML =
-      `<div class="mult-readout muted">tags = ×${round(tagTotal)}</div>` +
+    return `<div class="mult-readout muted">tags = ×${round(tagTotal)}</div>` +
       `<div class="inc-valrow"><input type="number" class="inc-val mult-val" step="0.05" min="0" value="${Number.isFinite(val) ? val : ""}" placeholder="1" inputmode="decimal" aria-label="Your multiplier" /></div>` +
       `<div class="inc-units">` +
       `<button type="button" class="inc-unit${mode === "mult" ? " is-on" : ""}" data-multmode="mult">× on top</button>` +
@@ -19803,28 +19809,20 @@ function openCustomMultPicker(pill: HTMLElement): void {
       `</div>` +
       `<div class="inc-eq muted">= ×${round(eff)}</div>` +
       `<button type="button" class="inc-floor" data-multclear>clear (use tags)</button>`;
-    place();
   };
-  pop.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const m = t.closest<HTMLElement>("[data-multmode]");
-    if (m?.dataset.multmode) { mode = m.dataset.multmode === "abs" ? "abs" : "mult"; render(); commit(); return; }
-    if (t.closest("[data-multclear]")) { val = NaN; mode = "mult"; render(); commit(); return; }
+  openFloatingPicker(pill, {
+    className: "inc-pop mult-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const m = t.closest<HTMLElement>("[data-multmode]");
+      if (m?.dataset.multmode) { mode = m.dataset.multmode === "abs" ? "abs" : "mult"; rerender(); commit(); return; }
+      if (t.closest("[data-multclear]")) { val = NaN; mode = "mult"; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".mult-val");
+      if (vi) { const v = parseFloat(vi.value); val = Number.isFinite(v) ? v : NaN; const eq = pop.querySelector<HTMLElement>(".inc-eq"); const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal; if (eq) eq.textContent = `= ×${round(eff)}`; commit(); }
+    },
   });
-  pop.addEventListener("input", (e) => {
-    const vi = (e.target as HTMLElement).closest<HTMLInputElement>(".mult-val");
-    if (vi) { const v = parseFloat(vi.value); val = Number.isFinite(v) ? v : NaN; const eq = pop.querySelector<HTMLElement>(".inc-eq"); const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal; if (eq) eq.textContent = `= ×${round(eff)}`; commit(); }
-  });
-  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeCustomMultPicker(); };
-  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeCustomMultPicker(); };
-  customMultPickerClose = () => {
-    document.removeEventListener("click", onOutside, true);
-    document.removeEventListener("keydown", onEsc, true);
-    pop.remove(); customMultPickerClose = null;
-  };
-  document.body.appendChild(pop);
-  render();
-  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 
 // ── Handstand LEAN pill + picker (hand-to-wall distance → canonical palm-base cm) ──
@@ -19850,10 +19848,7 @@ function leanPillHtml(ex: string): string {
   if (!hasLeanDim(ex)) return "";
   return `<button type="button" class="wo-af-leanpill wo-af-dimpill" data-leanex="${escapeHtml(ex)}" data-leanlevel="0cm" data-leandefault="0cm" title="Forward lean — distance from your hands to the wall. Tap to enter it from any hand point, in cm or yoga blocks.">${escapeHtml(leanPillLabel("0cm"))}</button>`;
 }
-let leanPickerClose: (() => void) | null = null;
-function closeLeanPicker(): void { leanPickerClose?.(); }
 function openLeanPicker(pill: HTMLElement): void {
-  closeLeanPicker();
   const ex = pill.dataset.leanex ?? "";
   const keys = leanLevelKeys(ex);
   const username = els.athlete.value;
@@ -19863,27 +19858,17 @@ function openLeanPicker(pill: HTMLElement): void {
   let block: YogaBlockSide = "medium";
   let hand = handLengthFor(username);
   const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
-  const pop = document.createElement("div");
-  pop.className = "inc-pop rom-pop lean-pop";
-  const place = () => {
-    const r = pill.getBoundingClientRect();
-    const w = pop.offsetWidth || 240, h = pop.offsetHeight || 200;
-    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
-    let top = r.bottom + 4;
-    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
-    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
-  };
+  const eqText = () => `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`;
   const commit = () => {
     const level = snapToLeanLevelCm(canonical(), keys);
     pill.dataset.leanlevel = level;
     pill.textContent = leanPillLabel(level);
     pill.classList.toggle("is-set", level !== (pill.dataset.leandefault ?? "0cm"));
   };
-  const render = () => {
+  const renderHtml = () => {
     const canon = Math.round(canonical());
     const level = snapToLeanLevelCm(canon, keys);
-    pop.innerHTML =
-      `<div class="inc-units">` +
+    return `<div class="inc-units">` +
       `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-leanunit="cm">cm</button>` +
       `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-leanunit="block">block</button>` +
       `</div>` +
@@ -19898,37 +19883,28 @@ function openLeanPicker(pill: HTMLElement): void {
       `<input type="number" class="rom-ref-input lean-hand-val" step="1" min="1" value="${hand}" aria-label="Your hand length, fingertips to palm-base (cm)" /><span class="rom-unit-lbl muted">cm</span></div>` +
       `<div class="inc-eq muted">= ${canon}cm from the palm → tag ${leanFingertipCm(level, username) <= 0 ? "no lean" : `${leanFingertipCm(level, username)}cm`}</div>` +
       `<button type="button" class="inc-floor" data-leandefaultbtn>no lean (default)</button>`;
-    place();
   };
-  pop.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const u = t.closest<HTMLElement>("[data-leanunit]");
-    if (u?.dataset.leanunit) { unit = u.dataset.leanunit === "block" ? "block" : "cm"; render(); commit(); return; }
-    const s = t.closest<HTMLElement>("[data-leanstep]");
-    if (s?.dataset.leanstep) { reading = Math.max(0, Math.round(reading + Number(s.dataset.leanstep))); render(); commit(); return; }
-    const bl = t.closest<HTMLElement>("[data-leanblock]");
-    if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; render(); commit(); return; }
-    const pt = t.closest<HTMLElement>("[data-leanpoint]");
-    if (pt?.dataset.leanpoint) { point = pt.dataset.leanpoint as HandPoint; render(); commit(); return; }
-    if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; render(); commit(); return; }
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop lean-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>("[data-leanunit]");
+      if (u?.dataset.leanunit) { unit = u.dataset.leanunit === "block" ? "block" : "cm"; rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>("[data-leanstep]");
+      if (s?.dataset.leanstep) { reading = Math.max(0, Math.round(reading + Number(s.dataset.leanstep))); rerender(); commit(); return; }
+      const bl = t.closest<HTMLElement>("[data-leanblock]");
+      if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; rerender(); commit(); return; }
+      const pt = t.closest<HTMLElement>("[data-leanpoint]");
+      if (pt?.dataset.leanpoint) { point = pt.dataset.leanpoint as HandPoint; rerender(); commit(); return; }
+      if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".lean-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
+      const hi = t.closest<HTMLInputElement>(".lean-hand-val");
+      if (hi) { const v = parseFloat(hi.value); if (Number.isFinite(v) && v > 0) { hand = v; setHandLength(username, v); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
+    },
   });
-  pop.addEventListener("input", (e) => {
-    const t = e.target as HTMLElement;
-    const vi = t.closest<HTMLInputElement>(".lean-val");
-    if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); commit(); pop.querySelector(".inc-eq")!.textContent = `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`; } return; }
-    const hi = t.closest<HTMLInputElement>(".lean-hand-val");
-    if (hi) { const v = parseFloat(hi.value); if (Number.isFinite(v) && v > 0) { hand = v; setHandLength(username, v); commit(); pop.querySelector(".inc-eq")!.textContent = `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`; } return; }
-  });
-  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeLeanPicker(); };
-  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeLeanPicker(); };
-  leanPickerClose = () => {
-    document.removeEventListener("click", onOutside, true);
-    document.removeEventListener("keydown", onEsc, true);
-    pop.remove(); leanPickerClose = null;
-  };
-  document.body.appendChild(pop);
-  render();
-  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 function addmVariantField(ex: string): string {
   const vf = ex ? afVariationField(ex) : "";
@@ -20010,32 +19986,18 @@ function inclinePillLabel(dim: LevelDim, val: number): string {
 // Floating incline/height picker for the add-set pill (NOT a native control). Units are
 // cm / SQ hole / Smith notch — switching one CONVERTS the value to keep the same cm height,
 // and the readout shows that height + its difficulty ×. Outside-tap / Esc closes it.
-let inclinePickerClose: (() => void) | null = null;
-function closeInclinePicker(): void { inclinePickerClose?.(); }
 function openInclinePicker(pill: HTMLElement): void {
-  closeInclinePicker();
   let dim = ((pill.dataset.incdim as LevelDim) || "cm");
   let val = Number(pill.dataset.incval) || 0;
   const units: LevelDim[] = ["cm", "sq", "smith"];
-  const pop = document.createElement("div");
-  pop.className = "inc-pop";
-  const place = () => {
-    const r = pill.getBoundingClientRect();
-    const w = pop.offsetWidth || 210, h = pop.offsetHeight || 150;
-    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
-    let top = r.bottom + 4;
-    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
-    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
-  };
   const commit = () => {
     pill.dataset.incdim = dim; pill.dataset.incval = String(val);
     pill.textContent = `↕ ${inclinePillLabel(dim, val)}`;
     pill.classList.toggle("is-set", levelCm(dim, val) !== 0);
   };
-  const render = () => {
+  const renderHtml = () => {
     const step = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1;
-    pop.innerHTML =
-      `<div class="inc-units">` +
+    return `<div class="inc-units">` +
       units.map((u) => `<button type="button" class="inc-unit${u === dim ? " is-on" : ""}" data-incunit="${u}">${escapeHtml(inclineDimLabel(u))}</button>`).join("") +
       `</div>` +
       `<div class="inc-valrow"><button type="button" class="inc-step" data-incstep="-1" aria-label="Lower">−</button>` +
@@ -20043,32 +20005,24 @@ function openInclinePicker(pill: HTMLElement): void {
       `<button type="button" class="inc-step" data-incstep="1" aria-label="Higher">+</button></div>` +
       `<div class="inc-eq muted">= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}</div>` +
       `<button type="button" class="inc-floor" data-incfloor>floor (0cm)</button>`;
-    place();
   };
-  pop.addEventListener("click", (e) => {
-    const t = e.target as HTMLElement;
-    const u = t.closest<HTMLElement>(".inc-unit");
-    if (u?.dataset.incunit) { const cm = levelCm(dim, val); dim = u.dataset.incunit as LevelDim; val = cmToLevel(dim, cm); render(); commit(); return; }
-    const s = t.closest<HTMLElement>(".inc-step");
-    if (s?.dataset.incstep) { const d = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1; val = Math.round((val + Number(s.dataset.incstep) * d) * 2) / 2; render(); commit(); return; }
-    if (t.closest("[data-incfloor]")) { dim = "cm"; val = 0; render(); commit(); return; }
+  openFloatingPicker(pill, {
+    className: "inc-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>(".inc-unit");
+      if (u?.dataset.incunit) { const cm = levelCm(dim, val); dim = u.dataset.incunit as LevelDim; val = cmToLevel(dim, cm); rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>(".inc-step");
+      if (s?.dataset.incstep) { const d = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1; val = Math.round((val + Number(s.dataset.incstep) * d) * 2) / 2; rerender(); commit(); return; }
+      if (t.closest("[data-incfloor]")) { dim = "cm"; val = 0; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const inp = t.closest<HTMLInputElement>(".inc-val");
+      if (!inp) return;
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)) { val = v; pop.querySelector(".inc-eq")!.textContent = `= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}`; commit(); }
+    },
   });
-  pop.addEventListener("input", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".inc-val");
-    if (!inp) return;
-    const v = parseFloat(inp.value);
-    if (Number.isFinite(v)) { val = v; pop.querySelector(".inc-eq")!.textContent = `= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}`; commit(); }
-  });
-  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeInclinePicker(); };
-  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeInclinePicker(); };
-  inclinePickerClose = () => {
-    document.removeEventListener("click", onOutside, true);
-    document.removeEventListener("keydown", onEsc, true);
-    pop.remove(); inclinePickerClose = null;
-  };
-  document.body.appendChild(pop);
-  render();
-  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 /** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the add-page ⚙ cog's
  * expanded per-exercise settings — assisted-machine, machine weight, ÷ multiplier, unilateral.
