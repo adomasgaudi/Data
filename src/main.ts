@@ -20395,7 +20395,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       exInput.addEventListener("change", refreshAddmSettings);
     }
   }
-  wrap.querySelector<HTMLInputElement>(isNew ? ".wo-af-ex" : ".wo-af-weight")?.focus();
+  // Owner: do NOT auto-focus a field on open — that pops the on-screen keyboard the moment
+  // the menu appears. The keyboard should only show after the user taps a text/number field.
 }
 function onAddModalClick(e: MouseEvent): void {
   const wrap = addModalEl;
