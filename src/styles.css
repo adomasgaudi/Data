@@ -2450,10 +2450,13 @@ select.subtle-select:hover, select.subtle-select:focus {
    regardless of the 1RM's width, AND every "+ set" lines up in a column on the
    right, in line with the exercise name (owner). The last column is `auto` so it
    collapses to 0 when "+ set" is off. */
-.wo-ex-line { display: grid; grid-template-columns: 2.8rem 1fr auto; align-items: baseline; column-gap: 0.4rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
-/* 1RM summary cell: keep the gold value on ONE line in its narrow column (never wrap a
-   multi-digit value like 12.4 onto two lines) — it right-aligns toward the exercise name. */
-.wo-1rm { white-space: nowrap; text-align: right; }
+/* Owner layout: exercise name + weights on the LEFT (the 1fr body), the gold 1RM on the
+   RIGHT just before "+ set", with a thin divider between them. Columns: body · 1RM · +set. */
+.wo-ex-line { display: grid; grid-template-columns: 1fr auto auto; align-items: baseline; column-gap: 0.5rem; touch-action: pan-y; transition: transform var(--dur-normal) ease, opacity var(--dur-normal) ease; }
+/* 1RM summary cell: keep the gold value on ONE line (never wrap a multi-digit value like
+   12.4), right-aligned in its column, with a thin line separating it from the lift+weights. */
+.wo-1rm { white-space: nowrap; text-align: right; border-left: 1px solid var(--line); padding-left: 0.5rem; }
+.wo-1rm:empty { border-left: none; padding-left: 0; } /* no stray divider when there's no value */
 .wo-ex-line > .wo-addset { justify-self: end; }
 /* Subtle gray separators between consecutive exercises in a collapsed day, so each
    exercise reads as its OWN tappable row (owner: "create little gray lines so I can

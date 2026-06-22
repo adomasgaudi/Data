@@ -8676,7 +8676,7 @@ function renderWorkoutsPage() {
         // the shared tags are pushed to the right and stack into their own compact column, so
         // they stay IN LINE with the exercise instead of wrapping underneath it (owner). The
         // per-set list sits on its own line below.
-        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets">${rmTxt}<span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${addBtn}</div>`;
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -20290,10 +20290,19 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     // routing every edit through ONE sheet (owner #super-persistent: "editing a set should look
     // exactly like the add menu") doesn't lose flag / reset / delete. Sits above Save.
     const nc = notComparableSets.has(edit.sid);
+    // "↺ reset" reverts a set to its ORIGINAL logged values — only meaningful for a
+    // StrengthLevel (CSV) set, which has an authoritative source to revert to. A hand-added
+    // set IS the source (manual entries get setNumber ≥ 100000 in mergeManualSets), so there's
+    // nothing to reset to — hide the button for those (owner).
+    const editSrc = liveRecords().find((r) => setId(r) === edit.sid);
+    const fromStrengthLevel = !!editSrc && (editSrc.setNumber ?? 0) < 100000;
+    const resetBtn = fromStrengthLevel
+      ? `<button type="button" class="addm-edit-act addm-edit-reset" data-editreset title="Revert this set to its original StrengthLevel values — discards your on-device edits (tags, multiplier, RIR, weight/reps changes) to this one set.">↺ reset</button>`
+      : "";
     wrap.querySelector<HTMLElement>(".addm-actions")?.insertAdjacentHTML("beforebegin",
       `<div class="addm-edit-foot">` +
       `<button type="button" class="addm-edit-act addm-edit-nc${nc ? " is-on" : ""}" data-editnc aria-pressed="${nc}" title="Not comparable — keep reps/sets but drop this set's 1RM &amp; volume">⊘ ${nc ? "not comparable" : "not comparable?"}</button>` +
-      `<button type="button" class="addm-edit-act addm-edit-reset" data-editreset title="Reset this set's on-device edits">↺ reset</button>` +
+      resetBtn +
       `<button type="button" class="addm-edit-act addm-edit-del" data-editdel title="Delete this set">🗑 delete</button>` +
       `</div>`);
   }
