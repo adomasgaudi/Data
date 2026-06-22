@@ -2969,19 +2969,19 @@ sup.wr-bw { font-size: 0.85em; }
 /* ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) ---- */
 /* Owner: the add popup DOCKS at the bottom (a sheet) with a LIGHT backdrop, so the history
    above stays visible — you watch the live ghost set appear as you type. */
-.addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgba(20, 24, 38, 0.18); }
+.addm-overlay { position: fixed; inset: 0; z-index: 120; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(20, 24, 38, 0.18); }
 .addm-card {
   /* PB-24: cap the card against the VIEWPORT itself (min of 26rem and 100vw−gutter),
      not just width:100% of the overlay — so it can NEVER be wider than the screen even
      if a child forces intrinsic width or the visual viewport desyncs (keyboard open).
      min-width:0 lets the flex item shrink; overflow-x hidden clips any stray child. */
   width: 100%; max-width: min(30rem, 100vw); min-width: 0;
-  /* Owner: don't make the sheet tiny — show it tall (it scrolls), leaving just a little space
-     at the top so the history + the live ghost set stay visible above it. dvh tracks the
-     keyboard so the sheet rides above it; vh is the fallback. */
-  max-height: 82vh; max-height: 82dvh; overflow: hidden auto;
-  background: var(--panel); border: 1px solid var(--line); border-bottom: none; border-radius: 14px 14px 0 0;
-  box-shadow: 0 -8px 40px rgba(20, 24, 38, 0.22); padding: 0.7rem 0.9rem 1rem;
+  /* Owner: a CENTERED popup, not a bottom-docked sheet — it stays put (doesn't jump as
+     the address bar / keyboard toggles the dynamic viewport) and scrolls inside. Capped
+     to the padded overlay; dvh keeps it within the visible area when the keyboard opens. */
+  max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow: hidden auto;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
 }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
 .addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; } /* grows so the ⚙ + × sit together at the right */
