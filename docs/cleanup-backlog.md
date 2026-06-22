@@ -74,6 +74,36 @@ Owner #prune on "there shouldn't be two separate set-editing views" + "don't sho
   popover's nc/mach, the card supplies them). Standalone popover still has its own for the
   collapsed path. Nothing urgent.
 
+## 🧩 One-component-not-two (rule 65 — found in the 2026-06-22 app-wide scan)
+
+- 🟠 **DEDUP-4** `[main.ts floating pickers]` (SP:5) — **Four near-identical floating-picker
+  functions → ONE factory.** `openRomPicker` / `openLeanPicker` / `openInclinePicker` /
+  `openCustomMultPicker` (plus their `close…` + `…PickerClose` state) all share the exact same
+  skeleton: create div, `place()` (clamp into view), `commit()` (write the pill's dataset),
+  `render()` (rebuild innerHTML), click/input/Esc + outside-tap handlers, append, deferred
+  listener attach. They differ ONLY in the popover's inner HTML, which dataset keys they
+  read/write, and the commit logic. Parameterise as `openFloatingPicker(pill, config)` where
+  config = { className, initialState, render(state), onClick, onInput, commit }. HIGH confidence;
+  pure refactor (no behaviour change), good test-by-build candidate. Biggest line-count win.
+- 🟠 **DEDUP-5** `[set-editor / add-modal]` (SP:8) — **Collapsed-set quick-edit still opens the OLD
+  popover, not the add/edit modal (rule 65, owner: "edit == add").** PB-46/DEDUP-2 routed the
+  EXPANDED-card edit through `openAddModal` edit-mode, but the COLLAPSED-set quick-edit chip
+  (`wo-set-variant`) still calls the legacy `openScaleEditor`/`renderScaleEditor` popover. So two
+  edit UIs survive for the same thing. Retire the popover and route the collapsed quick-edit to
+  the same `openAddModal` edit-mode. Verify nothing else still calls `openScaleEditor`/
+  `toggleScaleEditor` before deleting. HIGH confidence it should unify; medium effort.
+- 🟡 **DEDUP-6** `[set-editor / add-modal]` (SP:8) — **Two render paths for the SAME variation
+  picker.** The per-set card builds its dim dropdowns / ROM·lean·band pills via
+  `renderCardVarModel` → `renderScaleEditor` (driven by the `scaleEditState` global, re-renders on
+  every change), while `openAddModal` builds the same controls inline as HTML via `afLine` and
+  reads them at save. The chips/labels are already unified (`variationChipsFromVec`/`afLevelText`,
+  rule 60), but the FORM markup is emitted twice. Extract one `variationFormHtml(mode)` both call.
+  Medium confidence (real but larger); do AFTER DEDUP-5 (which may absorb it).
+- ℹ️ **Not duplication (excluded):** `renderSAnalysis` vs `renderWorkoutAnalysis` (rule 12, S-ANL
+  stays its own), the Curve/Volume/Map charts (different visualizations), and the generic
+  `open*/close*` menu pairs (`openLiftMenu`, `openHistTabMenu`… — same close idiom, genuinely
+  different content). The leaderboard vs compare charts/tables are different data shapes, not twins.
+
 ## ✅ Done sweeps (recent)
 
 - **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic
