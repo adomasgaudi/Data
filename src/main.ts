@@ -86,7 +86,7 @@ import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
-  leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm,
+  leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
@@ -1935,6 +1935,16 @@ const handLengthOverrides: Record<string, number> = (() => {
 function handLengthFor(username: string): number {
   const v = handLengthOverrides[username];
   return typeof v === "number" && v > 0 ? v : DEFAULT_HAND_LENGTH_CM;
+}
+/** Forward-lean is STORED as the canonical cm from the palm-base (the lever origin),
+ * but the owner reads it from the FINGERTIPS — so the DISPLAYED number subtracts the
+ * fingertips→palm-base offset (this athlete's hand length) and clamps at 0, keeping
+ * 0 = "no lean". Returns the fingertip cm as a number; 0 means "no real lean". Pure
+ * display — the stored level keys and difficulty factors are untouched. */
+function leanFingertipCm(level: string, username: string): number {
+  const n = parseFloat(level);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n - handPointOffsetCm("fingertips", handLengthFor(username))));
 }
 function setHandLength(username: string, cm: number | undefined): void {
   if (cm === undefined || !(cm > 0)) delete handLengthOverrides[username];
@@ -8115,7 +8125,7 @@ function setVec(r: SetRecord): Record<string, unknown> {
  * away and revealed in place by tapping ＋N. Applies to both per-set chips AND the hoisted
  * common tags (commonTagsChips renders through here). */
 const MAX_VAR_CHIPS = 6;
-function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>): string {
+function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>, username: string = els.athlete.value): string {
   if (!fam) return "";
   const items: { cls: string; txt: string }[] = [];
   // Collect EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
@@ -8129,7 +8139,10 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
     if (!v || isGray(fam, dim, v)) continue;
     if (suppress && suppress[dim] === v) continue;
     const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
-    const base = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${v}` : afLevelText(dim, v, fam);
+    // Lean reads from the fingertips; a lean that clamps to 0cm there is "no real lean" → no chip.
+    let leanTip = 0;
+    if (dim === "lean") { leanTip = leanFingertipCm(v, username); if (leanTip <= 0) continue; }
+    const base = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${leanTip}cm` : afLevelText(dim, v, fam);
     const code = DIM_CHIP_CODE[dim];
     const txt = code ? `${code} ${base}` : base;
     items.push({ cls, txt });
@@ -8157,7 +8170,7 @@ function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): st
   if (!fam) return "";
   const vec = setVec(r);
   if (Object.keys(vec).length === 0) return "";
-  return variationChipsFromVec(fam, vec, suppress);
+  return variationChipsFromVec(fam, vec, suppress, r.username);
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
@@ -14781,7 +14794,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
     const readout = noLean
       ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
-      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
+      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(`${leanFingertipCm(lk, els.athlete.value)}cm`)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
     return (
       `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}${noLean ? " ex-pad-nolean" : ""}"><span class="ex-var-dim-lbl">${noLean ? "depth (free — no lean)" : "depth × lean"}</span>` +
       `<div class="ex-pad-readout">${readout}</div>` +
@@ -17035,7 +17048,7 @@ async function init() {
     const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
-    set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+    set(".ex-sl-rk", rk); set(".ex-sl-lk", `${leanFingertipCm(lk, els.athlete.value)}cm`); set(".ex-sl-mult", `×${mult}`);
     set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
     if (fill) {
@@ -19740,7 +19753,12 @@ function leanLevelKeys(ex: string): string[] {
   const fam = familyOf(ex); const lv = fam ? famLevels(fam, "lean") : null;
   return lv ? Object.keys(lv) : [];
 }
-const leanPillLabel = (level: string): string => (level === "0cm" ? "lean" : `lean ${level}`);
+// The pill shows the lean from the FINGERTIPS (clamped at 0 = no lean) for the athlete
+// being logged, so it matches how the owner measures it.
+const leanPillLabel = (level: string, username: string = els.athlete.value): string => {
+  const tip = leanFingertipCm(level, username);
+  return tip <= 0 ? "lean" : `lean ${tip}cm`;
+};
 /** Whether a lift's family has a lean dim (→ show the lean pill instead of a plain select). */
 function hasLeanDim(ex: string): boolean { return leanLevelKeys(ex).length > 0; }
 function leanPillHtml(ex: string): string {
@@ -19793,7 +19811,7 @@ function openLeanPicker(pill: HTMLElement): void {
       LEAN_POINTS.map((p) => `<button type="button" class="rom-ref-chip${p === point ? " is-on" : ""}" data-leanpoint="${p}">${escapeHtml(LEAN_POINT_LBL[p])}</button>`).join("") + `</div></div>` +
       `<div class="rom-ref lean-hand"><span class="rom-ref-lbl muted">your hand (tips→palm)</span>` +
       `<input type="number" class="rom-ref-input lean-hand-val" step="1" min="1" value="${hand}" aria-label="Your hand length, fingertips to palm-base (cm)" /><span class="rom-unit-lbl muted">cm</span></div>` +
-      `<div class="inc-eq muted">= ${canon}cm from the palm → tag ${level}</div>` +
+      `<div class="inc-eq muted">= ${canon}cm from the palm → tag ${leanFingertipCm(level, username) <= 0 ? "no lean" : `${leanFingertipCm(level, username)}cm`}</div>` +
       `<button type="button" class="inc-floor" data-leandefaultbtn>no lean (default)</button>`;
     place();
   };
