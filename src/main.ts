@@ -10454,15 +10454,24 @@ function openSetActionMenu(anchor: HTMLElement): void {
   const w = src?.weight ?? 0;
   const ico = (act: string, glyph: string, label: string, cls = "") =>
     `<button type="button" class="set-act-ico${cls}" data-setact="${act}" data-sid="${escapeHtml(sid)}" title="${label}" aria-label="${label}">${glyph}</button>`;
-  // Reps ruler: 1..50. Weight ruler: 2.5-kg steps around the set's weight (0..+ for plate
-  // lifts, negative..0 for an assisted machine); omitted for pure bodyweight (w === 0).
+  // Reps ruler: 1..50. Weight ruler: 2.5-kg steps. ASSISTED machines log a NEGATIVE weight
+  // (the assistance), so key the range on whether the lift is ASSISTED — not on the current
+  // value's sign (owner: "assisted exercises don't give negative numbers and sometimes switch
+  // pos↔neg"). Assisted → a band spanning negatives through 0 to a little positive, so negatives
+  // are ALWAYS reachable and the range is the same shape for every set. Plate lifts stay 0..+;
+  // pure bodyweight (w === 0, not assisted) has no weight ruler.
   const repMin = 1, repStep = 1, repCount = 50;
   const repIdx = Math.min(repCount - 1, Math.max(0, curReps - repMin));
+  const assisted = isAssistedMachine(src?.exerciseName ?? "");
   let wtRuler = "";
-  if (w !== 0) {
+  if (w !== 0 || assisted) {
     const wtStep = 2.5;
-    const wtMin = w > 0 ? 0 : Math.floor((w - 20) / wtStep) * wtStep;
-    const wtMax = w > 0 ? Math.max(w + 50, 60) : 0;
+    const wtMin = assisted
+      ? Math.floor((Math.min(w, 0) - 40) / wtStep) * wtStep
+      : (w > 0 ? 0 : Math.floor((w - 20) / wtStep) * wtStep);
+    const wtMax = assisted
+      ? Math.ceil((Math.max(w, 0) + 20) / wtStep) * wtStep
+      : (w > 0 ? Math.max(w + 50, 60) : 0);
     const wtCount = Math.round((wtMax - wtMin) / wtStep) + 1;
     const wtIdx = Math.min(wtCount - 1, Math.max(0, Math.round((Math.round(w / wtStep) * wtStep - wtMin) / wtStep)));
     wtRuler = rulerHtml("wt", wtMin, wtStep, wtCount, wtIdx, "kg");
