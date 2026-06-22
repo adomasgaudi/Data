@@ -13765,6 +13765,17 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const mapX = (w: number) => Wd / 2 - ((w - d.loW) / (d.hiW - d.loW)) * Wd; // weight increases to the RIGHT (owner)
   const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
   const mapH = (c: number) => (c / d.maxCount) * maxBarH;
+  // Cell pitch on the floor: bars (and empty markers) now FILL their (weight-bin × rep)
+  // cell instead of being thin sticks, so there's no white floor between them (owner);
+  // a small gap remains so the bin grid lines read between bars. Aligned to the actual
+  // bins, so spacing tracks the wt/reps merge settings.
+  const wStep = d.binW > 0 ? d.binW : Math.max(1, d.hiW - d.loW);
+  const rStep = d.binR > 0 ? d.binR : Math.max(1, d.maxReps);
+  const nW = Math.max(1, Math.round((d.hiW - d.loW) / wStep));
+  const nR = Math.max(1, Math.round(d.maxReps / rStep));
+  const CELL_FILL = 0.9; // 0..1 of the cell the bar occupies (the rest is the grid gap)
+  const cellHX = (Wd / nW) / 2 * CELL_FILL;
+  const cellHZ = (Dp / nR) / 2 * CELL_FILL;
 
   // BARS: a THIN 3D stick per (weight, rep) cell topped by a small CUBE head. Every face is
   // shaded by its orientation along a warm-light → cool-shadow gradient so the perspective
@@ -13797,7 +13808,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const Lw = (() => { const n = Math.hypot(0.55, 0.6, 0.45); return { x: 0.55 / n, y: 0.6 / n, z: 0.45 / n }; })();
   const faceT = (nx: number, ny: number, nz: number): number => 0.3 + 0.7 * Math.max(0, nx * Lw.x + ny * Lw.y + nz * Lw.z);
   const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
-  const hwx = 0.055, hwz = 0.055;        // stick half-width — thin (owner)
+  const hwx = cellHX, hwz = cellHZ;      // fill the cell (no white gaps) — owner
   // Append one box's lit faces (4 sides + optional top) to `faces` at opacity `op`; returns
   // its 8 corners. `skipTop` omits the top face (for stacked recency segments, where an
   // intermediate top would be hidden under the segment above and only muddy the transparency).
@@ -13838,13 +13849,16 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
   const gx0 = -Wd / 2, gx1 = Wd / 2, gz0 = -Dp / 2, gz1 = Dp / 2;
   const grid: { ax: number; ay: number; bx: number; by: number }[] = [];
-  for (let i = 0; i <= 4; i++) {
-    const x = gx0 + (gx1 - gx0) * (i / 4);
+  // A grid line at EACH weight-bin boundary and EACH rep boundary (owner: "weight and
+  // reps lines so I see where each bar is"), so the lattice frames every bar's cell
+  // instead of an arbitrary 4×4. Boundaries sit in the gap between filled bars.
+  for (let w = d.loW - wStep / 2; w <= d.hiW + wStep / 2 + 1e-6; w += wStep) {
+    const x = mapX(w);
     const a = rot(x, cy0, gz0), b = rot(x, cy0, gz1);
     grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
   }
-  for (let i = 0; i <= 4; i++) {
-    const z = gz0 + (gz1 - gz0) * (i / 4);
+  for (let r = rStep / 2; r <= d.maxReps + rStep / 2 + 1e-6; r += rStep) {
+    const z = mapZ(r);
     const a = rot(gx0, cy0, z), b = rot(gx1, cy0, z);
     grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
   }
@@ -13892,14 +13906,13 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
 
   // GRAY empty-cell markers (owner): every (weight-bin, rep) cell with NO data gets a faint
   // gray flat footprint on the floor (a 0-height bar), so gaps in the grid are visible.
-  const hwx2 = 0.055;
   const have = new Set(d.pts.map((p) => `${p.w}|${p.reps}`));
   for (let w = d.loW; w <= d.hiW + 1e-6; w += d.binW) {
     for (let k = 1; k * d.binR <= d.maxReps + 1e-6; k++) {
       const repCoord = k * d.binR;
       if (have.has(`${w}|${repCoord}`)) continue;
       const cx = mapX(w), cz = mapZ(repCoord);
-      const q = [rot(cx - hwx2, cy0, cz - hwx2), rot(cx + hwx2, cy0, cz - hwx2), rot(cx + hwx2, cy0, cz + hwx2), rot(cx - hwx2, cy0, cz + hwx2)];
+      const q = [rot(cx - cellHX, cy0, cz - cellHZ), rot(cx + cellHX, cy0, cz - cellHZ), rot(cx + cellHX, cy0, cz + cellHZ), rot(cx - cellHX, cy0, cz + cellHZ)];
       out += `<polygon points="${q.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ")}" fill="#9aa6b0" opacity="0.18"/>`;
     }
   }
