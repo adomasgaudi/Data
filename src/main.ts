@@ -9323,6 +9323,7 @@ const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): 
 // setRowsHtml (cellFor), which has the computed numbers in scope.
 const SET_COL_METRICS: { id: string; label: string; name: string; title: string }[] = [
   { id: "weight", label: "W", name: "Weight × reps", title: "Weight × reps — what you actually lifted." },
+  { id: "wrm", label: "wRM", name: "Weight as rep-max", title: "The weight re-expressed as YOUR rep-max for it — e.g. 8RM means this weight is one your current strength says you could do about 8 reps with; the small number is the reps you actually did. So 8RM⁵ = your ~8-rep weight, done for 5." },
   { id: "e1rm", label: "RM", name: "Rep-max (1RM)", title: "Estimated rep-max — type how many reps in the header (1 = the 1RM, higher = that-many-rep max, computed from the 1RM). Tap a value for the formula." },
   { id: "volume", label: "Vol", name: "Volume", title: "Volume = weight × reps." },
   { id: "reps", label: "Reps", name: "Reps", title: "Reps done in the set." },
@@ -9658,6 +9659,22 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
         + (machineSet
         ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
         : `${machineWeightPrefixForSet(s)}${wr(s.weight, s.reps)}`) + (trailTags ? `<span class="set-wtags">${trailTags}</span>` : "");
+      // Weight as YOUR rep-max for it (owner): 70kg you could do ~8 reps → "8RM", with the
+      // reps actually done as the superscript ("8RM⁵"). Same lead/trail tags as the W cell so
+      // it's a drop-in alternative. Falls back to the plain weight if there's no strength anchor.
+      case "wrm": {
+        const rm = anchorE1RM != null && computed.weight != null && computed.weight > 0
+          ? repsForWeight(anchorE1RM, computed.weight, formula) : null;
+        const n = rm == null ? null : Math.max(1, Math.round(rm));
+        const body = n == null
+          ? wr(s.weight, s.reps)
+          : `${n}RM${s.reps == null ? "" : `<sup>${s.reps}</sup>`}`;
+        const tip = n == null ? ""
+          : ` title="${escapeHtml(`This weight is about your ${n}RM (a weight you could do ~${n} reps with, from your current ${fmt(anchorE1RM!)} kg 1RM); you did ${s.reps ?? "?"}.`)}"`;
+        return (leadTags ? `<span class="set-wtags set-wtags-lead">${leadTags}</span>` : "")
+          + `<span class="set-wrm"${tip}>${body}</span>`
+          + (trailTags ? `<span class="set-wtags">${trailTags}</span>` : "");
+      }
       case "e1rm": return e1rmCell; // the 1RM stands alone
       case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);

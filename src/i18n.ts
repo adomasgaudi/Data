@@ -315,6 +315,7 @@ const LT: Record<string, string> = {
   // ---- Customisable sets-table columns ----
   "Show in this column": "Rodyti šiame stulpelyje",
   "Weight × reps": "Svoris × pakartojimai",
+  "Weight as rep-max": "Svoris kaip pakart. maks.",
   "Rep-max (1RM)": "Pakartojimų maks. (1RM)",
   "Volume": "Apimtis",
   "Predicted RIR": "Numatomas RIR",
