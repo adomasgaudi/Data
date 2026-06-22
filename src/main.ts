@@ -189,7 +189,7 @@ import { curveFor, percentileFor, hasStandards, PERCENTILES, POPULATION_LABEL, t
 import { benchKey, benchmarkKg, sortBenchmarks, topMet, cleanStore, type Benchmark, type BenchmarkStore } from "./benchmarks";
 import { DEFAULT_FORMULA } from "./config";
 import { supabase, upsertSets, fetchKv, upsertKv } from "./supabase";
-import { isSyncable, merge3, SYNC_BASE_KEY } from "./cacheSync";
+import { isSyncable, merge3, sameStored, SYNC_BASE_KEY } from "./cacheSync";
 import { CHANGELOG, CURRENT_VERSION, RELEASES, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
@@ -18891,17 +18891,22 @@ async function pullMergeKv(): Promise<void> {
       // dashboard key — flags RED + "SHRINK" when the merge makes the local value SMALLER (a sign the
       // cloud copy wiped tabs/selections). base/local/cloud/merged = JSON string lengths; CHANGED = a
       // reload will follow → the line is also stashed (hdDiagPush) so it survives that reload.
+      // Compare on DEEP value, not raw string: merge3 re-serialises via JSON.stringify, which
+      // can reorder keys, so `merged !== localV/cloudV` was true for deeply-EQUAL values → every
+      // such key re-wrote + re-pushed on EVERY sync forever ("syncs 284 every refresh", and the
+      // spurious localChanged also kept the refresh bar open). sameStored() = JSON-deep-equal.
+      const localChangedHere = !sameStored(merged, localV);
       if (k === HISTORY_DASH_KEY_V2) {
-        const shrink = merged !== localV && (merged?.length ?? 0) < (localV?.length ?? 0);
-        const line = `HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${merged !== localV ? " CHANGED" : ""}${shrink ? " SHRINK" : ""}`;
+        const shrink = localChangedHere && (merged?.length ?? 0) < (localV?.length ?? 0);
+        const line = `HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${localChangedHere ? " CHANGED" : ""}${shrink ? " SHRINK" : ""}`;
         dbg(line, shrink);
-        if (merged !== localV) hdDiagPush(line); // a local change → reload follows; keep the line across it
+        if (localChangedHere) hdDiagPush(line); // a local change → reload follows; keep the line across it
       }
-      if (merged !== localV) {
+      if (localChangedHere) {
         if (merged === undefined) localStorage.removeItem(k); else localStorage.setItem(k, merged);
         localChanged++;
       }
-      if (merged !== undefined && merged !== cloudV) {
+      if (merged !== undefined && !sameStored(merged, cloudV)) {
         toPush.push({ key: k, value: merged }); // base advances only after a successful push
       } else if (merged === undefined) {
         delete newBase[k];

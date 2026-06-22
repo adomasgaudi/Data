@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isSyncable, cacheCategory, deepEq, merge3, merge3Json } from "./cacheSync";
+import { isSyncable, cacheCategory, deepEq, merge3, merge3Json, sameStored } from "./cacheSync";
 
 describe("cacheSync key classification", () => {
   it("syncs shared data keys, never device prefs or the sets/base keys", () => {
@@ -106,5 +106,17 @@ describe("merge3 — string level", () => {
   });
   it("identical strings short-circuit", () => {
     expect(merge3('{"a":1}', '{"a":1}', '{"a":1}')).toBe('{"a":1}');
+  });
+});
+
+describe("sameStored — deep value equality (no re-sync on key-order churn)", () => {
+  it("treats key-reordered objects as equal (the 'syncs everything every refresh' bug)", () => {
+    expect(sameStored('{"a":1,"b":2}', '{"b":2,"a":1}')).toBe(true);
+    expect(sameStored('{"a":1,"b":2}', '{"a":1,"b":3}')).toBe(false);
+  });
+  it("handles undefined (absent) sides and identical strings", () => {
+    expect(sameStored(undefined, undefined)).toBe(true);
+    expect(sameStored('{"a":1}', undefined)).toBe(false);
+    expect(sameStored("x", "x")).toBe(true);
   });
 });

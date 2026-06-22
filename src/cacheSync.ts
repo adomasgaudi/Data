@@ -152,3 +152,13 @@ export function merge3(base: string | undefined, local: string | undefined, remo
   const merged = merge3Json(parse(base), parse(local), parse(remote));
   return merged === undefined ? undefined : JSON.stringify(merged);
 }
+
+/** True if two STORED (string | undefined) values are DEEPLY equal as JSON — so a key
+ * isn't treated as "changed" just because JSON.stringify reordered object keys. Compare
+ * sync decisions with this, NOT raw `===`: the raw compare made every key with a non-
+ * canonical serialization re-write + re-push on EVERY sync forever (the "syncs 284 every
+ * refresh" bug). */
+export function sameStored(a: string | undefined, b: string | undefined): boolean {
+  if (a === b) return true;
+  return deepEq(parse(a), parse(b));
+}
