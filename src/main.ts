@@ -273,6 +273,7 @@ const els = {
   exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
   exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
+  topAthlete: $("topAthlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
   athleteProfile: $("athleteProfile"),
@@ -5326,6 +5327,8 @@ function syncSexToggle() {
  * The Men/Women filter additionally hides chips of the other sex. */
 function syncAthleteChips() {
   const active = els.athlete.value;
+  // Pin the current athlete's name in the sticky top bar so it's always visible (owner).
+  if (els.topAthlete) { els.topAthlete.textContent = athleteLabel(); els.topAthlete.hidden = !active; }
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
   // In a locked (user/spectator) view you only ever see yourself: hide the M/W sex
   // menu and every other athlete's chip entirely (not just disable them), and drop
