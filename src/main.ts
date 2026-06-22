@@ -429,6 +429,11 @@ function isAdminRole(): boolean { return actualRole === "admin"; }
 let viewUser: string | null = (() => {
   try { return localStorage.getItem("colosseum.viewUser.v1"); } catch { return null; }
 })();
+/** A non-admin viewing SOMEONE ELSE via a ?u= link: the read-only spectate target.
+ * URL-driven ONLY (never persisted) — the URL is the source of truth, so the browser
+ * never "remembers" it; a reload re-derives it from the link. Admin leaves this null
+ * (admin opens any account fully). null = not spectating another user. */
+let spectateUser: string | null = null;
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
 // Tabs a non-admin (locked user / spectator) may stay on — the Clients section of
@@ -529,7 +534,7 @@ function setViewMode(mode: ViewMode) {
   if (mode !== "admin") {
     // Lock the selection to the locked user — UNLESS you're spectating a public athlete
     // (allowed: read-only), which must not snap back to yourself.
-    if (locked && els.athlete.value !== locked && !isPublicProfile(els.athlete.value)) { els.athlete.value = locked; renderAthlete(); }
+    if (locked && els.athlete.value !== locked && !isPublicProfile(els.athlete.value) && els.athlete.value !== spectateUser) { els.athlete.value = locked; renderAthlete(); }
     // If we entered a restricted view from an admin-only panel, drop back to the
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
@@ -15830,15 +15835,20 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Pick the athlete to show on load: a ?u=<username> in the URL wins (a typed/shared
-  // jump-to-user link), then the one remembered from last visit if it's still in the
-  // data, otherwise default to Indre. A locked user/spectator view ignores ?u= — it
-  // only ever shows its own athlete (rule: locked views never peek at others).
-  const urlUser = lockedUsername() === null ? athleteFromUrl(users) : null;
+  // Pick the athlete to show on load. A ?u=<username> link is the SOURCE OF TRUTH and
+  // overrides the cached pick (owner: "the browser shouldn't remember which user — it
+  // listens to the URL"). How far it overrides depends on your REAL role:
+  //   • admin     → open that account fully (drops any "view as" preview).
+  //   • a user    → your OWN link = your normal view; ANOTHER user's link = read-only
+  //                 spectate of them (canEditAthlete still blocks edits).
+  // With no ?u=, fall back to the remembered athlete, else Indre.
+  const urlTarget = athleteFromUrl(users);
   const remembered = loadLastAthlete();
   const rememberedUser = remembered ? users.find((u) => u.username === remembered) : undefined;
-  if (urlUser) {
-    els.athlete.value = urlUser;
+  if (urlTarget) {
+    if (isAdminRole()) { viewMode = "admin"; spectateUser = null; }
+    else spectateUser = urlTarget === userViewUsername() ? null : urlTarget;
+    els.athlete.value = urlTarget;
   } else if (rememberedUser) {
     els.athlete.value = rememberedUser.username;
   } else {
