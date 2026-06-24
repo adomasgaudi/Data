@@ -1,5 +1,15 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-51 — Strength-line "best:" window pill does nothing (config never reaches the active chart)
+
+- **First seen / reported:** 2026-06-24, mobile (Brave, Android, b.2.9.276, `?u=dzuljeta`, Hip Thrust). Owner #persistent: with the Options → Strength "best: 1d" pill selected, the Strength line stays FLAT (long plateaus, never drops) instead of jumping per training day. The feature (CHART-216, b.2.9.275) had in fact never worked.
+- **Root cause:** the window is stored on `waGraphConfig.strengthWindow`, set in only two places — `renderGraphSlideChart` (the dormant carousel) and the legacy `renderWaGraph` fallback AFTER its `if (useGraphDashboard) { … return; }` early-return. Both are DEAD in normal operation (the active path is the per-bubble dashboard). So when `buildBubbleInput` spreads `...waGraphConfig` to build the chart's config, `strengthWindow` is `undefined` → `windowedMax` falls back to all-time `runningMax` → the line never drops. Same class as the formula handling, which is why `formula` is set DIRECTLY in the `buildBubbleInput` clone and worked — the window was just never given the same treatment.
+- **Fix (b.2.9.277, CHART-217):** set `strengthWindow: currentStrengthWindow().ms` directly in the `buildBubbleInput` cfg clone (the choke point that actually feeds the active dashboard chart), exactly like `formula`. No longer depends on a dead path having stamped `waGraphConfig`. Comment `PB-51` at the fix site.
+- **Watch:** a graph Option that "does nothing" is almost always this class — the knob writes a value that the ACTIVE render path never reads because it's stamped on `waGraphConfig` by a dead/dormant path (carousel or legacy fallback). The dashboard's `buildBubbleInput` cfg clone is the single source of truth for what the chart draws; any new per-render Option must be set THERE (like `formula`/`strengthWindow`), not merely on `waGraphConfig`. If it recurs, `dbg()` the `cfg.strengthWindow` value inside buildBubbleInput and confirm the build stamp (stale cache).
+- **Recurrences:** 0 (first report; the v.275 feature shipped broken — never functioned on the dashboard path).
+
+---
+
 ## PB-50 — Page jumps around while it loads/syncs on open (scroll-restore fights the user)
 
 - **First seen / reported:** 2026-06-22, mobile (coloseum.netlify.app, opening via a `?u=` link). Owner #persistent #debug: "it still loads on first open and then jumps; if I try to scroll away while it's loading/synchronising it jumps around." First fix attempt (NAV-71, b.2.9.261) staged the three *background* syncs (GitHub CSV / Supabase manual sets / KV merge) behind a refresh bar so they no longer auto-rebuild or reload — but it still jumped.

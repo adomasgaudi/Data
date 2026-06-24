@@ -23496,6 +23496,11 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   const cfg: GraphConfig = {
     ...waGraphConfig,
     formula,
+    // PB-51: the Strength line's "best top set" window. MUST be set here (the choke point for
+    // the ACTIVE dashboard chart) — not trusted from the waGraphConfig spread, which is only
+    // ever stamped in the dormant carousel / dead legacy paths, so it stayed undefined here and
+    // the line silently fell back to all-time runningMax (the "best: 1d does nothing" bug).
+    strengthWindow: currentStrengthWindow().ms,
     repsVsWeight: isRvw,
     repsVsWeightFit: isRvw ? S.waRepsVsWeightFit : false,
     rirOf: (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula),
