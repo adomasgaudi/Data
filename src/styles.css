@@ -3014,6 +3014,10 @@ sup.wr-bw { font-size: 0.85em; }
   box-shadow: 0 8px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
 }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
+/* PB-53 #debug width readout — its own line so it never crowds the header. Muted by default,
+   turns terracotta when the card spills past the viewport (so a screenshot self-diagnoses). */
+.addm-dbg { font-size: 0.62rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow-x: auto; margin: -0.2rem 0 0.3rem; letter-spacing: 0.02em; }
+.addm-dbg--over { color: var(--remove); font-weight: 700; }
 .addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; } /* grows so the ⚙ + × sit together at the right */
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
 /* ⚙ Exercise-settings cog (Phase 1, equipment model) + its expanded per-exercise panel. */

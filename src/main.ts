@@ -20234,10 +20234,26 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     `<span class="addm-ver" title="Loaded build. If this isn't the latest version, hard-refresh — the weight/reps box may already be fixed.">${escapeHtml(CURRENT_VERSION)}</span>` +
     `<button type="button" class="addm-cog" aria-label="Exercise settings" aria-expanded="false" title="Exercise settings — assisted machine, machine weight, multiplier, unilateral">⚙</button>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
+    // PB-53 #debug readout (owner: "add a width readout first"): a live width diagnostic so ONE
+    // screenshot proves the out-of-bounds cause/fix — viewport, card width, card left·right edge,
+    // card scrollWidth, widest set-line scrollWidth. Turns red if the card spills past the viewport.
+    `<div class="addm-dbg" title="Live width diagnostic (PB-53): vw=viewport · card=card width · L/R=card left/right edge in px · sx=card scrollWidth · ln=widest set-line scrollWidth. If R exceeds vw (red), the card is wider than the screen.">measuring…</div>` +
     form +
     `</div>`;
   document.body.appendChild(wrap);
   addModalEl = wrap;
+  // Fill the PB-53 width readout AFTER layout (next frame) so the measurements are real.
+  requestAnimationFrame(() => {
+    const card = wrap.querySelector<HTMLElement>(".addm-card");
+    const dbgEl = wrap.querySelector<HTMLElement>(".addm-dbg");
+    if (!card || !dbgEl) return;
+    const r = card.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const lines = [...wrap.querySelectorAll<HTMLElement>(".addm-line")];
+    const widestLine = lines.length ? Math.max(...lines.map((l) => l.scrollWidth)) : 0;
+    dbgEl.textContent = `vw${vw} card${Math.round(r.width)} L${Math.round(r.left)}R${Math.round(r.right)} sx${card.scrollWidth} ln${widestLine}`;
+    if (r.right > vw + 0.5 || r.left < -0.5 || card.scrollWidth > card.clientWidth + 0.5) dbgEl.classList.add("addm-dbg--over");
+  });
   if (prefill) {
     const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
     setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
