@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-53 — Add-set: the WHOLE modal card spills off the right edge (out-of-bounds, the real root)
+
+- **First seen / reported:** 2026-06-24, mobile (b.2.9.280), Add set — Handstand Push Ups. Owner #persistent: "still out of bounds" — and crucially "the width may vary, the fix has to be for ALL sizes". The previous fixes (PB-49, PB-52) targeted INNER rows, but the whole card (NOTE field, SUGGESTED row, the blue Add button — all `width:100%` of the card) ran off the right edge, proving the CARD ITSELF was wider than the viewport, not just one row.
+- **Family:** the recurring add-modal "out of bounds" class (PB-24, PB-48, PB-49, PB-52) — recurrence **4** for the class. This is the ROOT the inner-row fixes kept missing: rubric line 1 (`docs/ui-rubric.md`) — *nothing may exceed the viewport; the cap belongs on the CONTAINER*.
+- **Root cause:** `.addm-card` had `max-width: min(30rem, 100vw)` while sitting in `.addm-overlay` (a `display:flex; justify-content:center; padding:1rem` box). The overlay's content box is `100vw − 2rem`, but the card's `100vw` cap let it grow to a FULL `100vw` — 1rem wider than the available space on EACH side — so it spilled off both edges. The card's own `overflow-x:hidden` clips its CHILDREN but does nothing about the card overflowing its OVERLAY. The PB-24 comment literally said "100vw−gutter" but the code used a bare `100vw` — the `− gutter` was never in the value. Because the card was over-wide, every `width:100%` descendant inherited the over-wide width too.
+- **Fix (b.2.9.281, UI-44):** `max-width: min(30rem, calc(100vw - 2rem))` — gutter-aware, viewport-relative, NO fixed px so it holds at every screen size (owner's "all sizes" requirement). Plus `min-width: 0` added to `.addm-lines` and `.addm-line` (belt-and-suspenders down the flex chain, per rubric line 1) so no unshrinkable child can force width either. Comments PB-53 at the fix site.
+- **Watch:** before treating an add-modal "out of bounds" as an INNER-row bug, FIRST check whether the whole card overflows (does the NOTE / SUGGESTED / Add button also run off?). If yes, it's the CONTAINER cap, not a row — fix `.addm-card` max-width against the gutter, not the row. Any container capped to the viewport MUST subtract the overlay padding (`calc(100vw - 2rem)`), never a bare `100vw`. Score every UI change against `docs/ui-rubric.md` line 1.
+- **Recurrences:** 4 (class: PB-24 → PB-48 → PB-49 → PB-52 → PB-53; this is the first CONTAINER-level fix — the prior four all patched inner rows).
+
+---
+
 ## PB-52 — Add-set: the set line's tag block overflows the card, clipping the weight boxes
 
 - **First seen / reported:** 2026-06-24, mobile (Brave, Android, b.2.9.278), Add set — Handstand Push Ups. Owner #persistent: "css going out of bounds again" — the set line's right-hand boxes (weight / reps) are cut off at the modal's right edge.
