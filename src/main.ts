@@ -5946,6 +5946,29 @@ function setupSectionToggles(): void {
     applySectionToggle(s);
   }
 }
+/** Stop an OPEN analysis section (Graph / History / …) from collapsing on a stray tap of its
+ * TITLE or the whitespace beside it (owner: "you can too often accidentally click next to the
+ * '65 exercises' title and it closes the history"). The ONLY collapse trigger when open is the
+ * outlined caret button at the top-right; every other tap on the summary is swallowed (we cancel
+ * just the <details> toggle — inner controls like the Pick tab / lift chips still get their
+ * click). When the section is CLOSED a tap anywhere still opens it (so it's easy to reopen).
+ * The listener lives on the persistent <summary> element, so it survives the innerHTML rebuilds
+ * the title goes through; the caret hit is geometry (top-right corner) since the caret is a CSS
+ * ::after with no element of its own. */
+function setupFoldToggleGuards(): void {
+  const sums = document.querySelectorAll<HTMLElement>(
+    ".wa-analysis-panel > .wa-fold-titled > summary.wa-fold-sum",
+  );
+  sums.forEach((sum) => {
+    sum.addEventListener("click", (e) => {
+      const details = sum.parentElement as HTMLDetailsElement | null;
+      if (!details || !details.open) return; // closed → a tap anywhere reopens it
+      const r = sum.getBoundingClientRect();
+      const inCaret = e.clientX >= r.right - 44 && e.clientY <= r.top + 46; // the top-right caret box
+      if (!inCaret) e.preventDefault(); // title / whitespace / Pick tab → don't toggle closed
+    });
+  });
+}
 
 function renderAthleteStats() {
   const s = athleteSummary(activeRecords(), els.athlete.value);
@@ -16001,6 +16024,7 @@ async function init() {
   setupTabs();
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
   setupSectionToggles(); // matching Graph / History show/hide buttons beside it
+  setupFoldToggleGuards(); // collapse an OPEN analysis section ONLY via its caret (not a stray title tap)
   // Graph card: closing it REMEMBERS whether you were on the single-lift carousel or the
   // full multi graph, so reopening returns to the same view (owner request — don't reset
   // to single). The single ⇄ multi switch is the "Multi ▾" / "Single ▴" button. Opening

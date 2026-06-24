@@ -5168,15 +5168,25 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    closed and simply rotates up (▾ → ▲) when it opens, exactly like the Stats card.
    Replaces the section folds' old left ▸ that moved when the fold opened. ── */
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum { position: relative; }
-.wa-analysis-panel > .wa-fold-titled:not([open]) > .wa-fold-sum { padding-right: 1.3rem; }
+/* Reserve room at the right edge in BOTH states so the outlined caret box never overlaps the
+   title text (was a closed-only 1.3rem; the box is wider now and the open state also needs it). */
+.wa-analysis-panel > .wa-fold-titled > .wa-fold-sum { padding-right: 2.2rem; }
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum::before { content: none; }
 /* Suppress the GLOBAL collapsed-caret (the right-aligned ::before added for all
    wa-folds) on these four section folds — they use our own rotating ::after below,
    so without this both would show (the "two triangles" bug). Higher specificity than
    that rule so it wins regardless of source order. */
 .wa-analysis-panel > .wa-fold-titled:not([open]) > summary.wa-fold-sum::before { content: none; }
+/* Collapse/expand caret — an OUTLINED button-like box at the top-right so it clearly reads as
+   tappable (owner). It is the ONLY thing that collapses an OPEN section; the title + whitespace
+   beside it no longer toggle (setupFoldToggleGuards swallows those taps), so the History/Graph
+   can't be closed by accident. pointer-events stay off — the summary's guard handles the hit by
+   geometry (the top-right corner). */
 .wa-analysis-panel > .wa-fold-titled > .wa-fold-sum::after {
-  content: "▾"; position: absolute; right: 0; top: 0.75rem;
+  content: "▾"; position: absolute; right: 0; top: 0.5rem;
+  width: var(--tap-min); height: var(--tap-min);
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg);
   font-size: var(--fs-sm); line-height: 1; color: var(--accent); font-weight: 700;
   transition: transform 0.15s ; pointer-events: none;
 }
