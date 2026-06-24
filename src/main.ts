@@ -20041,7 +20041,10 @@ function passivePaletteHtml(ex: string): string {
   const uniInd = isUni(ex)
     ? `<button type="button" class="addm-uni-ind" data-uniex="${escapeHtml(ex)}" title="Unilateral — each set is a right + a left set (single-arm/leg); calculations use the weaker side. Tap to turn off.">⇄ unilateral</button>`
     : "";
-  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span>${pills}${uniInd}</div>`;
+  // Label ABOVE the pills (its own header line), and a separator line below the whole block —
+  // so the TAGS palette reads as its own section, visually split from the set lines beneath it
+  // (owner annotation: "add a line to separate visually and move tag above").
+  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span><div class="addm-passive-pills">${pills}${uniInd}</div></div>`;
 }
 /** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
 function inclinePillLabel(dim: LevelDim, val: number): string {

@@ -3038,10 +3038,15 @@ sup.wr-bw { font-size: 0.85em; }
    "swipe for more" affordance: without them a chip clipped at the row's right edge read as
    broken / "out of bounds" (owner #persistent, sibling of PB-24). The mask sits on the box's
    right edge so the last visible chip always fades into a clear scroll cue, never a hard cut. */
-.addm-passive { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; margin: 0.15rem 0 0.1rem 0.35rem; padding-right: 0.6rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); }
-.addm-passive::-webkit-scrollbar { display: none; }
+/* TAGS palette: label on its OWN line above the pills, with a separator line under the whole
+   block so it reads as a distinct section from the set lines below (owner: "add a line to
+   separate visually and move tag above"). */
+.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.15rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); }
 .addm-passive:empty { display: none; }
-.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; flex: 0 0 auto; }
+.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+/* The pills themselves stay in ONE horizontally-scrolling row (the swipe-sideways strip). */
+.addm-passive-pills { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); }
+.addm-passive-pills::-webkit-scrollbar { display: none; }
 .addm-passive-pill {
   flex: 0 0 auto; padding: 2px 8px; font: inherit; font-size: 0.62rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.02em; cursor: pointer;
