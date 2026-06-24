@@ -5913,6 +5913,12 @@ function applySectionToggle(s: SectionToggle): void {
     const tabs = document.getElementById("woTabs");
     if (tabs) tabs.hidden = !shown;
   }
+  // Same for the Graph section: its tab strip (#gdashTabs) now lives ABOVE the fold, so
+  // hiding the Graph section must hide the tabs too (or they'd hang there with no card).
+  if (s.foldId === "waGraphFold") {
+    const tabs = document.getElementById("gdashTabs");
+    if (tabs) tabs.hidden = !shown;
+  }
   const btn = document.getElementById(s.btnId);
   if (btn) {
     btn.classList.toggle("is-on", shown);
@@ -23779,6 +23785,36 @@ function infoBtn(key: string): string {
  * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
  * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
  * from its own stored config — never a stub. */
+/** Build the graph tab strip into #gdashTabs, which now lives ABOVE the Graph card (like
+ * the history's #woTabs) — owner: "move the graph tabs to above the graph card just like
+ * the history section". Self-contained so the strip can refresh even when the card is
+ * COLLAPSED (renderGraphDashboard skips the chart work then). Tap a tab NAME to switch; tap
+ * its ⋯ button for the options menu (Duplicate / Rename / Add / Delete) — NO long-press
+ * (unreliable on device, PB-38). The tab being renamed turns into an input. */
+function renderGdashTabs(): void {
+  const tabsHost = document.getElementById("gdashTabs");
+  if (!tabsHost) return;
+  ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
+  // Don't rebuild the strip while a rename <input> is already live — a re-render (e.g. a
+  // deferred graph paint) would destroy the focused field mid-type ("rename won't let me type").
+  if (dashEditTab && tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit")) return;
+  tabsHost.innerHTML = graphDash.tabs
+    .map((t) => {
+      const on = t.id === graphDash.activeTabId;
+      if (on && dashEditTab === t.id) {
+        return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
+      }
+      return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
+        `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
+        `<button type="button" class="gdash-tab-more" data-tabmenuopen="${t.id}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
+      `</span>`;
+    })
+    .join("");
+  if (dashEditTab) {
+    const inp = tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
+    inp?.focus(); inp?.select();
+  }
+}
 function renderGraphDashboard(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
@@ -23812,41 +23848,7 @@ function renderGraphDashboard(): void {
     persistDash();
     bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
   }
-  // TABS live ABOVE the graph (owner): tap a tab NAME to switch; tap its ⋯ button to open the
-  // options menu (Duplicate / Rename / Add / Delete). NO long-press — it was unreliable on
-  // device and interfered with tapping (PB-38). The active tab being renamed turns into an input.
-  const tabsHtml = graphDash.tabs
-    .map((t) => {
-      const on = t.id === graphDash.activeTabId;
-      if (on && dashEditTab === t.id) {
-        return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
-      }
-      return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
-        `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
-        `<button type="button" class="gdash-tab-more" data-tabmenuopen="${t.id}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
-      `</span>`;
-    })
-    .join("");
-  const full = document.getElementById("waGraphFull");
-  let tabsHost = document.getElementById("gdashTabs");
-  if (!tabsHost && full) {
-    tabsHost = document.createElement("div");
-    tabsHost.id = "gdashTabs"; tabsHost.className = "gdash-tabs";
-    full.insertBefore(tabsHost, full.firstChild);
-  }
-  if (tabsHost) {
-    // Don't rebuild the strip while a rename <input> is already live — a re-render (e.g. a
-    // deferred graph paint) would destroy the focused field mid-type, which is the "rename
-    // won't let me type" bug. Rebuild only when not actively editing.
-    const liveEdit = dashEditTab && tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
-    if (!liveEdit) {
-      tabsHost.innerHTML = tabsHtml;
-      if (dashEditTab) {
-        const inp = tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
-        inp?.focus(); inp?.select();
-      }
-    }
-  }
+  renderGdashTabs();
   // Project the active bubble onto the shared graph state so the Options menu + buildBubbleInput
   // read THIS bubble: metrics are per-bubble (waMetrics ← bubble.metrics); the other Options
   // knobs (aggregation/decay/…) stay global/shared for now.
@@ -23978,6 +23980,7 @@ function renderWaGraph(): void {
     const full = document.getElementById("waGraphFull");
     if (mini) mini.hidden = true;
     if (full) full.hidden = false;
+    renderGdashTabs(); // tabs live ABOVE the card now — keep them fresh even when collapsed
     const foldEl = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
     if (!foldEl?.open) return; // collapsed → skip the (hidden) chart work
     renderGraphDashboard();

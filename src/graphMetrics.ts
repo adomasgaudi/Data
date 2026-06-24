@@ -208,15 +208,24 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
   return pts.map((p) => ({ x: p.x, y: r1((m = Math.max(m, p.y))) }));
 }
 
-/** Strength as the best top set within a rolling WINDOW (ms): at each point, the max y over
- * points in [x − windowMs, x]. `undefined`/`Infinity` falls back to the all-time runningMax.
+/** Strength as the best top set within a rolling WINDOW: at each point, the max y over a
+ * trailing span of calendar DAYS. `undefined`/`Infinity` falls back to the all-time runningMax.
  * `pts` must be sorted ascending by x (e1rmPoints already is). Unlike runningMax this line CAN
- * drop — it reflects "best in the last window", not the lifetime peak. */
+ * drop — it reflects "best in the last window", not the lifetime peak.
+ *
+ * Compared by calendar DAY, not raw ms: logged sets are day-granular (a date, no clock time)
+ * and same-day sets are FANNED across the day for visual separation, so a raw-ms window let an
+ * early-in-day point swallow the WHOLE previous day — the "1d line never drops" bug (owner: the
+ * curve should jump on 1d view). We instead look back (windowDays − 1) whole days, so "1d" = the
+ * SAME calendar day only, "1w" = today + 6 prior days, etc.; the line then drops between periods. */
 function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
   if (windowMs == null || !Number.isFinite(windowMs)) return runningMax(pts);
+  const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
+  const dayOf = (x: number) => Math.floor(x / DAY);
   return pts.map((p, i) => {
+    const di = dayOf(p.x);
     let m = p.y;
-    for (let j = i - 1; j >= 0 && pts[j]!.x >= p.x - windowMs; j--) m = Math.max(m, pts[j]!.y);
+    for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
     return { x: p.x, y: r1(m) };
   });
 }

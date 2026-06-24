@@ -1237,8 +1237,10 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 /* ── Custom graph dashboard (CHART-160) ──────────────────────────────────────
    A tab strip + a per-bubble control row + the bubble's chart + the reel foot. Compact,
    one horizontally-scrolling row each (#cram), reusing the carousel dots/nav for the reel. */
-/* Tab strip — its OWN host at the top of #waGraphFull, above the picker + chart. */
+/* Tab strip — its OWN host ABOVE the Graph card (like history's #woTabs), so it stays
+   visible when the card is collapsed. */
 #gdashTabs.gdash-tabs { margin: 0 0 0.4rem; }
+.wa-graph-tabs { border-bottom: 1px solid var(--line); }
 .gdash-tabs {
   display: flex; align-items: center; gap: 0.3rem; flex-wrap: nowrap;
   overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 0.25rem; margin-bottom: 0.3rem;
