@@ -21,6 +21,11 @@ export interface GraphConfig {
   decayParams?: DecayParams | undefined;
   /** 1RM formula for the strength/1RM metrics (matches the app-wide choice). */
   formula: OneRepMaxFormula;
+  /** Rolling WINDOW (ms) over which the (non-decay) Strength line takes the best top set:
+   * at each date it's the max e1RM within the last `strengthWindow`. Undefined / Infinity =
+   * all-time (the legacy running-max that never drops). Smaller = the line tracks recent best
+   * and can fall when you haven't beaten it lately. */
+  strengthWindow?: number | undefined;
   /** REPS-VERSUS-WEIGHT mode: swap the graph to a scatter of every set at
    * (x = weight kg, y = reps) per exercise, instead of the time-series metrics. */
   repsVsWeight?: boolean;

@@ -208,6 +208,19 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
   return pts.map((p) => ({ x: p.x, y: r1((m = Math.max(m, p.y))) }));
 }
 
+/** Strength as the best top set within a rolling WINDOW (ms): at each point, the max y over
+ * points in [x − windowMs, x]. `undefined`/`Infinity` falls back to the all-time runningMax.
+ * `pts` must be sorted ascending by x (e1rmPoints already is). Unlike runningMax this line CAN
+ * drop — it reflects "best in the last window", not the lifetime peak. */
+function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
+  if (windowMs == null || !Number.isFinite(windowMs)) return runningMax(pts);
+  return pts.map((p, i) => {
+    let m = p.y;
+    for (let j = i - 1; j >= 0 && pts[j]!.x >= p.x - windowMs; j--) m = Math.max(m, pts[j]!.y);
+    return { x: p.x, y: r1(m) };
+  });
+}
+
 /** Select the points that feed the projection fit, per the configured basis.
  * Warm-ups (clearly submaximal: RIR ≥ 6 when effort is known) are ALWAYS dropped;
  * "hard" keeps only near-failure sets (RIR < 3), "records" reduces to the running
@@ -381,7 +394,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
       );
     },
   },
-  { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
+  { id: "strength", label: "Strength", compute: (rs, cfg) => windowedMax(e1rmPoints(rs, cfg.formula), cfg.strengthWindow) },
   { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => {
       // EFF-1 (rule 58): run the fade + growth cap on the EFFECTIVE 1RM, then peel the
       // bodyweight share back so the plotted line is the ADDED weight (rule 49).

@@ -21692,6 +21692,30 @@ let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm", "strength"]); // default graph view: 1RM + Strength score (no decay)
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// Strength-line rolling WINDOW (owner): the (non-decay) Strength line takes the best top set
+// within this window at each date instead of the all-time running max — so it can DROP when you
+// haven't beaten it lately. Device-local view pref. "all" = the legacy lifetime-best behaviour.
+const STRENGTH_WINDOWS: { id: string; label: string; short: string; ms: number | undefined }[] = [
+  { id: "all", label: "all-time", short: "all", ms: undefined },
+  { id: "1d", label: "per day", short: "1d", ms: 86400000 },
+  { id: "1w", label: "1 week", short: "1w", ms: 7 * 86400000 },
+  { id: "2w", label: "2 weeks", short: "2w", ms: 14 * 86400000 },
+  { id: "1mo", label: "1 month", short: "1mo", ms: 30 * 86400000 },
+  { id: "3mo", label: "3 months", short: "3mo", ms: 91 * 86400000 },
+  { id: "6mo", label: "6 months", short: "6mo", ms: 182 * 86400000 },
+  { id: "12mo", label: "12 months", short: "12mo", ms: 365 * 86400000 },
+];
+const STRENGTH_WINDOW_KEY = "colosseum.strengthWindow.v1";
+let strengthWindowId: string = (() => {
+  try { const v = localStorage.getItem(STRENGTH_WINDOW_KEY); if (v && STRENGTH_WINDOWS.some((w) => w.id === v)) return v; } catch { /* ignore */ }
+  return "all";
+})();
+function currentStrengthWindow() { return STRENGTH_WINDOWS.find((w) => w.id === strengthWindowId) ?? STRENGTH_WINDOWS[0]!; }
+function cycleStrengthWindow(): void {
+  const i = STRENGTH_WINDOWS.findIndex((w) => w.id === strengthWindowId);
+  strengthWindowId = STRENGTH_WINDOWS[(i + 1) % STRENGTH_WINDOWS.length]!.id;
+  try { localStorage.setItem(STRENGTH_WINDOW_KEY, strengthWindowId); } catch { /* ignore */ }
+}
 // Adjustable strength-decay MODEL (device-local): the owner dials the fade curve's
 // complexity level + variables in the graph Options to SEE it on their data. Persisted so
 // the chosen experiment sticks; merged over the defaults so older saves get any new fields.
@@ -23111,6 +23135,7 @@ function graphTypeTabsHtml(): string {
 }
 function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.formula = currentFormula();
+  waGraphConfig.strengthWindow = currentStrengthWindow().ms;
   // Honour the graph-type toggle on the carousel too (it shares waGraphConfig with the full graph).
   waGraphConfig.repsVsWeight = S.waRepsVsWeight;
   waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
@@ -23221,10 +23246,16 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       .join("");
     const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
     const mInfo = g.label === "Weight" ? "mWeight" : g.label === "Strength" ? "mStrength" : "mVolume";
+    // The Strength line's rolling-WINDOW pill (owner): only meaningful when the Strength line
+    // is on — it picks the period the "best top set = strength" is taken over (all-time …
+    // down to per-day). A cycling pill (rule #toggle).
+    const winPill = g.label === "Strength" && waMetrics.has("strength")
+      ? `<button type="button" class="wa-metric wa-strwin" data-wastrwin title="Strength line window: at each date the line is your best top set within this period (smaller = tracks your recent best and can drop; 'all' = lifetime best, never drops). Tap to cycle.">best: ${escapeHtml(currentStrengthWindow().short)}</button>`
+      : "";
     return (
       `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
       `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}${infoBtn(mInfo)}</summary>` +
-      `<div class="wa-metric-chips">${chips}</div></details>`
+      `<div class="wa-metric-chips">${chips}${winPill}</div></details>`
     );
   }).join("");
   const c = waGraphConfig;
@@ -23977,6 +24008,7 @@ function renderWaGraph(): void {
   // Work out the plotted exercises FIRST, so the metric chips can reflect what's
   // allowed for them (everything is blocked until reviewed in More info).
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  waGraphConfig.strengthWindow = currentStrengthWindow().ms;
   // Reps-versus-weight scatter mode (owner): swaps the whole plot to weight(x)/reps(y).
   waGraphConfig.repsVsWeight = S.waRepsVsWeight;
   waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
@@ -25248,6 +25280,12 @@ function setupWorkoutAnalysis(): void {
       const steps = [0, 1, 2, 5, 10, 20, 50];
       const i = steps.indexOf(waGraphConfig.smoothing);
       waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
+      return;
+    }
+    // Strength-line window: cycle the period the line's "best top set" is taken over (owner).
+    if (t.closest<HTMLElement>("[data-wastrwin]")) {
+      cycleStrengthWindow();
       scheduleWaGraph();
       return;
     }
