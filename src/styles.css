@@ -2861,10 +2861,21 @@ sup.wr-bw { font-size: 0.85em; }
    LINE carries its OWN .addm-line-vars — a TAG BLOCK of variant/ROM pills + a ＋ tag button on
    the LEFT, with the weight/reps/RIR/✕ grouped on the right (.addm-line-main). Many tags (e.g.
    handstands) wrap within the block; the right group drops below only when out of room. */
-/* flex: 0 1 auto (don't GROW): the tag block hugs its tags so the weight follows right after them
-   instead of being shoved to the far-right card edge (owner: "the css goes too far to the right").
-   min-width:0 still lets it shrink + wrap its tags onto more left-hand rows when there are many. */
-.addm-line-vars { display: flex; flex-wrap: wrap; align-content: flex-start; align-items: flex-start; flex: 0 1 auto; min-width: 0; gap: 0.3rem; }
+/* PB-52: the tag block is ONE horizontally-scrolling row (rule #cram: many pills → one scroll
+   row, NEVER a wrapped multi-row block), NOT flex-wrap. With many tags (handstands: support /
+   height / ROM / fwd-lean / multiplier) a WRAP block plus the fixed weight group exceeded the
+   card and the right boxes were clipped ("css going out of bounds again"). nowrap + overflow-x
+   means the tags SCROLL inside their own block instead of shoving the weight off the right edge.
+   flex: 0 1 auto still lets the block HUG its tags (so the weight follows right after them) when
+   they fit, and shrink + scroll only when they don't; min-width:0 makes the shrink possible. The
+   right-edge mask is the "swipe for more" cue (same as the tag palette / PB-49). */
+.addm-line-vars {
+  display: flex; flex-wrap: nowrap; align-items: center; flex: 0 1 auto; min-width: 0; gap: 0.3rem;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-right: 0.5rem;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent);
+}
+.addm-line-vars::-webkit-scrollbar { display: none; }
 .addm-line-vars:empty { display: none; }
 /* dissolve the .wo-af-dims wrapper so its dim/tag columns join the tag wrap directly, beside the ROM */
 .addm-line-vars .wo-af-dims { display: contents; }

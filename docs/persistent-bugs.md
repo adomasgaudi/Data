@@ -1,5 +1,16 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-52 — Add-set: the set line's tag block overflows the card, clipping the weight boxes
+
+- **First seen / reported:** 2026-06-24, mobile (Brave, Android, b.2.9.278), Add set — Handstand Push Ups. Owner #persistent: "css going out of bounds again" — the set line's right-hand boxes (weight / reps) are cut off at the modal's right edge.
+- **Family:** the recurring add-modal "out of bounds" class (PB-24 card overflow, PB-49 palette clip). Here the culprit is the per-set TAG block (`.addm-line-vars`), which carried 5 wide tags for handstands (support / height / ROM / fwd-lean / multiplier).
+- **Root cause:** `.addm-line` is a nowrap row of `.addm-line-vars` (the tags) + `.addm-line-main` (the fixed ~8.8rem weight/reps/✕ group). The tag block was `flex-wrap: wrap` (PB-48), so its one-line content (~17rem) plus the weight group (~8.8rem) ≈ 26rem exceeded the ~20rem phone card; the wrap-block didn't reflow enough and the weight group was pushed past the card's right edge, which `.addm-card { overflow-x: hidden }` then clipped. A wrapped multi-row tag block ALSO violates rule #cram ("many pills → ONE horizontally-scrolling row, NEVER a wrapped multi-row block").
+- **Fix (b.2.9.279, UI-42):** `.addm-line-vars` becomes a contained horizontal SCROLL row — `flex-wrap: nowrap; overflow-x: auto` with a right-edge mask fade (the same "swipe for more" affordance as the tag palette / PB-49), keeping `flex: 0 1 auto; min-width: 0` so the block still HUGS its tags (weight right after them) when few fit, but shrinks and scrolls instead of shoving the weight off when there are many. Comment PB-52 at the fix site.
+- **Watch:** any side-by-side "tags + fixed control" row in the add modal must let the tag side SCROLL (basis hug + min-width:0 + overflow-x), never wrap, or the fixed control gets clipped by the card's overflow:hidden. If it recurs, confirm the build stamp in the modal header (`.addm-ver`), then check whether the tag block is actually shrinking (its scrollWidth > clientWidth) — if the weight group is still clipped, the tag block isn't getting `min-width:0`/shrink, so pin it to `flex: 1 1 0` (fill the space after the weight) as the bulletproof fallback.
+- **Recurrences:** 0 (first report for the set-LINE; class-sibling of PB-24 / PB-49 in the out-of-bounds family).
+
+---
+
 ## PB-51 — Strength-line "best:" window pill does nothing (config never reaches the active chart)
 
 - **First seen / reported:** 2026-06-24, mobile (Brave, Android, b.2.9.276, `?u=dzuljeta`, Hip Thrust). Owner #persistent: with the Options → Strength "best: 1d" pill selected, the Strength line stays FLAT (long plateaus, never drops) instead of jumping per training day. The feature (CHART-216, b.2.9.275) had in fact never worked.
