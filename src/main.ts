@@ -227,6 +227,7 @@ const els = {
   syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
   syncDownBtn: $<HTMLButtonElement>("syncDownBtn"),
   dbgToggleBtn: $<HTMLButtonElement>("dbgToggleBtn"),
+  inspectToggleBtn: document.getElementById("inspectToggleBtn") as HTMLButtonElement | null,
   publicProfileToggle: $<HTMLButtonElement>("publicProfileToggle"),
   syncStatus: $("syncStatus"),
   sAnalysis: $("sAnalysis"),
@@ -16211,6 +16212,12 @@ async function init() {
     syncDbgToggle();
     renderDbg(); // shows or removes the overlay immediately
   });
+  // 🔍 CSS / element inspector (admin-only). Lazy-loads eruda devtools on first tap — a
+  // full on-screen Elements panel (box model: padding/margin/border/size + computed styles),
+  // console & network. Phones have no devtools, so this is the tappable inspector (pairs with
+  // the green dbg() console + the CSS box-viewer rule). Loaded on demand so it never touches
+  // the initial bundle (Vite splits the dynamic import into its own chunk).
+  els.inspectToggleBtn?.addEventListener("click", () => { void toggleInspector(); });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
@@ -23716,6 +23723,50 @@ function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remo
  * admin Settings ⚙ "🐞 Debug console" toggle (or `localStorage.setItem("colosseum.dbg","on")`).
  * Also exposed as `window.dbg` for ad-hoc desktop-console use.
  */
+// 🔍 On-screen CSS / element inspector — eruda devtools, loaded on demand (admin Settings toggle).
+// First tap fetches eruda from the CDN + opens the panel; later taps toggle it. The Elements
+// panel's pointer lets you tap any element to see its box model (padding / margin / border / size)
+// + computed styles — the tappable inspector phones otherwise lack (pairs with dbg() + the CSS
+// box-viewer rule 68). Loaded from CDN, NOT bundled: this app inlines into ONE index.html
+// (vite-singlefile), so bundling eruda (~0.7 MB) would bloat the single deliverable for everyone;
+// CDN-on-toggle keeps the file lean and only the admin who taps it ever downloads eruda.
+interface ErudaLike { init: (opts?: unknown) => void; show: () => void; hide: () => void }
+let erudaMod: ErudaLike | null = null;
+let erudaShown = false;
+function loadScriptOnce(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src; s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`script load failed: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+async function toggleInspector(): Promise<void> {
+  const btn = els.inspectToggleBtn;
+  try {
+    if (!erudaMod) {
+      if (btn) btn.textContent = "🔍 Loading…";
+      await loadScriptOnce("https://cdn.jsdelivr.net/npm/eruda@3");
+      erudaMod = (window as unknown as { eruda?: ErudaLike }).eruda ?? null;
+      if (!erudaMod) throw new Error("eruda global missing after load");
+      erudaMod.init();
+      erudaShown = true;
+    } else if (erudaShown) {
+      erudaMod.hide(); erudaShown = false;
+    } else {
+      erudaMod.show(); erudaShown = true;
+    }
+  } catch (e) {
+    dbg(`inspect LOAD-FAILED ${e instanceof Error ? e.message : String(e)}`);
+    if (btn) btn.textContent = "🔍 Inspect (load failed)";
+    return;
+  }
+  if (btn) {
+    btn.setAttribute("aria-pressed", String(erudaShown));
+    btn.textContent = erudaShown ? "🔍 Inspect (CSS) ✓" : "🔍 Inspect (CSS)";
+  }
+}
 const dbgLines: { t: string; err: boolean }[] = [];
 function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
 // The green console is HIDDEN by default now (owner) — it only shows when explicitly

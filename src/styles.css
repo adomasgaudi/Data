@@ -2811,14 +2811,6 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-perdate[data-persize="2"] .wo-permain { font-size: 1.2rem; }
 .wo-perdate[data-persize="3"] .wo-permain { font-size: 1.45rem; }
 .wo-perdate[data-persize="4"] .wo-permain { font-size: 1.7rem; }
-/* TEMP gap diagnostic (UI-50): outline the history-section containers in distinct colours so
-   one screenshot shows which box owns the empty space under "N exercises". Remove next turn.
-   green=title · red=exercise selector · orange=taxonomy · blue=calendar · purple=table. */
-.wa-seltitle-box { outline: 2px solid green !important; }
-#waExerciseSelectorHist { outline: 2px solid red !important; }
-#waAssign { outline: 2px solid orange !important; }
-#workoutCalendar { outline: 2px solid blue !important; }
-#waTable { outline: 2px solid purple !important; }
 /* Slight separators between day rows when the week / month / year changes (the list
    is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder
    accent line plus a year chip. */
