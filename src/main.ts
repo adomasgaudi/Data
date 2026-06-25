@@ -23730,7 +23730,7 @@ function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remo
 // box-viewer rule 68). Loaded from CDN, NOT bundled: this app inlines into ONE index.html
 // (vite-singlefile), so bundling eruda (~0.7 MB) would bloat the single deliverable for everyone;
 // CDN-on-toggle keeps the file lean and only the admin who taps it ever downloads eruda.
-interface ErudaLike { init: (opts?: unknown) => void; show: () => void; hide: () => void }
+interface ErudaLike { init: (opts?: unknown) => void; show: (name?: string) => void; hide: () => void }
 let erudaMod: ErudaLike | null = null;
 let erudaShown = false;
 function loadScriptOnce(src: string): Promise<void> {
@@ -23751,11 +23751,14 @@ async function toggleInspector(): Promise<void> {
       erudaMod = (window as unknown as { eruda?: ErudaLike }).eruda ?? null;
       if (!erudaMod) throw new Error("eruda global missing after load");
       erudaMod.init();
+      // Open STRAIGHT to the Elements panel — that's the box-model / CSS view the owner wants
+      // (padding · margin · border · size + computed styles), not the Console it defaults to.
+      erudaMod.show("elements");
       erudaShown = true;
     } else if (erudaShown) {
       erudaMod.hide(); erudaShown = false;
     } else {
-      erudaMod.show(); erudaShown = true;
+      erudaMod.show("elements"); erudaShown = true;
     }
   } catch (e) {
     dbg(`inspect LOAD-FAILED ${e instanceof Error ? e.message : String(e)}`);
@@ -23772,7 +23775,10 @@ function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.
 // The green console is HIDDEN by default now (owner) — it only shows when explicitly
 // switched ON via the admin Settings ⚙ toggle (localStorage colosseum.dbg === "on").
 // (Old behaviour was the reverse: shown unless "off".)
-function dbgVisible(): boolean { try { return localStorage.getItem("colosseum.dbg") === "on"; } catch { return false; } }
+// `dbgForced` is flipped on by an uncaught error so a CRASH self-reports on-screen even when the
+// console is toggled off (owner asked for visible errors) — transient, never persisted.
+let dbgForced = false;
+function dbgVisible(): boolean { if (dbgForced) return true; try { return localStorage.getItem("colosseum.dbg") === "on"; } catch { return false; } }
 function renderDbg(): void {
   if (!dbgVisible()) { document.getElementById("dbgOverlay")?.remove(); return; }
   let el = document.getElementById("dbgOverlay");
@@ -23808,10 +23814,13 @@ function dbg(msg: string, isErr = false): void {
 // Expose for ad-hoc use from a desktop console or other modules.
 (window as unknown as { dbg?: (m: string, e?: boolean) => void }).dbg = dbg;
 // Surface any uncaught JS error / promise rejection on the on-screen console (phones have no
-// devtools) — the owner asked for visible error logging; a crash now shows up in red on-device.
+// devtools) — the owner asked for visible error logging. A crash FORCES the green console open
+// (dbgForced) even when it's toggled off, so the error self-reports in red instead of the page
+// just looking "frozen". The force is transient (not persisted) — a refresh clears it.
 if (typeof window !== "undefined") {
-  window.addEventListener("error", (e) => dbg(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`, true));
-  window.addEventListener("unhandledrejection", (e) => dbg(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`, true));
+  const onCrash = (msg: string) => { dbgForced = true; dbg(msg, true); };
+  window.addEventListener("error", (e) => onCrash(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`));
+  window.addEventListener("unhandledrejection", (e) => onCrash(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`));
 }
 // PB-44 history-tab reset diagnostic: pullMergeKv RELOADS the page when a cloud merge changes
 // localStorage, which clears the in-memory green console — so the `HD sync` line that would
