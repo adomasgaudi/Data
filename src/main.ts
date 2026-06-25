@@ -2531,6 +2531,11 @@ const unilateralOverrides: Record<string, boolean> = (() => {
 function isUni(exerciseName: string): boolean {
   return isUnilateralBase(exerciseName, unilateralOverrides[exerciseName]);
 }
+/** The two handstand families (HSPU = presses, HANDSTAND = holds/walks/taps). Used to keep their
+ * tag set consistent — e.g. the generic %-ROM pill is irrelevant for both (owner). */
+function isHandstandFam(fam: string | null | undefined): boolean {
+  return fam === "HSPU" || fam === "HANDSTAND";
+}
 /** Force a lift unilateral on/off (clears the key to fall back to auto-detect). */
 function setUnilateralOverride(exerciseName: string, state: boolean | undefined): void {
   if (state === undefined) delete unilateralOverrides[exerciseName];
@@ -20044,7 +20049,13 @@ function addmVariantField(ex: string): string {
   const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
   // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
   // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
-  const rom = ex && tagActive(ex, familyOf(ex), "rom") ? cap("ROM", romPillHtml(ex)) : "";
+  // The generic %-ROM pill is SUPPRESSED for handstands (owner: "% rom is not relevant for hs"):
+  // HSPU already has its own cm hand-height `rom` DIM (the select), so showing the % pill too made
+  // "two ROMs"; the non-press handstands have no ROM concept at all. Only families WITHOUT their own
+  // rom dim and that aren't handstands get the generic % pill.
+  const rfam = familyOf(ex);
+  const showPctRom = !!ex && tagActive(ex, rfam, "rom") && !FAMILIES[rfam ?? ""]?.dims.rom && !isHandstandFam(rfam);
+  const rom = showPctRom ? cap("ROM", romPillHtml(ex)) : "";
   // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
   // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
   // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
@@ -20087,7 +20098,9 @@ function passivePaletteHtml(ex: string): string {
   const tags: { id: string; label: string }[] = [];
   // lean is excluded — it has its own always-shown rich pill (leanPillHtml), not a palette toggle.
   if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
-  tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
+  // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
+  // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
+  if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   const pills = tags.map((t) => {
     const on = tagActive(ex, fam, t.id);
     // A tag with no obvious baseline can't be deselected (it has no "nothing special" level to fall
