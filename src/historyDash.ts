@@ -20,7 +20,7 @@ export type HistoryShowMode = "exercises" | "groups";
 /** One history tab's COMPLETE, independent view config — every setting the ⚙ console +
  * the exercise picker drive, snapshotted per tab so tabs never share state. */
 /** How a history group's exercises are ordered (the ⚙ sort pill cycles these). */
-export type HistorySortMode = "priority" | "recency" | "volume" | "logged";
+export type HistorySortMode = "priority" | "recency" | "volume" | "logged" | "similarity";
 
 export interface HistoryTabConfig {
   /** Period grouping (Sessions = "day"); ignored when byExercise is on. */
@@ -116,7 +116,7 @@ const ConfigSchema = z.object({
   viewMode: z.enum(["day", "week", "2week", "month", "3month"]).catch(DC.viewMode),
   byExercise: z.boolean().catch(DC.byExercise),
   sortByPriority: z.boolean().catch(DC.sortByPriority),
-  sortMode: z.enum(["priority", "recency", "volume", "logged"]).optional().catch(DC.sortMode),
+  sortMode: z.enum(["priority", "recency", "volume", "logged", "similarity"]).optional().catch(DC.sortMode),
   showRest: z.boolean().catch(DC.showRest),
   restCompact: z.boolean().catch(DC.restCompact),
   showAddSets: z.boolean().catch(DC.showAddSets),

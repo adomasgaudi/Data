@@ -8601,7 +8601,13 @@ function renderWorkoutsPage() {
   // Order each group's exercises by the chosen sort mode (owner: priority / recency /
   // volume, or the logged order). New group objects so no cached source is mutated; both
   // the collapsed summary and the expanded set table read this one ordered array.
-  if (woSortMode !== "logged") {
+  if (woSortMode === "similarity") {
+    // Group related exercises adjacently (body region → name-family → name); see similarityKey.
+    workoutGroups = workoutGroups.map((g) =>
+      g.exercises
+        ? { ...g, exercises: [...g.exercises].sort((x, y) => similarityKey(x.exerciseName).localeCompare(similarityKey(y.exerciseName))) }
+        : g);
+  } else if (woSortMode !== "logged") {
     const prioCmp = woSortMode === "priority" ? priorityComparator(els.athlete.value) : null;
     if (woSortMode !== "priority" || prioCmp) {
       workoutGroups = workoutGroups.map((g) => {
@@ -12708,9 +12714,24 @@ function priorityComparator(user: string): ((a: string, b: string) => number) | 
  * by the athlete's plan priorities. DEFAULT ON (owner) — only an explicit "0" turns it off. */
 // History exercise SORT mode — the ⚙ pill cycles: priority → recency → volume → logged
 // (owner added recency + volume). Each group's exercises are ordered accordingly.
-const WO_SORT_MODES: readonly HistorySortMode[] = ["priority", "recency", "volume", "logged"];
-const WO_SORT_LABEL: Record<HistorySortMode, string> = { priority: "Prio", recency: "Recent", volume: "Volume", logged: "Logged" };
-const WO_SORT_SUB: Record<HistorySortMode, string> = { priority: "priority", recency: "most recent", volume: "volume", logged: "logged order" };
+const WO_SORT_MODES: readonly HistorySortMode[] = ["priority", "recency", "volume", "logged", "similarity"];
+const WO_SORT_LABEL: Record<HistorySortMode, string> = { priority: "Prio", recency: "Recent", volume: "Volume", logged: "Logged", similarity: "Similar" };
+const WO_SORT_SUB: Record<HistorySortMode, string> = { priority: "priority", recency: "most recent", volume: "volume", logged: "logged order", similarity: "similar grouped" };
+// "similarity" sort — cluster related exercises adjacently rather than chronologically (owner: the
+// daily log mixes sets anyway, so for week/month especially a similarity grouping reads better).
+// Key = body-region order (INDEX_MUSCLES, so neighbouring muscles like shoulders↔forearms sit
+// near each other) ‖ name-family (shared leading word, so every "Handstand …" variant groups) ‖
+// the name itself for a stable tie-break. Sets WITHIN an exercise stay chronological (unaffected).
+const SIM_SKIP_WORDS = new Set(["one", "two", "single", "double", "arm", "arms", "leg", "legs", "dumbbell", "barbell", "cable", "machine", "smith", "seated", "standing", "lying", "incline", "decline", "kneeling", "assisted", "band", "banded", "weighted", "wide", "close", "narrow", "alternating", "bent", "reverse", "front", "back", "side", "the", "with", "of", "a", "to"]);
+function simFamily(name: string): string {
+  const words = name.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  for (const w of words) if (!SIM_SKIP_WORDS.has(w)) return w;
+  return words[0] ?? "";
+}
+function similarityKey(name: string): string {
+  const mi = INDEX_MUSCLES.indexOf(muscleGroup(name));
+  return `${String(mi < 0 ? 99 : mi).padStart(2, "0")}|${simFamily(name)}|${name.toLowerCase()}`;
+}
 const WO_SORT_KEY = "colosseum.woSortMode.v1";
 let woSortMode: HistorySortMode = (() => {
   try {
