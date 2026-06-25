@@ -133,6 +133,10 @@ function perSet(
   sel: (r: SetRecord) => number | null | undefined,
   metaOf?: (r: SetRecord) => string,
   cfg?: GraphConfig,
+  // Optional "stem" base: when given, the point carries a `lo` (e.g. the weight
+  // actually used) so the chart can draw a thin line from there up to the value
+  // (the 1RM) — a lightweight, segment-free version of the Weight Range bar.
+  loOf?: (r: SetRecord) => number | null | undefined,
 ): GraphPoint[] {
   const times = setTimes(records, cfg?.spread);
   const origins = distinctOrigins(records); // >1 → a combined/comparison lift
@@ -142,6 +146,12 @@ function perSet(
     if (y != null && Number.isFinite(y)) {
       const x = times.get(r) ?? ts(r.date);
       const p: GraphPoint = { x, y };
+      if (loOf) {
+        const lo = loOf(r);
+        // Only attach a stem when the base sits BELOW the value (a real range);
+        // equal/above (e.g. a 1-rep set whose 1RM == the weight) → just the dot.
+        if (lo != null && Number.isFinite(lo) && lo < y) p.lo = r1(lo);
+      }
       if (metaOf) p.meta = metaOf(r);
       p.detail = setDetail(r, cfg);
       p.histEx = r.originalExerciseName ?? r.exerciseName;
@@ -401,7 +411,9 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     id: "e1rm",
     label: "1RM",
     type: "scatter",
-    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`, cfg),
+    // Each dot sits at the est. 1RM; a thin stem drops to the weight actually used
+    // (added kg, 0 for pure bodyweight) — the Weight Range read, minus the segments.
+    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`, cfg, (r) => added(r) ?? 0),
   },
   // "% of world record" — computed specially in analyticsGraph (needs the athlete's
   // sex + bodyweight + the per-exercise record); carries no compute. Shown as a

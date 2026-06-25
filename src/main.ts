@@ -22287,8 +22287,19 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
     };
     const liftChip = (n: string): string => {
       const label = titleName(n);
+      const attrs = `${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(label)} — tap for Info / Combine / Compare / Remove / pick a member`;
+      // A LONG name doesn't fit at full size, and shrinking it (s3) makes it tiny. Instead
+      // show the SHORT name big + the FULL name in smaller gray text below — it fits, but the
+      // whole name is still readable (owner: "short name in the title, smaller gray full
+      // title"). Only when a distinct shorter form exists and we're not on a merged group
+      // (those already show a compact group label).
+      const cg = chosenGroup(scope, n, "combine");
+      const short = shortFor(n);
+      if (!cg && label.length > 16 && short.trim() && short !== label) {
+        return `<button type="button" class="wa-title-lift wa-tl-s1 wa-tl-stacked${attrs}"><span class="wa-tl-short">${escapeHtml(short)}</span><span class="wa-tl-full">${escapeHtml(label)}</span></button>`;
+      }
       const sc = label.length <= 12 ? " wa-tl-s1" : label.length <= 17 ? " wa-tl-s2" : " wa-tl-s3";
-      return `<button type="button" class="wa-title-lift${sc}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(label)} — tap for Info / Combine / Compare / Remove / pick a member">${escapeHtml(label)}</button>`;
+      return `<button type="button" class="wa-title-lift${sc}${attrs}">${escapeHtml(label)}</button>`;
     };
     if (sel.length > TITLE_NAME_CAP) {
       // More than TITLE_NAME_CAP (6) lifts → the title is a COUNT ("7 exercises"), not the
@@ -22296,8 +22307,13 @@ function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | n
       // Still non-boxy — a plain bold title + a ▾ that opens the data-titlelist floating menu;
       // the whole thing is the dropdown trigger. "exercises" is its own text node so i18n swaps it.
       bodyHtml = `<span class="wa-tl-lead"><button type="button" class="wa-title-exsum" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="wa-exsum-n">${sel.length}</span> exercises <span class="xdd-caret">▾</span></button></span>`;
+    } else if (sel.length <= 3) {
+      // 1–3 lifts → ONE FULL-WIDTH column, each name on its own line (owner: "up to 3
+      // exercises can be full width"). The full width gives long single names the most room
+      // (and the short+gray stacking above when they still don't fit).
+      bodyHtml = `<span class="wa-tlcols wa-tlcols--single"><span class="wa-tlcol">${sel.map(liftChip).join("")}</span></span>`;
     } else {
-      // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
+      // 4–6 lifts → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
       // name in one column NEVER widens or heightens the other (owner: "two separate columns").
       const c0: string[] = [], c1: string[] = [];
       sel.forEach((n, i) => (i % 2 === 0 ? c0 : c1).push(liftChip(n)));

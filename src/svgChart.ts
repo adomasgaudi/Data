@@ -758,6 +758,14 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // transparency so overlapping same-day sets read as a denser blob (depth).
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          // Stem: a thin line from the weight actually used (p.lo) up to the dot
+          // (the 1RM). Like the Weight Range bar but thinner and segment-free, so the
+          // dot still reads as the value and the stem just shows the load behind it.
+          if (p.lo != null && Number.isFinite(p.lo)) {
+            const yLo = ymap(p.lo);
+            if (Math.abs(yLo - cy) > 0.5)
+              body += `<line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yLo.toFixed(1)}" stroke="${s.color}" stroke-width="1.4" stroke-linecap="round" stroke-opacity="0.4"/>`;
+          }
           if (p.fail) {
             // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
