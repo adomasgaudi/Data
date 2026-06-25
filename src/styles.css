@@ -6424,17 +6424,30 @@ body.admin-only-hidden #waCalendarFold { display: none; }
 .hs-field .hs-num::-webkit-outer-spin-button, .hs-field .hs-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .hs-field .hs-num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
 .hs-out { display: flex; flex-direction: column; gap: 0.7rem; }
-/* Per-tag breakdown — a 3-column mini table (tag · level · factor). */
-.hs-brk { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-.hs-brk-head { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0.35rem 0.6rem; background: var(--accent-soft); }
-.hs-brk-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: center; padding: 0.3rem 0.6rem; border-top: 1px solid var(--line); font-size: 0.85rem; }
-.hs-brk-row.is-neutral { color: var(--muted); }
-.hs-brk-dim { font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.03em; }
-.hs-brk-lvl { color: var(--muted); }
-.hs-brk-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
-.hs-brk-total { background: var(--accent-soft); font-weight: 700; }
-.hs-brk-total .hs-brk-dim { color: var(--text); }
-.hs-brk-total .hs-brk-val { color: var(--accent); }
+/* Full tag REFERENCE — every variation of every relevant tag + its effect (owner: "I wanna
+   see how much each tag affects the exercise"). Discrete tags are tap-to-set chip rows; the
+   ROM / lean SPECTRUM tags are cm→multiplier curve diagrams instead (too many cm steps for chips). */
+.hs-ref { display: flex; flex-direction: column; gap: 0.5rem; }
+.hs-ref-head { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.hs-ref-card { border: 1px solid var(--line); border-radius: 10px; padding: 0.45rem 0.55rem; }
+.hs-ref-dim { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 0.35rem; display: flex; align-items: baseline; gap: 0.5rem; }
+.hs-ref-cur { font-weight: 600; text-transform: none; letter-spacing: normal; color: var(--accent); font-size: 0.72rem; }
+/* The all-variations chips — one horizontally-scrolling row (#cram), each shows level + factor. */
+.hs-ref-chips { display: flex; flex-wrap: nowrap; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 2px; }
+.hs-ref-chips::-webkit-scrollbar { display: none; }
+.hs-ref-chip { flex: 0 0 auto; display: inline-flex; flex-direction: column; align-items: center; gap: 1px; min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: inherit; font: inherit; cursor: pointer; padding: 3px 9px; }
+.hs-ref-chip:hover { border-color: var(--accent); }
+.hs-ref-chip.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.hs-ref-lvl { font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+.hs-ref-val { font-size: 0.64rem; font-weight: 700; font-variant-numeric: tabular-nums; opacity: 0.85; }
+/* Spectrum-tag diagram. */
+.hs-ref-card--wide .hs-svg { display: block; width: 100%; height: auto; margin-top: 2px; }
+.hs-svg-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.hs-svg-ref { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.hs-dot { fill: var(--accent); opacity: 0.5; }
+.hs-dot-sel { fill: var(--accent); stroke: var(--panel); stroke-width: 1.5; }
+.hs-svg-ax { fill: var(--muted); font-size: 9px; }
+.hs-svg-sel { fill: var(--accent); font-size: 10px; font-weight: 700; }
 /* Step-by-step load maths. */
 .hs-steps { display: flex; flex-direction: column; gap: 0.25rem; }
 .hs-step { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.85rem; }

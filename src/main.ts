@@ -26053,14 +26053,56 @@ function hsDefaultVec(fam: string): Record<string, string> {
   for (const dim of Object.keys(famDef.dims)) out[dim] = famDefaultLevel(fam, dim);
   return out;
 }
-/** One dim's contribution for the breakdown: a MULTIPLIER, or a kg subtraction (band). */
-function hsDimEffect(fam: string, dim: string, vec: Record<string, string>): { mult?: number; kg?: number } {
-  if (dim === "band") return { kg: bandAssistKg(fam, vec.band ?? "none") };
-  if (dim === "lean") return { mult: leanFactorFor(fam, vec.support ?? "free", vec.lean ?? "") };
-  return { mult: famLevels(fam, dim)[vec[dim] ?? ""] ?? 1 };
+/** A (dim, level)'s effect: a MULTIPLIER, or a kg subtraction (band). */
+function hsLevelEffect(fam: string, dim: string, level: string, vec: Record<string, string>): { mult?: number; kg?: number } {
+  if (dim === "band") return { kg: bandAssistKg(fam, level) };
+  if (dim === "lean") return { mult: leanFactorFor(fam, vec.support ?? "free", level) };
+  return { mult: famLevels(fam, dim)[level] ?? 1 };
 }
 const hsR1 = (n: number): number => Math.round(n * 10) / 10;
 const hsR3 = (n: number): number => Math.round(n * 1000) / 1000;
+/** The cm value of a spectrum level key ("+25cm" → 25, "-10cm" → -10, "0cm" → 0), or null. */
+function hsCmOf(level: string): number | null {
+  const m = /^([+-]?\d+(?:\.\d+)?)cm$/.exec(level.trim());
+  return m ? parseFloat(m[1]!) : null;
+}
+/** A dim is a SPECTRUM (continuous cm scale) — too many points for a chip row, so it gets a
+ * curve diagram instead of a table (owner: ROM is a 0→N cm spectrum). ≥5 cm-valued levels. */
+function hsIsSpectrum(fam: string, dim: string): boolean {
+  return Object.keys(famLevels(fam, dim)).filter((k) => hsCmOf(k) != null).length >= 5;
+}
+/** A small inline SVG curve of a spectrum dim's MULTIPLIER as a function of cm — the defined
+ * levels are the data points, joined into the piecewise function the difficulty maths uses;
+ * the currently-picked level is marked. (Lean's factor is support-specific, so it reads the
+ * current support.) */
+function hsSpectrumSvg(fam: string, dim: string, vec: Record<string, string>): string {
+  const pts = Object.keys(famLevels(fam, dim))
+    .map((k) => ({ cm: hsCmOf(k), f: hsLevelEffect(fam, dim, k, vec).mult ?? 1, sel: (vec[dim] ?? "") === k }))
+    .filter((p): p is { cm: number; f: number; sel: boolean } => p.cm != null)
+    .sort((a, b) => a.cm - b.cm);
+  if (pts.length < 2) return "";
+  const cms = pts.map((p) => p.cm);
+  const fs = pts.map((p) => p.f);
+  const minCm = Math.min(...cms), maxCm = Math.max(...cms);
+  const minF = Math.min(...fs, 1), maxF = Math.max(...fs, 1);
+  const W = 320, H = 140, padL = 30, padR = 12, padT = 14, padB = 24;
+  const xAt = (cm: number) => padL + ((cm - minCm) / (maxCm - minCm || 1)) * (W - padL - padR);
+  const yAt = (f: number) => padT + ((maxF - f) / (maxF - minF || 1)) * (H - padT - padB);
+  const poly = pts.map((p) => `${xAt(p.cm).toFixed(1)},${yAt(p.f).toFixed(1)}`).join(" ");
+  const dots = pts.map((p) => `<circle cx="${xAt(p.cm).toFixed(1)}" cy="${yAt(p.f).toFixed(1)}" r="${p.sel ? 4.5 : 2.3}" class="${p.sel ? "hs-dot-sel" : "hs-dot"}" />`).join("");
+  const oneY = yAt(1).toFixed(1);
+  const sel = pts.find((p) => p.sel);
+  const selTxt = sel ? `<text x="${xAt(sel.cm).toFixed(1)}" y="${(yAt(sel.f) - 8).toFixed(1)}" class="hs-svg-sel" text-anchor="middle">${sel.cm}cm · ×${hsR3(sel.f)}</text>` : "";
+  return `<svg class="hs-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)} multiplier across cm">` +
+    `<line x1="${padL}" y1="${oneY}" x2="${W - padR}" y2="${oneY}" class="hs-svg-ref" />` +
+    `<text x="${W - padR}" y="${(parseFloat(oneY) - 3).toFixed(1)}" class="hs-svg-ax" text-anchor="end">×1.0</text>` +
+    `<polyline points="${poly}" class="hs-svg-line" />${dots}${selTxt}` +
+    `<text x="${padL}" y="${H - 7}" class="hs-svg-ax">${minCm}cm</text>` +
+    `<text x="${W - padR}" y="${H - 7}" class="hs-svg-ax" text-anchor="end">${maxCm}cm</text>` +
+    `<text x="2" y="${padT + 3}" class="hs-svg-ax">×${hsR3(maxF)}</text>` +
+    `<text x="2" y="${H - padB}" class="hs-svg-ax">×${hsR3(minF)}</text>` +
+  `</svg>`;
+}
 
 function renderHandstands(): void {
   const body = document.getElementById("handstandsBody");
@@ -26072,10 +26114,11 @@ function renderHandstands(): void {
   const c = hsCalc;
   const fam = familyOf(c.ex) ?? "HSPU";
   const exOpts = HS_EXERCISES.map((n) => `<option value="${escapeHtml(n)}"${n === c.ex ? " selected" : ""}>${escapeHtml(displayName(n))}</option>`).join("");
-  const dimControls = hsRelevantDims(fam, c.vec).map((dim) => {
-    const levels = Object.keys(famLevels(fam, dim));
+  // Spectrum dims (ROM, lean) are picked with a compact select here (too many cm steps for a
+  // chip row); discrete dims are the tap-to-set chip tables in the reference below.
+  const dimControls = hsRelevantDims(fam, c.vec).filter((d) => hsIsSpectrum(fam, d)).map((dim) => {
     const cur = c.vec[dim] ?? famDefaultLevel(fam, dim);
-    const opts = levels.map((lv) => `<option value="${escapeHtml(lv)}"${lv === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, lv, fam))}</option>`).join("");
+    const opts = Object.keys(famLevels(fam, dim)).map((lv) => `<option value="${escapeHtml(lv)}"${lv === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, lv, fam))}</option>`).join("");
     return `<label class="hs-field"><span class="hs-field-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="hs-dim" data-hsdim="${escapeHtml(dim)}">${opts}</select></label>`;
   }).join("");
   body.innerHTML =
@@ -26091,7 +26134,10 @@ function renderHandstands(): void {
   hsRenderOut();
 }
 
-/** Recompute + redraw ONLY the results block (so typing in a number input keeps its focus). */
+/** Recompute + redraw the results + the full tag reference (keeps the number inputs' focus —
+ * they live in the un-rebuilt .hs-controls). The reference shows EVERY variation of every tag
+ * and its effect: discrete tags as tap-to-set chip rows, spectrum tags (ROM/lean) as cm→×
+ * curve diagrams. */
 function hsRenderOut(): void {
   const c = hsCalc;
   if (!c) return;
@@ -26108,26 +26154,32 @@ function hsRenderOut(): void {
   const formula = currentFormula();
   const effE1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, c.reps, formula) : null;
   const addedE1RM = effE1RM != null ? effE1RM - bwLoad : null;
-  const rows = hsRelevantDims(fam, c.vec).map((dim) => {
-    const eff = hsDimEffect(fam, dim, c.vec);
-    const lvl = afLevelText(dim, c.vec[dim] ?? "", fam);
-    const val = eff.kg !== undefined ? (eff.kg ? `−${hsR1(eff.kg)} kg` : "—") : `×${hsR3(eff.mult ?? 1)}`;
-    const neutral = eff.kg !== undefined ? eff.kg === 0 : (eff.mult ?? 1) === 1;
-    return `<div class="hs-brk-row${neutral ? " is-neutral" : ""}"><span class="hs-brk-dim">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><span class="hs-brk-lvl">${escapeHtml(lvl)}</span><span class="hs-brk-val">${val}</span></div>`;
+  // FULL reference — every variation of every relevant tag and its effect.
+  const refCards = hsRelevantDims(fam, c.vec).map((dim) => {
+    const lbl = escapeHtml(AF_DIM_LBL[dim] ?? dim);
+    if (hsIsSpectrum(fam, dim)) {
+      const curF = hsLevelEffect(fam, dim, c.vec[dim] ?? "", c.vec).mult ?? 1;
+      return `<div class="hs-ref-card hs-ref-card--wide"><div class="hs-ref-dim">${lbl}<span class="hs-ref-cur">${escapeHtml(afLevelText(dim, c.vec[dim] ?? "", fam))} · ×${hsR3(curF)}</span></div>${hsSpectrumSvg(fam, dim, c.vec)}</div>`;
+    }
+    const chips = Object.keys(famLevels(fam, dim)).map((k) => {
+      const eff = hsLevelEffect(fam, dim, k, c.vec);
+      const val = eff.kg !== undefined ? (eff.kg ? `−${hsR1(eff.kg)}kg` : "0kg") : `×${hsR3(eff.mult ?? 1)}`;
+      const on = (c.vec[dim] ?? "") === k;
+      return `<button type="button" class="hs-ref-chip${on ? " is-on" : ""}" data-hsdim="${escapeHtml(dim)}" data-hslvl="${escapeHtml(k)}"><span class="hs-ref-lvl">${escapeHtml(afLevelText(dim, k, fam))}</span><span class="hs-ref-val">${val}</span></button>`;
+    }).join("");
+    return `<div class="hs-ref-card"><div class="hs-ref-dim">${lbl}</div><div class="hs-ref-chips">${chips}</div></div>`;
   }).join("");
   out.innerHTML =
-    `<div class="hs-brk"><div class="hs-brk-head">tags</div>${rows}` +
-      `<div class="hs-brk-row hs-brk-total"><span class="hs-brk-dim">total multiplier</span><span class="hs-brk-lvl"></span><span class="hs-brk-val">×${hsR3(mult)}</span></div>` +
-    `</div>` +
     `<div class="hs-steps">` +
       `<div class="hs-step"><span>bodyweight share</span><span>${hsR1(bw)} × ${coeff} = <b>${hsR1(bwLoad)} kg</b></span></div>` +
       `<div class="hs-step"><span>+ added weight</span><span><b>${hsR1(baseLoad)} kg</b></span></div>` +
-      `<div class="hs-step"><span>× tags${bandKg ? ` − band ${hsR1(bandKg)} kg` : ""}</span><span><b>${hsR1(scaledLoad)} kg</b> effective</span></div>` +
+      `<div class="hs-step"><span>× tags ×${hsR3(mult)}${bandKg ? ` − band ${hsR1(bandKg)} kg` : ""}</span><span><b>${hsR1(scaledLoad)} kg</b> effective</span></div>` +
     `</div>` +
     `<div class="hs-results">` +
       `<div class="hs-res"><span class="hs-res-lbl">effective 1RM</span><span class="hs-res-num">${effE1RM != null ? hsR1(effE1RM) + " kg" : "—"}</span></div>` +
       `<div class="hs-res hs-res-main"><span class="hs-res-lbl">added-weight 1RM</span><span class="hs-res-num">${addedE1RM != null ? hsR1(addedE1RM) + " kg" : "—"}</span></div>` +
-    `</div>`;
+    `</div>` +
+    `<div class="hs-ref"><div class="hs-ref-head">how each tag affects difficulty — tap a value to set it</div>${refCards}</div>`;
 }
 
 function setupHandstands(): void {
@@ -26139,15 +26191,19 @@ function setupHandstands(): void {
     if (t.matches(".hs-ex")) {
       hsCalc.ex = (t as HTMLSelectElement).value;
       hsCalc.vec = hsDefaultVec(familyOf(hsCalc.ex) ?? "HSPU");
-      renderHandstands(); // family changed → rebuild the dim controls
+      renderHandstands(); // family changed → rebuild the spectrum selects
       return;
     }
-    if (t.matches(".hs-dim")) {
-      const dim = (t as HTMLElement).dataset.hsdim!;
-      hsCalc.vec[dim] = (t as HTMLSelectElement).value;
-      if (dim === "support") renderHandstands(); // support drives which dims apply
-      else hsRenderOut();
+    if (t.matches(".hs-dim")) { // a spectrum select (ROM / lean)
+      hsCalc.vec[(t as HTMLElement).dataset.hsdim!] = (t as HTMLSelectElement).value;
+      hsRenderOut();
     }
+  });
+  body.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".hs-ref-chip");
+    if (!chip || !hsCalc) return;
+    hsCalc.vec[chip.dataset.hsdim!] = chip.dataset.hslvl!;
+    hsRenderOut(); // recompute + redraw (support change also re-derives which tags are relevant)
   });
   body.addEventListener("input", (e) => {
     const t = e.target as HTMLElement;
