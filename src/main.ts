@@ -3297,6 +3297,28 @@ function closeTitleExListMenu(): void {
   document.getElementById("titleExList")?.remove();
   document.removeEventListener("click", titleExListOutside, true);
 }
+/** The selected-lift chips for the "N exercises" dropdown (shared by open + refresh so they
+ * can't drift). Each opens that lift's Info/Combine/Compare/Remove menu. */
+function titleExListChipsHtml(scope: SelScope): string {
+  const sel = scope === "graph" ? waGraphSel : waSelected;
+  const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
+  return sel
+    .map((n) => `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`)
+    .join("");
+}
+/** Keep an OPEN "N exercises" dropdown alive across the re-render that removing a lift from it
+ * triggers (owner: "the exercise list shouldn't close after removing an exercise") — rule 24:
+ * a floating menu must survive the re-render its own options cause. Rebuilds the chips in place
+ * from the current selection; closes only when nothing is left to show. */
+function syncTitleExListMenu(): void {
+  const m = document.getElementById("titleExList");
+  if (!m) return;
+  const scope = (m.dataset.scope as SelScope) ?? "graph";
+  const sel = scope === "graph" ? waGraphSel : waSelected;
+  if (!sel.length) { closeTitleExListMenu(); return; }
+  const grid = m.querySelector(".title-exlist-grid");
+  if (grid) grid.innerHTML = titleExListChipsHtml(scope);
+}
 function titleExListOutside(e: MouseEvent): void {
   const t = e.target as HTMLElement;
   if (t.closest("#titleExList") || t.closest("[data-titlelist]") || t.closest("#liftMenu")) return;
@@ -3306,14 +3328,9 @@ function openTitleExListMenu(anchor: HTMLElement, scope: SelScope): void {
   const existing = document.getElementById("titleExList");
   if (existing && existing.dataset.scope === scope) { closeTitleExListMenu(); return; }
   closeTitleExListMenu();
-  const sel = scope === "graph" ? waGraphSel : waSelected;
-  const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
-  const chips = sel
-    .map((n) => `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`)
-    .join("");
   const m = document.createElement("div");
   m.id = "titleExList"; m.className = "title-exlist"; m.dataset.scope = scope;
-  m.innerHTML = `<div class="title-exlist-grid">${chips}</div>`;
+  m.innerHTML = `<div class="title-exlist-grid">${titleExListChipsHtml(scope)}</div>`;
   document.body.appendChild(m);
   clampMenuIntoView(m, anchor);
   setTimeout(() => document.addEventListener("click", titleExListOutside, true), 0);
@@ -20394,6 +20411,7 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       : "";
     wrap.querySelector<HTMLElement>(".addm-actions")?.insertAdjacentHTML("beforebegin",
       `<div class="addm-edit-foot">` +
+      `<button type="button" class="addm-edit-act addm-edit-exp${isExperimental(ex) ? " is-on" : ""}" data-editexp aria-pressed="${isExperimental(ex)}" title="Experimental — a scratchpad lift; its sets are excluded from all 1RM / volume / graphs / leaderboards AND auto-marked not comparable. Tap to toggle for ${escapeHtml(displayName(ex))}.">🧪 ${isExperimental(ex) ? "experimental" : "experimental?"}</button>` +
       `<button type="button" class="addm-edit-act addm-edit-nc${nc ? " is-on" : ""}" data-editnc aria-pressed="${nc}" title="Not comparable — keep reps/sets but drop this set's 1RM &amp; volume">⊘ ${nc ? "not comparable" : "not comparable?"}</button>` +
       resetBtn +
       `<button type="button" class="addm-edit-act addm-edit-del" data-editdel title="Delete this set">🗑 delete</button>` +
@@ -20519,6 +20537,21 @@ function onAddModalClick(e: MouseEvent): void {
     if (t.closest("[data-editreset]")) {
       delete setOverrides[editSid]; saveSetOverrides();
       closeAddModal();
+      refreshAfterDifficultyEdit();
+      return;
+    }
+    const expBtn = t.closest<HTMLElement>("[data-editexp]");
+    if (expBtn) {
+      // Per-EXERCISE experimental flag (owner: "why experimental? I didn't set it, can't unset
+      // it") — unsettable right here now, not only in the Index card. Experimental auto-implies
+      // not-comparable (computeRecord), so turning it off clears both the EXP badge and the
+      // grey "uncomparable" sets. Refresh so the history badge updates live behind the modal.
+      const exNow = form.dataset.addex ?? "";
+      const on = !isExperimental(exNow);
+      setExperimental(exNow, on);
+      expBtn.classList.toggle("is-on", on);
+      expBtn.setAttribute("aria-pressed", String(on));
+      expBtn.textContent = `🧪 ${on ? "experimental" : "experimental?"}`;
       refreshAfterDifficultyEdit();
       return;
     }
@@ -24067,7 +24100,7 @@ function renderGdashTabs(): void {
 function renderGraphDashboard(): void {
   const box = document.getElementById("waGraph");
   if (!box) return;
-  closeTitleExListMenu(); // a stale "N exercises" dropdown can't survive the title rebuild
+  syncTitleExListMenu(); // keep an open "N exercises" dropdown alive (refresh in place), so removing a lift from it doesn't close it (owner)
   ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
   const tab = activeTab(graphDash);
   if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
