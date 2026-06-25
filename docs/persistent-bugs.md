@@ -1,5 +1,18 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-54 — Unilateral set: the EDIT menu drops the second side (add ≠ edit)
+
+- **First seen / reported:** recurring; latest 2026-06-25, mobile (Brave, Android, b.2.9.295), Edit set — One Arm Dumbbell Preacher Curl. Owner #persistent: the ADD menu shows the two-sided unilateral layout (`R 9×10 · L W×reps`) but the EDIT menu shows only ONE pair (`8×8`) — you can't see or edit the left side. "the add and edit menus should be made from the same base component, single source, why are they different?"
+- **Why it keeps recurring (the repeated-failure analysis):** the add and edit set menus LOOK unified (both open `openAddModal`), but they were only sharing the SHELL — the behaviour forked through mode conditionals and two save paths:
+  - **Reveal forked:** `syncAddmReal` computed `const uni = isUni(ex) && !form.dataset.editsid` — explicitly hiding the left-side inputs in edit mode (a leftover from when unilateral sets were edited via the old per-side table editor).
+  - **Save forked:** ADD ran `onInlineAddGo` (which read the left inputs + stored a per-side divergence via `setSideDivergence` + set the weaker side as the base); EDIT branched to `applySetEdit`, which never touched the sides at all.
+  So every time the modal was "unified" again, these two `editsid`-gated forks survived and the second side silently vanished on edit. The root is rule 65: a SHARED shell with mode-conditional internals is still two components.
+- **Fix (b.2.9.296, PB-54):** extracted the side maths into ONE pure function `resolveSides(rW,rR,lW,lR)` in `unilateral.ts` (returns the divergence to store + the weaker-side base); `applyUnilateralSides` wraps it with persistence. BOTH paths now call it: `syncAddmReal` reveals the sides in add AND edit (dropped the `editsid` gate); `openAddModal`'s edit branch prefills both sides from `sideValues`; `applySetEdit` reads the left inputs and stores the divergence through the same helper. Pure-function tests lock the behaviour (`unilateral.test.ts`), and a Stop-hook guard (`scripts/rules-check.cjs`) flags any re-introduction of `isUni(...) && !…editsid` or an `applyUnilateralSides` that stops calling `resolveSides`.
+- **Watch:** any future "edit ≠ add" for a set attribute is THIS class — search for `dataset.editsid` / `isEdit` conditionals that hide or skip a field, and route the logic through one shared (ideally pure) function instead. A shared shell is not a shared component.
+- **Recurrences:** 3+ (the unilateral edit/add divergence has been reported and patched multiple times; this is the first ROOT fix — one shared resolver + a hook, not another mode-patch).
+
+---
+
 ## PB-53 — Add-set: the WHOLE modal card spills off the right edge (out-of-bounds, the real root)
 
 - **First seen / reported:** 2026-06-24, mobile (b.2.9.280), Add set — Handstand Push Ups. Owner #persistent: "still out of bounds" — and crucially "the width may vary, the fix has to be for ALL sizes". The previous fixes (PB-49, PB-52) targeted INNER rows, but the whole card (NOTE field, SUGGESTED row, the blue Add button — all `width:100%` of the card) ran off the right edge, proving the CARD ITSELF was wider than the viewport, not just one row.

@@ -3,11 +3,39 @@ import {
   isUnilateralName,
   isUnilateral,
   sideValues,
+  resolveSides,
   sidesDiffer,
   divergenceEmpty,
   setUnits,
   explodeSides,
 } from "./unilateral";
+
+describe("resolveSides — the single source add & edit share (PB-54)", () => {
+  it("empty left inputs (NaN) → linked, no divergence, base = right", () => {
+    const r = resolveSides(20, 8, NaN, NaN);
+    expect(r.divergence).toBeNull();
+    expect(r.base).toEqual({ weight: 20, reps: 8 });
+  });
+  it("left equal to right → linked (clears divergence)", () => {
+    expect(resolveSides(20, 8, 20, 8).divergence).toBeNull();
+  });
+  it("weaker LEFT becomes the base; divergence stores both sides", () => {
+    const r = resolveSides(20, 8, 15, 8); // left lighter → weaker
+    expect(r.base).toEqual({ weight: 15, reps: 8 });
+    expect(r.divergence).toEqual({ rWeight: 20, rReps: 8, lWeight: 15, lReps: 8 });
+  });
+  it("weaker RIGHT stays the base when the left is stronger", () => {
+    expect(resolveSides(20, 8, 25, 8).base).toEqual({ weight: 20, reps: 8 });
+  });
+  it("only a left REPS difference still diverges (left reps fewer → weaker)", () => {
+    const r = resolveSides(20, 8, NaN, 5);
+    expect(r.base).toEqual({ weight: 20, reps: 5 });
+    expect(r.divergence).toEqual({ rWeight: 20, rReps: 8, lWeight: 20, lReps: 5 });
+  });
+  it("bodyweight (null weight): fewer reps on a side is weaker", () => {
+    expect(resolveSides(null, 10, NaN, 7).base).toEqual({ weight: null, reps: 7 });
+  });
+});
 
 describe("unilateral name detection", () => {
   it("matches clear single-side names (raw and normalised)", () => {

@@ -50,6 +50,21 @@ for (const f of ["src/main.ts", "src/styles.css", "src/changelog.ts", "index.htm
   }
 }
 
+// ── PB-54 guard: ADD and EDIT set menus must NOT diverge ────────────────────────
+// The unilateral two-sided inputs were repeatedly missing in EDIT because the reveal /
+// save was gated on edit mode (`!form.dataset.editsid`), making the EDIT menu a quietly
+// different component from ADD (rule 65). Flag any re-introduction of edit-mode gating on
+// the unilateral reveal, and ensure both paths still go through the ONE shared resolver.
+{
+  const main = read("src/main.ts");
+  if (/isUni\([^)]*\)\s*&&\s*!\s*\w+\.dataset\.editsid/.test(main)) {
+    violations.push("the unilateral inputs are gated on edit mode again (`isUni(...) && !…dataset.editsid`) — that makes the EDIT set menu diverge from ADD (rule 65 / PB-54). Reveal the sides in BOTH; let `applyUnilateralSides`/`resolveSides` handle add & edit identically.");
+  }
+  if (main.includes("function applyUnilateralSides") && !main.includes("resolveSides(")) {
+    violations.push("applyUnilateralSides no longer calls the shared `resolveSides` core (PB-54) — add & edit must compute unilateral sides through the ONE pure function so they can't drift.");
+  }
+}
+
 // ── Reply-format check (rules 4/39/40/44 — runs EVERY turn) ────────────────────
 // Read the newest session transcript (same source as show-cost.py) and inspect the
 // LAST assistant text reply — the one the owner just saw — for the reply-format rules.

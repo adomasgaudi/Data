@@ -89,7 +89,7 @@ import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
-import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
+import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 // The visual pose editor (3-D three.js scene, 2-D drawn figure, photo frames) was
 // warehoused on 2026-06-10 — it is DORMANT (no .pose3d/.pose-draw/.pose-photo-scrub
@@ -19559,7 +19559,9 @@ function syncAddmReal(form: HTMLElement): void {
   const eq = ex ? equipSettingsCurrent(ex) : null;
   // Unilateral lifts get a second (left) weight×reps pair in the ADD path so both sides are
   // editable up front (owner); the expanded-table editor still handles editing an existing set.
-  const uni = !!ex && isUni(ex) && !form.dataset.editsid;
+  // PB-54: show the two-sided inputs in BOTH add AND edit (the edit modal is the SAME editor now,
+  // rule 65) — the old `&& !form.dataset.editsid` hid the left side when editing a unilateral set.
+  const uni = !!ex && isUni(ex);
   for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
     const lside = ln.querySelector<HTMLElement>(".wo-af-lside");
     const rlbl = ln.querySelector<HTMLElement>(".wo-af-sidelbl-r");
@@ -20331,6 +20333,16 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       formEl.dataset.editsid = edit.sid;
       formEl.dataset.editnote = edit.note;
       formEl.dataset.editorignote = edit.rawNote;
+      // PB-54: a unilateral set must open with BOTH sides populated (the edit modal is the same
+      // editor as add — rule 65). Fill right + left from the set's stored divergence, then reveal
+      // the left inputs via syncAddmReal (the right/primary was already set from `prefill`).
+      if (isUni(ex)) {
+        const sv = sideValues(prefill?.reps ?? null, prefill?.weight ?? null, setSidesStore[edit.sid]);
+        const setIn = (sel: string, v: number | null) => { const el = formEl.querySelector<HTMLInputElement>(sel); if (el) el.value = v != null ? String(v) : ""; };
+        setIn(".wo-af-weight", sv.right.weight); setIn(".wo-af-reps", sv.right.reps);
+        setIn(".wo-af-weight-l", sv.left.weight); setIn(".wo-af-reps-l", sv.left.reps);
+        syncAddmReal(formEl);
+      }
     }
     // Free-text note = the set's RAW note (not the synthetic __set: key or auto tags).
     const noteEl = wrap.querySelector<HTMLInputElement>(".wo-af-note");
@@ -20778,6 +20790,18 @@ function toggleInlineAddExerciseForm(btn: HTMLElement) {
 /** Save an EDIT of one existing set (PB-46): the add-modal form opened in edit mode UPDATES the
  * set's per-set overrides in place — weight/reps, the free note, every variation tag, incline,
  * ROM and RIR — then re-renders and closes. Reuses the exact per-set setters the add path uses. */
+/** SINGLE SOURCE for a unilateral set's two sides, shared by the ADD and EDIT paths (rule 65 —
+ * add & edit must compute sides identically, not diverge). Given the right side (rW/rR) and the
+ * left inputs (lW/lR, NaN = empty → linked to the right), it stores the per-side divergence (or
+ * clears it when the sides are identical) and returns the BASE reps/weight the record should
+ * carry = the WEAKER side (so every 1RM/strength calc uses the weaker arm; volume sums both via
+ * explodeSides). PB-54: the edit path used to skip all of this, so editing a unilateral set lost
+ * its second side. */
+function applyUnilateralSides(id: string, rW: number | null, rR: number, lW: number, lR: number): { weight: number | null; reps: number } {
+  const res = resolveSides(rW, rR, lW, lR); // the PURE, tested core (unilateral.ts) — add & edit share it
+  setSideDivergence(id, res.divergence ?? {}); // null → {} → divergenceEmpty → clears the store key
+  return res.base;
+}
 function applySetEdit(form: HTMLElement): boolean {
   const sid = form.dataset.editsid!;
   const ex = form.dataset.addex ?? "";
@@ -20790,6 +20814,15 @@ function applySetEdit(form: HTMLElement): boolean {
   const r = rTxt === "" ? null : Math.round(parseFloat(rTxt));
   setSetOverrideField(sid, "weight", w !== null && Number.isFinite(w) ? w : null);
   setSetOverrideField(sid, "reps", r !== null && Number.isFinite(r) ? r : null);
+  // PB-54: a unilateral set edits BOTH sides — read the left inputs and store the divergence via
+  // the SAME helper the add path uses, then set the base to the weaker side (rule 65 single source).
+  if (isUni(ex) && r !== null && Number.isFinite(r)) {
+    const lW = parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight-l")?.value.trim() || "");
+    const lR = Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps-l")?.value.trim() || ""));
+    const base = applyUnilateralSides(sid, w !== null && Number.isFinite(w) ? w : null, r, lW, lR);
+    setSetOverrideField(sid, "weight", base.weight);
+    setSetOverrideField(sid, "reps", base.reps);
+  }
   setSetOverrideNote(sid, form.querySelector<HTMLInputElement>(".wo-af-note")?.value ?? "", origNote);
   // Tags: write EVERY dim's chosen level to the set's vec, so a change back to default also applies.
   for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
@@ -20975,22 +21008,13 @@ function onInlineAddGo(form: HTMLElement): boolean {
   // base record's weight/reps to the WEAKER side so every strength/1RM calc uses the weaker arm
   // (volume/counting still sum both sides via explodeSides). Sides equal → stay linked (no store).
   if (isUni(exerciseName)) {
-    // Rough 1RM proxy (same lift on both sides, so only the ordering matters): Epley for weighted,
-    // reps as the tiebreak for bodyweight / equal-weight.
-    const sideScore = (w: number | null, r: number) => (w && w > 0 ? w * (1 + r / 30) : 0) + r * 1e-3;
     for (let i = 0; i < setLines.length; i++) {
       const l = setLines[i]!;
-      const hasL = Number.isFinite(l.lWeight) || Number.isFinite(l.lReps);
-      if (!hasL) continue;
-      const rW = Number.isFinite(l.weight) ? l.weight : null;
-      const rR = l.reps;
-      const lW = Number.isFinite(l.lWeight) ? l.lWeight : rW;
-      const lR = Number.isFinite(l.lReps) ? l.lReps : rR;
-      if (lW === rW && lR === rR) continue; // identical sides → leave linked
+      if (!(Number.isFinite(l.lWeight) || Number.isFinite(l.lReps))) continue; // no left side typed → linked
       const id = `${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+      const base = applyUnilateralSides(id, Number.isFinite(l.weight) ? l.weight : null, l.reps, l.lWeight, l.lReps);
       const ent = manualEntries[startIdx + i];
-      if (ent && sideScore(lW, lR) < sideScore(rW, rR)) { ent.weight = lW; ent.reps = lR; } // weaker = base
-      setSideDivergence(id, { rWeight: rW, rReps: rR, lWeight: lW, lReps: lR });
+      if (ent) { ent.weight = base.weight; ent.reps = base.reps; } // weaker side = the stored base
     }
   }
   // Custom ×multiplier per line → store as scaleAbs (replace the total) or scale (multiply on top).

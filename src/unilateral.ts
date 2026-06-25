@@ -58,6 +58,26 @@ export function sideValues(reps: number | null, weight: number | null, d?: SideD
   };
 }
 
+export interface SidesResolution {
+  /** The divergence to STORE — null means the sides are linked, so any stored divergence is cleared. */
+  divergence: SideDivergence | null;
+  /** The base reps/weight the record carries = the WEAKER side (so 1RM/strength use the weaker arm).
+   * reps is always a number (the right side's reps is the floor), weight may be null (bodyweight). */
+  base: { weight: number | null; reps: number };
+}
+/** SINGLE SOURCE (rule 65 / PB-54) for turning a right side + the (maybe empty) left inputs into
+ * the stored divergence + the record's base. `lW`/`lR` === NaN means "left not entered" → linked
+ * to the right. Both the ADD and EDIT paths call this, so editing and adding a unilateral set can
+ * NEVER diverge again (the recurring bug: edit silently dropped the second side). */
+export function resolveSides(rW: number | null, rR: number, lW: number, lR: number): SidesResolution {
+  const lWv = Number.isFinite(lW) ? lW : rW;
+  const lRv = Number.isFinite(lR) ? lR : rR;
+  if (lWv === rW && lRv === rR) return { divergence: null, base: { weight: rW, reps: rR } };
+  const score = (w: number | null, r: number) => (w && w > 0 ? w * (1 + r / 30) : 0) + r * 1e-3;
+  const base = score(lWv, lRv) < score(rW, rR) ? { weight: lWv, reps: lRv } : { weight: rW, reps: rR };
+  return { divergence: { rWeight: rW, rReps: rR, lWeight: lWv, lReps: lRv }, base };
+}
+
 /** Whether the two sides carry different reps or weight (false = perfectly linked). */
 export function sidesDiffer(b: BothSides): boolean {
   return b.right.reps !== b.left.reps || b.right.weight !== b.left.weight;
