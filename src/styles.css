@@ -2811,6 +2811,14 @@ sup.wr-bw { font-size: 0.85em; }
 .wo-perdate[data-persize="2"] .wo-permain { font-size: 1.2rem; }
 .wo-perdate[data-persize="3"] .wo-permain { font-size: 1.45rem; }
 .wo-perdate[data-persize="4"] .wo-permain { font-size: 1.7rem; }
+/* TEMP gap diagnostic (UI-50): outline the history-section containers in distinct colours so
+   one screenshot shows which box owns the empty space under "N exercises". Remove next turn.
+   green=title · red=exercise selector · orange=taxonomy · blue=calendar · purple=table. */
+.wa-seltitle-box { outline: 2px solid green !important; }
+#waExerciseSelectorHist { outline: 2px solid red !important; }
+#waAssign { outline: 2px solid orange !important; }
+#workoutCalendar { outline: 2px solid blue !important; }
+#waTable { outline: 2px solid purple !important; }
 /* Slight separators between day rows when the week / month / year changes (the list
    is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder
    accent line plus a year chip. */
@@ -3110,11 +3118,14 @@ sup.wr-bw { font-size: 0.85em; }
    WRAP, but stay left of the weight"): nowrap keeps the tag block (.addm-line-vars, flex:1 1 auto)
    on the left and the weight group (.addm-line-main, flex:0 0 auto) on the right — the tags wrap
    WITHIN their own block (min-width:0) instead of the weight dropping to a line below them. */
-.addm-line { display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; min-width: 0; }
+/* WRAP (owner): when many tags OR long weight/reps numbers fill the row, the weight group
+   (and its RIR) must WRAP to the next line instead of pushing the RIR out of the card. */
+.addm-line { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0.3rem 0.5rem; margin: 0.15rem 0; min-width: 0; }
 /* A faint dashed divider between sets so it's clear which tags belong to which set (owner). */
 .addm-lines > .addm-line + .addm-line { border-top: 1px dashed var(--line); padding-top: 0.6rem; }
-/* No margin-left:auto — the weight group sits right after the tags, not pinned to the far edge. */
-.addm-line-main { display: flex; align-items: center; gap: 0.4rem; flex: 0 0 auto; }
+/* No margin-left:auto — the weight group sits right after the tags, not pinned to the far edge.
+   max-width:100% + flex-wrap let the RIR / ✕ drop below the weight box rather than overflow. */
+.addm-line-main { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; flex: 0 0 auto; max-width: 100%; min-width: 0; }
 /* PB-43 — END the escalation war. The weight/reps box was rewritten 6× (chip → outlined →
    plain-text "remove the input look" → "invisible" → visible-box …), ping-ponging between
    "looks like an input" and "I can't see/find it". The owner's reconciling spec: TWO small
@@ -4963,7 +4974,9 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
      under the "N exercises" count title — owner: "why so much empty space"). line-height
      tightened too. */
   display: block; min-height: var(--tap-min); line-height: 1.4;
-  position: relative; /* anchor for the top-right Pick box */
+  /* NOT position:relative anymore — the Pick box now anchors to the fold SUMMARY (which is
+     position:relative) so it lines up in the SAME right-edge column as the ▲ collapse caret,
+     stacked directly under it (owner: "+ should be under the collapse btn, not floating"). */
 }
 /* Reserve room at the right edge ONLY when the Pick tab is present, so the inline ✕ / ≈ /
    names never slide UNDER it. (When there's no selection there's no tab and no reserve.) */
@@ -5144,7 +5157,10 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    the collapse caret (the caret sits at top:0.5rem; this drops below it). Still opens the
    exercise picker on tap (the drag handle is gone — a tap is enough). */
 .wa-title-picker {
-  position: absolute; top: 0; right: 0; z-index: 4;
+  /* top = caret top (0.5rem) + caret height + a 4px gap → sits one button below the ▲ caret,
+     right:0 matches the caret's column. Anchored to the summary (seltitle-box is no longer
+     positioned). */
+  position: absolute; top: calc(0.5rem + var(--tap-min) + 4px); right: 0; z-index: 4;
   display: inline-flex; align-items: center; justify-content: center;
   width: var(--tap-min); height: var(--tap-min); padding: 0; margin: 0;
   cursor: pointer; white-space: nowrap; -webkit-user-select: none; user-select: none;

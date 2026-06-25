@@ -7606,8 +7606,14 @@ function periodHeaderParts(start: string, period: HistoryPeriod): { main: string
   const mIdx = Number(start.slice(5, 7)) - 1;
   if (period === "month") return { main: MONTH_FULL[mIdx] ?? "", sub: `${MONTH_ABBR[mIdx]} ${y}`, size: 3 };
   if (period === "3month") return { main: `${MONTH_ABBR[mIdx]}–${MONTH_ABBR[mIdx + 2] ?? ""}`, sub: y, size: 4 };
+  // Week / 2-week: the MAIN label IS the from–to range (owner: "Jun 22" alone isn't as clear
+  // as "Jun 22–29"); no gray sub (it just repeated the start). Same month → "Jun 22–29";
+  // across months → "Jun 29 – Jul 5".
   const end = addDaysIso(start, period === "2week" ? 13 : 6);
-  return { main: shortDate(start), sub: `${shortDate(start)} – ${shortDate(end)}`, size: period === "2week" ? 2 : 1 };
+  const range = start.slice(0, 7) === end.slice(0, 7)
+    ? `${shortDate(start)}–${String(Number(end.slice(8, 10)))}`
+    : `${shortDate(start)} – ${shortDate(end)}`;
+  return { main: range, sub: "", size: period === "2week" ? 2 : 1 };
 }
 /** Header label for one period group (e.g. "Week of May 25", "May 2025", "Apr–Jun 2025"). */
 function periodGroupLabel(start: string, period: HistoryPeriod): string {
@@ -8778,7 +8784,7 @@ function renderWorkoutsPage() {
         const ph = periodHeaderParts(g.date, period);
         return (
           `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
-          `<div class="wo-date wo-perdate" data-persize="${ph.size}">${yearMark}<span class="caret">▸</span><span class="wo-permain">${escapeHtml(ph.main)}</span> <span class="wo-persub">${escapeHtml(ph.sub)}</span>${tagBtn}</div>` +
+          `<div class="wo-date wo-perdate" data-persize="${ph.size}">${yearMark}<span class="caret">▸</span><span class="wo-permain">${escapeHtml(ph.main)}</span>${ph.sub ? ` <span class="wo-persub">${escapeHtml(ph.sub)}</span>` : ""}${tagBtn}</div>` +
           `<div class="wo-did">${did}${addExBtn}</div></td></tr>`
         );
       }
