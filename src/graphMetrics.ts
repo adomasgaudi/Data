@@ -219,15 +219,37 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
  * curve should jump on 1d view). We instead look back (windowDays − 1) whole days, so "1d" = the
  * SAME calendar day only, "1w" = today + 6 prior days, etc.; the line then drops between periods. */
 function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
-  if (windowMs == null || !Number.isFinite(windowMs)) return runningMax(pts);
-  const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
-  const dayOf = (x: number) => Math.floor(x / DAY);
-  return pts.map((p, i) => {
-    const di = dayOf(p.x);
-    let m = p.y;
-    for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
-    return { x: p.x, y: r1(m) };
-  });
+  let raw: GraphPoint[];
+  if (windowMs == null || !Number.isFinite(windowMs)) {
+    raw = runningMax(pts);
+  } else {
+    const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
+    const dayOf = (x: number) => Math.floor(x / DAY);
+    raw = pts.map((p, i) => {
+      const di = dayOf(p.x);
+      let m = p.y;
+      for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
+      return { x: p.x, y: r1(m) };
+    });
+  }
+  return keepLevelCorners(raw);
+}
+
+/** Drop the strength-line vertices that DON'T change the level — a weaker set sitting in the
+ * shadow of a stronger recent one keeps the windowed max flat, so it added a confusing dot at
+ * a value that isn't your real strength (owner: "don't add data points for the strength line
+ * when weaker sets are done, it confuses which one is real"). Keep only the CORNERS (a point
+ * whose y differs from a neighbour → where the level actually steps up or dips) plus the two
+ * endpoints, so the line keeps its flat-then-step shape and the genuine lull-dips (CHART-217)
+ * but loses the weak-set dots. Does not touch the per-set 1RM scatter — that's a separate metric. */
+function keepLevelCorners(pts: GraphPoint[]): GraphPoint[] {
+  if (pts.length <= 2) return pts;
+  const out: GraphPoint[] = [pts[0]!];
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (pts[i]!.y !== pts[i - 1]!.y || pts[i]!.y !== pts[i + 1]!.y) out.push(pts[i]!);
+  }
+  out.push(pts[pts.length - 1]!);
+  return out;
 }
 
 /** Select the points that feed the projection fit, per the configured basis.

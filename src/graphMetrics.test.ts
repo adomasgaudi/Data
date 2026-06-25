@@ -156,6 +156,25 @@ describe("graph metric registry (TASK 26)", () => {
     expect(s.map((p) => p.y)).toEqual([100, 100]); // running max holds at 100
   });
 
+  it("strength line drops shadowed weak-set vertices, keeps corners + lull dips (UI-47)", () => {
+    // A strong session, then two WEAKER sessions inside a 28-day window (shadowed by the
+    // strong one), then a new PR. The weak sessions must NOT add their own data points —
+    // the line holds flat at the proven level, then steps up. (Owner: weaker sets confuse
+    // which point is real.)
+    const recs = [
+      rec({ date: "2024-01-01", weight: 100, reps: 1 }), // 100
+      rec({ date: "2024-01-08", weight: 90, reps: 1 }),  // weaker, shadowed → no vertex
+      rec({ date: "2024-01-15", weight: 92, reps: 1 }),  // weaker, shadowed → no vertex
+      rec({ date: "2024-01-22", weight: 110, reps: 1 }), // new PR → vertex
+    ];
+    const cfg = { ...DEFAULT_GRAPH_CONFIG, strengthWindow: 28 * 24 * 3600 * 1000 };
+    const ys = graphMetric("strength")!.compute!(recs, cfg).map((p) => p.y);
+    // Endpoints + the step: flat 100 (start + last-before-jump) then 110 — never 90/92.
+    expect(ys).toEqual([100, 100, 110]);
+    expect(ys).not.toContain(90);
+    expect(ys).not.toContain(92);
+  });
+
   it("predicted strength needs ≥3 points, else empty (TASK 36 missing-data)", () => {
     const few = [rec({ date: "2024-01-01" }), rec({ date: "2024-02-01" })];
     expect(graphMetric("predicted")!.compute!(few, DEFAULT_GRAPH_CONFIG)).toEqual([]);
