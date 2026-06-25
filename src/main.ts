@@ -7592,6 +7592,23 @@ const WO_REST_UNIT: Record<(typeof WO_VIEW_MODES)[number], string> = {
 function historyPeriod(mode: typeof S.workoutViewMode): HistoryPeriod | null {
   return mode === "day" ? null : mode;
 }
+const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const addDaysIso = (iso: string, n: number): string => {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+/** Period-grouped date header (owner: when grouping by week/month/… the MAIN date should be
+ * clear + grow with the period — "June" for a month — with NO weekday ("Monday"), and the exact
+ * span shown small for accuracy. `size` scales the main label (bigger period → bigger). */
+function periodHeaderParts(start: string, period: HistoryPeriod): { main: string; sub: string; size: number } {
+  const y = start.slice(0, 4);
+  const mIdx = Number(start.slice(5, 7)) - 1;
+  if (period === "month") return { main: MONTH_FULL[mIdx] ?? "", sub: `${MONTH_ABBR[mIdx]} ${y}`, size: 3 };
+  if (period === "3month") return { main: `${MONTH_ABBR[mIdx]}–${MONTH_ABBR[mIdx + 2] ?? ""}`, sub: y, size: 4 };
+  const end = addDaysIso(start, period === "2week" ? 13 : 6);
+  return { main: shortDate(start), sub: `${shortDate(start)} – ${shortDate(end)}`, size: period === "2week" ? 2 : 1 };
+}
 /** Header label for one period group (e.g. "Week of May 25", "May 2025", "Apr–Jun 2025"). */
 function periodGroupLabel(start: string, period: HistoryPeriod): string {
   const mon = MONTH_ABBR[Number(start.slice(5, 7)) - 1] ?? "";
@@ -8755,6 +8772,16 @@ function renderWorkoutsPage() {
         if (yr) yearMark = `<span class="wo-yearmark">${escapeHtml(g.date.slice(0, 4))}</span>`;
       }
       prevRowDate = g.date;
+      // PERIOD grouping (week/2week/month/3month): a clear, period-sized MAIN label (no weekday)
+      // + the exact span small for accuracy (owner). DAY view keeps the relative-phrase header.
+      if (byWeek && period) {
+        const ph = periodHeaderParts(g.date, period);
+        return (
+          `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
+          `<div class="wo-date wo-perdate" data-persize="${ph.size}">${yearMark}<span class="caret">▸</span><span class="wo-permain">${escapeHtml(ph.main)}</span> <span class="wo-persub">${escapeHtml(ph.sub)}</span>${tagBtn}</div>` +
+          `<div class="wo-did">${did}${addExBtn}</div></td></tr>`
+        );
+      }
       // Longer date: a big relative phrase ("Last Thursday") + a smaller month-day
       // ("May 12"), with the full year ("2026") added only when the day is expanded.
       const dp = dayHeaderParts(g.date, todayIso());

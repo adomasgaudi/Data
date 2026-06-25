@@ -2803,6 +2803,14 @@ sup.wr-bw { font-size: 0.85em; }
    list clean but disambiguates the year when you open a session. */
 .wo-year { display: none; color: var(--muted); font-weight: 600; font-size: 0.82em; }
 .wo-row.open .wo-year { display: inline; }
+/* PERIOD-grouped header (week/month/…): a clear, period-sized MAIN label (no weekday) with the
+   exact span small beside it (owner). The main grows with the period via data-persize 1→4. */
+.wo-perdate .wo-permain { font-weight: 800; color: var(--text); }
+.wo-perdate .wo-persub { color: var(--muted); font-weight: 600; font-size: 0.72rem; margin-left: 0.15rem; }
+.wo-perdate[data-persize="1"] .wo-permain { font-size: 1.05rem; }
+.wo-perdate[data-persize="2"] .wo-permain { font-size: 1.2rem; }
+.wo-perdate[data-persize="3"] .wo-permain { font-size: 1.45rem; }
+.wo-perdate[data-persize="4"] .wo-permain { font-size: 1.7rem; }
 /* Slight separators between day rows when the week / month / year changes (the list
    is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder
    accent line plus a year chip. */
