@@ -13,6 +13,10 @@
      button) gets at least this tap height. Compact horizontally is fine (rule
      #cram), but never a button so short it's hard to tap. One home for the floor. */
   --tap-min: 30px;
+  /* #design: numeric entry boxes (weight/reps) fill side-to-side — only 2px horizontal padding,
+     and they auto-grow to the content (field-sizing) so triple-digit+ values aren't clipped.
+     One home for the side padding. */
+  --num-box-pad-x: 2px;
   /* Strong "this is filtering the whole app" glow — matches the terracotta glow the
      search/command bar uses when filtering (.cmd-input), so every app-wide filter
      signals the same way. var(--danger) → adapts to dark mode for free. */
@@ -3118,14 +3122,19 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-set-chip .wo-af-weight, .addm-set-chip .wo-af-reps {
   box-sizing: border-box; min-height: var(--tap-min); margin: 0;
   border: 1px solid var(--line); background: var(--line); border-radius: 6px;
-  padding: 4px 8px; text-align: center; color: inherit; font-weight: 700;
+  /* Owner #design: the number fills the box side-to-side — 2px side padding only, and the box
+     AUTO-GROWS to its content (field-sizing) so triple-digit+ values aren't clipped. width:auto
+     lets field-sizing hug the number; min/max bound it (and cap the fallback on engines without
+     field-sizing — the owner's Chromium/Brave supports it). The card overflow-scrolls if needed. */
+  padding: 4px var(--num-box-pad-x); text-align: center; color: inherit; font-weight: 700;
+  field-sizing: content; width: auto; max-width: 6rem;
   -moz-appearance: textfield; appearance: textfield; /* no spinner → reads as a box, not a field */
 }
-/* Weight = the main box. Owner: 10px narrower per side (−1.25rem) to fit the card (PB-53). */
-.addm-set-chip .wo-af-weight { width: 2.05rem; font-size: 1.05rem; }
+/* Weight = the main box. */
+.addm-set-chip .wo-af-weight { min-width: 1.7rem; font-size: 1.05rem; }
 /* Reps = a smaller box, raised a touch so it echoes the collapsed weight^reps chip. */
 .addm-set-chip .wo-af-reps {
-  width: 1.75rem; font-size: 0.85rem; color: var(--muted); align-self: flex-start; margin-top: -3px;
+  min-width: 1.5rem; font-size: 0.85rem; color: var(--muted); align-self: flex-start; margin-top: -3px;
 }
 /* W / reps default labels: muted + lighter weight so they read as hints, not values. */
 .addm-set-chip .wo-af-weight::placeholder, .addm-set-chip .wo-af-reps::placeholder { color: var(--muted); font-weight: 600; opacity: 1; }
@@ -3165,11 +3174,13 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-set-chip .wo-af-weight-l, .addm-set-chip .wo-af-reps-l {
   box-sizing: border-box; min-height: var(--tap-min); margin: 0;
   border: 1px solid var(--line); background: var(--line); border-radius: 6px;
-  padding: 4px 6px; text-align: center; color: inherit; font-weight: 700;
+  /* Same #design as the right-side boxes: 2px side padding, content-sized auto-grow. */
+  padding: 4px var(--num-box-pad-x); text-align: center; color: inherit; font-weight: 700;
+  field-sizing: content; width: auto; max-width: 6rem;
   -moz-appearance: textfield; appearance: textfield;
 }
-.addm-set-chip .wo-af-weight-l { width: 2.7rem; font-size: 0.95rem; }
-.addm-set-chip .wo-af-reps-l { width: 2.5rem; font-size: 0.8rem; color: var(--muted); margin-top: -3px; }
+.addm-set-chip .wo-af-weight-l { min-width: 1.6rem; font-size: 0.95rem; }
+.addm-set-chip .wo-af-reps-l { min-width: 1.4rem; font-size: 0.8rem; color: var(--muted); margin-top: -3px; }
 .addm-set-chip .wo-af-weight-l::-webkit-outer-spin-button, .addm-set-chip .wo-af-weight-l::-webkit-inner-spin-button,
 .addm-set-chip .wo-af-reps-l::-webkit-outer-spin-button, .addm-set-chip .wo-af-reps-l::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .addm-set-chip .wo-af-weight-l::placeholder, .addm-set-chip .wo-af-reps-l::placeholder { color: var(--muted); font-weight: 600; opacity: 1; }
