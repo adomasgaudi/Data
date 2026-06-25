@@ -4951,8 +4951,11 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
    hidden-count. Reserve 2 lines (min-height) so short titles don't jump; let longer
    ones wrap to a 3rd line rather than clipping the count. Expanding drops the floor. */
 .wa-seltitle-box {
-  display: block; min-height: 2.6em; line-height: 1.7;
-  position: relative; /* anchor for the right-edge sticky-note Pick tab */
+  /* min-height floored at the picker-box height (was 2.6em, which reserved a big empty gap
+     under the "N exercises" count title — owner: "why so much empty space"). line-height
+     tightened too. */
+  display: block; min-height: var(--tap-min); line-height: 1.4;
+  position: relative; /* anchor for the top-right Pick box */
 }
 /* Reserve room at the right edge ONLY when the Pick tab is present, so the inline ✕ / ≈ /
    names never slide UNDER it. (When there's no selection there's no tab and no reserve.) */
@@ -5128,31 +5131,24 @@ button.wa-title-more:hover { color: var(--accent); text-decoration: underline; }
    BOTH selectors' tabs sit flush with the same edge. touch-action:pan-y: a vertical drag still
    scrolls; a horizontal drag is claimed by JS. (PB-13 — fix site; drag wiring in src/main.ts.) */
 .wa-card-fold { --wa-pick-bleed: 0.7rem; }
+/* Owner: NO longer a floating right-edge sticky tab — a plain OUTLINED box button that
+   matches the ▲ collapse caret and the ⚙ settings button, stacked at the top-right UNDER
+   the collapse caret (the caret sits at top:0.5rem; this drops below it). Still opens the
+   exercise picker on tap (the drag handle is gone — a tap is enough). */
 .wa-title-picker {
-  position: absolute; top: 50%; right: calc(-1 * var(--wa-pick-bleed, 0px)); transform: translateY(-50%); z-index: 4;
-  display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 0;
-  width: 30px; height: 28px; padding: 2px 0; margin: 0;
-  cursor: grab; white-space: nowrap; -webkit-user-select: none; user-select: none;
-  color: var(--muted); font-family: inherit;
-  background: var(--panel);
-  border: none; border-radius: var(--r-pill) 0 0 8px;
-  /* Plain white tab (no sticky-note tint / dog-ear) — kept lifted off the page with a
-     neutral shadow so it still reads as a pull-out handle. */
-  box-shadow: -6px 2px 13px rgba(20, 24, 38, 0.20), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
-  touch-action: pan-y; transition: transform 0.16s ease, box-shadow 0.16s ease;
+  position: absolute; top: 0; right: 0; z-index: 4;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--tap-min); height: var(--tap-min); padding: 0; margin: 0;
+  cursor: pointer; white-space: nowrap; -webkit-user-select: none; user-select: none;
+  color: var(--accent); font-family: inherit; font-weight: 700;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-pill);
+  transition: border-color 0.15s ease;
 }
-/* Hover/active: the tab peels out a touch further to invite the pull-left drag. */
-.wa-title-picker:hover, .wa-title-picker:active {
-  transform: translateY(-50%) translateX(-3px);
-  box-shadow: -10px 3px 18px rgba(20, 24, 38, 0.26), -1px 0 0 rgba(0, 0, 0, 0.05), inset 5px 0 9px -7px rgba(0, 0, 0, 0.10);
-}
-/* "‹" pull-hint hidden so the tab can be HALF as tall (owner request); the hover
-   peel-out + tab shape still signal it's a draggable handle. */
+.wa-title-picker:hover, .wa-title-picker:active { border-color: var(--accent); }
 .wa-pick-pull { display: none; }
-/* Vertical "Pick" label, reading bottom→top up the tab. */
+/* Horizontal "+" glyph, sized like the caret/cog. */
 .wa-pick-tab-txt {
-  writing-mode: vertical-rl; transform: rotate(180deg);
-  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: 0; line-height: 1;
 }
 .wa-fold-sum::before { content: "▸"; display: inline-block; width: 1.1em; margin-right: 0.35em; color: var(--accent); font-weight: 700; }
 .wa-fold[open] > .wa-fold-sum::before { content: "▾"; }
