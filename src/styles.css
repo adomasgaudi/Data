@@ -2889,6 +2889,12 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-line-vars::-webkit-scrollbar { display: none; }
 .addm-line-vars:empty { display: none; }
+/* PB-49 sibling (owner: "even scrolling to the end the tags are out of bounds / can't see them"):
+   the right-edge fade mask is painted on the CONTAINER, so the rightmost ~1rem is ALWAYS faded —
+   the last chip, flush at the right edge when fully scrolled, stays under it. An invisible
+   end-spacer (wider than the fade) gives the last chip somewhere to scroll TO, so it clears the
+   mask. A bare padding-right isn't reliably honoured at the scroll-end in flex+overflow. */
+.addm-line-vars::after { content: ""; flex: 0 0 1.1rem; align-self: stretch; }
 /* dissolve the .wo-af-dims wrapper so its dim/tag columns join the tag wrap directly, beside the ROM */
 .addm-line-vars .wo-af-dims { display: contents; }
 /* Each tag is a little COLUMN: a tiny gray CAPTION naming what it is (owner: "above the tag,
@@ -3061,6 +3067,9 @@ sup.wr-bw { font-size: 0.85em; }
 /* The pills themselves stay in ONE horizontally-scrolling row (the swipe-sideways strip). */
 .addm-passive-pills { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); }
 .addm-passive-pills::-webkit-scrollbar { display: none; }
+/* Same PB-49-sibling end-spacer as .addm-line-vars: lets the last palette pill scroll out from
+   under the always-painted right-edge fade so it's fully visible at the scroll end. */
+.addm-passive-pills::after { content: ""; flex: 0 0 1.2rem; align-self: stretch; }
 .addm-passive-pill {
   flex: 0 0 auto; padding: 2px 8px; font: inherit; font-size: 0.62rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.02em; cursor: pointer;
