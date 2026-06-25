@@ -3111,7 +3111,8 @@ sup.wr-bw { font-size: 0.85em; }
    the reps RAISED like the collapsed 65⁵ — plus a clear gap so each is easy to tap.
    The chip is now a transparent flex row; the box chrome lives on each input. */
 .addm-set-chip {
-  display: inline-flex; align-items: flex-start; gap: 8px; flex: 0 0 auto;
+  /* gap 1px: owner wants W and reps boxes touching (sx450>card379 overflow, PB-53). */
+  display: inline-flex; align-items: flex-start; gap: 1px; flex: 0 0 auto;
   border: none; background: none; padding: 0;
 }
 .addm-set-chip .wo-af-weight, .addm-set-chip .wo-af-reps {
@@ -3120,11 +3121,11 @@ sup.wr-bw { font-size: 0.85em; }
   padding: 4px 8px; text-align: center; color: inherit; font-weight: 700;
   -moz-appearance: textfield; appearance: textfield; /* no spinner → reads as a box, not a field */
 }
-/* Weight = the main box. */
-.addm-set-chip .wo-af-weight { width: 3.3rem; font-size: 1.05rem; }
+/* Weight = the main box. Owner: 10px narrower per side (−1.25rem) to fit the card (PB-53). */
+.addm-set-chip .wo-af-weight { width: 2.05rem; font-size: 1.05rem; }
 /* Reps = a smaller box, raised a touch so it echoes the collapsed weight^reps chip. */
 .addm-set-chip .wo-af-reps {
-  width: 3rem; font-size: 0.85rem; color: var(--muted); align-self: flex-start; margin-top: -3px;
+  width: 1.75rem; font-size: 0.85rem; color: var(--muted); align-self: flex-start; margin-top: -3px;
 }
 /* W / reps default labels: muted + lighter weight so they read as hints, not values. */
 .addm-set-chip .wo-af-weight::placeholder, .addm-set-chip .wo-af-reps::placeholder { color: var(--muted); font-weight: 600; opacity: 1; }
