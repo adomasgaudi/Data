@@ -16218,6 +16218,9 @@ async function init() {
   // the green dbg() console + the CSS box-viewer rule). Loaded on demand so it never touches
   // the initial bundle (Vite splits the dynamic import into its own chunk).
   els.inspectToggleBtn?.addEventListener("click", () => { void toggleInspector(); });
+  // 📦 Custom box-model viewer (admin) — our own fast/simple alternative to eruda's Elements tab:
+  // outlines every box AND tap-to-measure padding/margin/size. See toggleBoxInspect.
+  document.getElementById("boxInspectBtn")?.addEventListener("click", () => { toggleBoxInspect(); });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
@@ -23769,6 +23772,84 @@ async function toggleInspector(): Promise<void> {
     btn.setAttribute("aria-pressed", String(erudaShown));
     btn.textContent = erudaShown ? "🔍 Inspect (CSS) ✓" : "🔍 Inspect (CSS)";
   }
+}
+// 📦 BOX inspector — our own fast box-model viewer (eruda has too many tabs to find this).
+// ON: outlines EVERY element (colour-cycled by nesting depth, the rule-68 CSS box-viewer) so all
+// boxes appear at once; AND turns taps into a measure — tap any element to draw a devtools-style
+// 4-layer highlight (margin orange · border yellow · padding green · content blue) with a label
+// showing tag/id/class, W×H, and the margin/padding numbers. No bundle cost — pure DOM/CSS.
+let boxInspectOn = false;
+function boxLayer(o: HTMLElement, c: string): HTMLElement {
+  const d = document.createElement("div");
+  d.style.cssText = `position:fixed;pointer-events:none;z-index:2147483646;background:${c}`;
+  o.appendChild(d);
+  return d;
+}
+let boxOverlay: { wrap: HTMLElement; margin: HTMLElement; border: HTMLElement; padding: HTMLElement; content: HTMLElement; label: HTMLElement } | null = null;
+function setBox(el: HTMLElement, x: number, y: number, w: number, h: number): void {
+  el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.width = `${Math.max(0, w)}px`; el.style.height = `${Math.max(0, h)}px`;
+}
+function px(v: string): number { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
+function measureBox(target: HTMLElement): void {
+  if (!boxOverlay) {
+    const wrap = document.createElement("div");
+    wrap.id = "boxDbgOverlay";
+    wrap.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483646";
+    document.body.appendChild(wrap);
+    const margin = boxLayer(wrap, "rgba(246,178,107,0.45)");   // orange
+    const border = boxLayer(wrap, "rgba(255,229,127,0.55)");   // yellow
+    const padding = boxLayer(wrap, "rgba(147,196,125,0.55)");  // green
+    const content = boxLayer(wrap, "rgba(111,168,220,0.55)");  // blue
+    const label = document.createElement("div");
+    label.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;background:#111;color:#fff;font:10px/1.35 monospace;padding:3px 5px;border-radius:3px;max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    wrap.appendChild(label);
+    boxOverlay = { wrap, margin, border, padding, content, label };
+  }
+  const o = boxOverlay;
+  const r = target.getBoundingClientRect();
+  const cs = getComputedStyle(target);
+  const m = { t: px(cs.marginTop), r: px(cs.marginRight), b: px(cs.marginBottom), l: px(cs.marginLeft) };
+  const b = { t: px(cs.borderTopWidth), r: px(cs.borderRightWidth), b: px(cs.borderBottomWidth), l: px(cs.borderLeftWidth) };
+  const p = { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
+  setBox(o.margin, r.left - m.l, r.top - m.t, r.width + m.l + m.r, r.height + m.t + m.b);
+  setBox(o.border, r.left, r.top, r.width, r.height);
+  setBox(o.padding, r.left + b.l, r.top + b.t, r.width - b.l - b.r, r.height - b.t - b.b);
+  setBox(o.content, r.left + b.l + p.l, r.top + b.t + p.t, r.width - b.l - b.r - p.l - p.r, r.height - b.t - b.b - p.t - p.b);
+  const sel = `${target.tagName.toLowerCase()}${target.id ? "#" + target.id : ""}${target.classList.length ? "." + Array.from(target.classList).slice(0, 2).join(".") : ""}`;
+  const r4 = (o2: { t: number; r: number; b: number; l: number }) => `${o2.t}/${o2.r}/${o2.b}/${o2.l}`;
+  o.label.textContent = `${sel}  ${Math.round(r.width)}×${Math.round(r.height)}  m ${r4(m)}  p ${r4(p)}  b ${r4(b)}`;
+  // park the label just above the element, clamped into view
+  const ly = r.top - m.t - 20 > 4 ? r.top - m.t - 20 : r.bottom + m.b + 4;
+  o.label.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - 8))}px`;
+  o.label.style.top = `${Math.min(ly, window.innerHeight - 20)}px`;
+}
+function onBoxTap(e: Event): void {
+  const t = e.target as HTMLElement;
+  if (!t || t.id === "boxInspectBtn" || t.closest("#boxDbgOverlay")) return; // don't measure our own UI
+  e.preventDefault(); e.stopPropagation();
+  measureBox(t);
+}
+function toggleBoxInspect(): void {
+  boxInspectOn = !boxInspectOn;
+  const btn = document.getElementById("boxInspectBtn");
+  if (boxInspectOn) {
+    if (!document.getElementById("boxDbgStyle")) {
+      const s = document.createElement("style");
+      s.id = "boxDbgStyle";
+      // outline EVERY element; cycle 3 hues by depth so nested boxes are tellable apart
+      s.textContent = "*{outline:1px solid rgba(232,93,117,.35)!important}" +
+        "* * {outline-color:rgba(111,168,220,.35)!important}" +
+        "* * * {outline-color:rgba(147,196,125,.35)!important}" +
+        "* * * * {outline-color:rgba(232,93,117,.35)!important}";
+      document.head.appendChild(s);
+    }
+    document.addEventListener("click", onBoxTap, true);
+  } else {
+    document.getElementById("boxDbgStyle")?.remove();
+    boxOverlay?.wrap.remove(); boxOverlay = null;
+    document.removeEventListener("click", onBoxTap, true);
+  }
+  if (btn) { btn.setAttribute("aria-pressed", String(boxInspectOn)); btn.textContent = boxInspectOn ? "📦 Boxes ✓" : "📦 Boxes"; }
 }
 const dbgLines: { t: string; err: boolean }[] = [];
 function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
