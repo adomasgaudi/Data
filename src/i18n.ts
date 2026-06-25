@@ -160,7 +160,20 @@ const LT: Record<string, string> = {
   "Data": "Duomenys",
   "Formulas": "Formulės",
   "World records": "Pasaulio rekordai",
+  "Handstands": "Stovėjimai ant rankų",
   "Version history": "Versijų istorija",
+  // ---- Handstand calculator page ----
+  "Handstand calculator": "Stovėjimo ant rankų skaičiuoklė",
+  "Pick a handstand exercise and its tags — see how each tag scales the load and what effective weight & 1RM it works out to.":
+    "Pasirink stovėjimo ant rankų pratimą ir jo žymas — pamatyk, kaip kiekviena žyma keičia svorį ir koks gaunamas efektyvus svoris bei 1RM.",
+  "exercise": "pratimas",
+  "bodyweight (kg)": "kūno svoris (kg)",
+  "added (kg)": "papildomas (kg)",
+  "total multiplier": "bendras daugiklis",
+  "bodyweight share": "kūno svorio dalis",
+  "+ added weight": "+ papildomas svoris",
+  "effective 1RM": "efektyvus 1RM",
+  "added-weight 1RM": "papildomo svorio 1RM",
   // ---- Coach calculator (Formulas tab) ----
   "Coach — working weight & warm-up": "Treneris — darbinis svoris ir apšilimas",
   "From a client's 1RM: the hard-set load and a full warm-up ramp up to it.":

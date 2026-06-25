@@ -6417,3 +6417,41 @@ body.wa-graph-full .wa-graph-overlay { position: fixed; top: 0.6rem; right: 0.7r
    in a user / spectator view — only a real admin (or admin previewing) sees them. */
 body.admin-only-hidden #waHistHorizFold,
 body.admin-only-hidden #waCalendarFold { display: none; }
+
+/* ===== Handstand calculator page (UI-43) =================================================
+   A live calculator: a wrapping grid of compact labelled controls (exercise + bodyweight /
+   added / reps + one pill-select per tag dimension), then a breakdown of every tag's factor,
+   the step-by-step load maths, and the two 1RM results. Compact + small-rounded (#cram /
+   #design); the selects auto-enhance to .xdd like everywhere else. */
+.hs-calc { display: flex; flex-direction: column; gap: 0.8rem; }
+.hs-controls { display: flex; flex-wrap: wrap; gap: 0.5rem 0.6rem; align-items: flex-end; }
+.hs-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.hs-field-wide { flex: 1 1 12rem; }
+.hs-field-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding-left: 2px; white-space: nowrap; }
+.hs-field .hs-num { width: 5rem; box-sizing: border-box; min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); padding: 4px 8px; font: inherit; font-weight: 700; -moz-appearance: textfield; appearance: textfield; }
+.hs-field .hs-num::-webkit-outer-spin-button, .hs-field .hs-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.hs-field .hs-num:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
+.hs-out { display: flex; flex-direction: column; gap: 0.7rem; }
+/* Per-tag breakdown — a 3-column mini table (tag · level · factor). */
+.hs-brk { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.hs-brk-head { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0.35rem 0.6rem; background: var(--accent-soft); }
+.hs-brk-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.5rem; align-items: center; padding: 0.3rem 0.6rem; border-top: 1px solid var(--line); font-size: 0.85rem; }
+.hs-brk-row.is-neutral { color: var(--muted); }
+.hs-brk-dim { font-weight: 600; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.03em; }
+.hs-brk-lvl { color: var(--muted); }
+.hs-brk-val { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+.hs-brk-total { background: var(--accent-soft); font-weight: 700; }
+.hs-brk-total .hs-brk-dim { color: var(--text); }
+.hs-brk-total .hs-brk-val { color: var(--accent); }
+/* Step-by-step load maths. */
+.hs-steps { display: flex; flex-direction: column; gap: 0.25rem; }
+.hs-step { display: flex; justify-content: space-between; gap: 0.6rem; font-size: 0.85rem; }
+.hs-step > span:first-child { color: var(--muted); }
+.hs-step b { font-variant-numeric: tabular-nums; }
+/* The two big results. */
+.hs-results { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.hs-res { flex: 1 1 8rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.5rem 0.7rem; display: flex; flex-direction: column; gap: 2px; }
+.hs-res-lbl { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.hs-res-num { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+.hs-res-main { border-color: var(--accent); background: var(--accent-soft); }
+.hs-res-main .hs-res-num { color: var(--accent); }

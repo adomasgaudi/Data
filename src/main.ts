@@ -441,7 +441,7 @@ let spectateUser: string | null = null;
 // the More menu: both analysis pages, the athlete view, the Index (exercise reference),
 // plus Live, Colosseum, Stats view (groups) and World records. (Coach pages bounce back
 // to analysis.)
-const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records", "bwparts"]);
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records", "bwparts", "handstands"]);
 /** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
  * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
@@ -16055,6 +16055,7 @@ async function init() {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
   });
   setupTabs();
+  setupHandstands(); // the standalone handstand tag calculator page
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
   setupSectionToggles(); // matching Graph / History show/hide buttons beside it
   setupFoldToggleGuards(); // collapse an OPEN analysis section ONLY via its caret (not a stray title tap)
@@ -25845,12 +25846,152 @@ function switchTopTab(name: string) {
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
   if (name === "records") renderRecords();
+  if (name === "handstands") renderHandstands();
   if (name === "coach") renderCoachPage();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.
   if (name !== "analysis") { restoreAnalysisPanels(); document.body.classList.remove("wa-graph-full"); closePickDrawer(); }
   updateBottomNav();
+}
+
+// ===== HANDSTAND CALCULATOR PAGE (owner: a standalone page turning the handstand tag model
+// into a LIVE calculator) ============================================================
+// Pick a handstand lift + its tags (support / lean / ROM / band …) and a bodyweight + reps,
+// and see EVERY tag's multiplier and the resulting effective load + 1RM update live. Reuses
+// the SAME pure model the graphs/history use (scalarFromVec / famLevels / leanFactorFor /
+// bandAssistKg / coeffFor / estimate1RM) so the numbers can never drift from the rest of the
+// app — one source of truth, no parallel maths (rule: SSOT).
+const HS_EXERCISES = ["Handstand Push Up", "Handstand wall touch", "Handstand hold", "Handstand walk", "Handstand"];
+type HsCalc = { ex: string; bw: number | null; added: number; reps: number; vec: Record<string, string> };
+let hsCalc: HsCalc | null = null;
+
+/** The dims (in display order) that actually apply to the family + current support pick —
+ * ladder grip/height only on a ladder, shoulder-gap only back-to-wall (mirrors scalarFromVec). */
+function hsRelevantDims(fam: string, vec: Record<string, string>): string[] {
+  const famDef = FAMILIES[fam];
+  if (!famDef) return [];
+  return AF_DIM_ORDER.filter((dim) => {
+    if (!famDef.dims[dim]) return false;
+    if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") return false;
+    if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
+    return true;
+  });
+}
+/** A fresh tag vector for a family = each dimension at its (owner-pinned) default level. */
+function hsDefaultVec(fam: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const famDef = FAMILIES[fam];
+  if (!famDef) return out;
+  for (const dim of Object.keys(famDef.dims)) out[dim] = famDefaultLevel(fam, dim);
+  return out;
+}
+/** One dim's contribution for the breakdown: a MULTIPLIER, or a kg subtraction (band). */
+function hsDimEffect(fam: string, dim: string, vec: Record<string, string>): { mult?: number; kg?: number } {
+  if (dim === "band") return { kg: bandAssistKg(fam, vec.band ?? "none") };
+  if (dim === "lean") return { mult: leanFactorFor(fam, vec.support ?? "free", vec.lean ?? "") };
+  return { mult: famLevels(fam, dim)[vec[dim] ?? ""] ?? 1 };
+}
+const hsR1 = (n: number): number => Math.round(n * 10) / 10;
+const hsR3 = (n: number): number => Math.round(n * 1000) / 1000;
+
+function renderHandstands(): void {
+  const body = document.getElementById("handstandsBody");
+  if (!body) return;
+  if (!hsCalc || !HS_EXERCISES.includes(hsCalc.ex)) {
+    const ex = HS_EXERCISES[0]!;
+    hsCalc = { ex, bw: athProfile(els.athlete.value)?.weight ?? null, added: 0, reps: 1, vec: hsDefaultVec(familyOf(ex) ?? "HSPU") };
+  }
+  const c = hsCalc;
+  const fam = familyOf(c.ex) ?? "HSPU";
+  const exOpts = HS_EXERCISES.map((n) => `<option value="${escapeHtml(n)}"${n === c.ex ? " selected" : ""}>${escapeHtml(displayName(n))}</option>`).join("");
+  const dimControls = hsRelevantDims(fam, c.vec).map((dim) => {
+    const levels = Object.keys(famLevels(fam, dim));
+    const cur = c.vec[dim] ?? famDefaultLevel(fam, dim);
+    const opts = levels.map((lv) => `<option value="${escapeHtml(lv)}"${lv === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, lv, fam))}</option>`).join("");
+    return `<label class="hs-field"><span class="hs-field-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="hs-dim" data-hsdim="${escapeHtml(dim)}">${opts}</select></label>`;
+  }).join("");
+  body.innerHTML =
+    `<div class="hs-controls">` +
+      `<label class="hs-field hs-field-wide"><span class="hs-field-lbl">exercise</span><select class="hs-ex">${exOpts}</select></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">bodyweight (kg)</span><input class="hs-num" type="number" step="0.5" inputmode="decimal" data-hsnum="bw" value="${c.bw ?? ""}" placeholder="kg" /></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">added (kg)</span><input class="hs-num" type="number" step="0.5" inputmode="decimal" data-hsnum="added" value="${c.added}" /></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">reps</span><input class="hs-num" type="number" step="1" min="1" inputmode="numeric" data-hsnum="reps" value="${c.reps}" /></label>` +
+      dimControls +
+    `</div>` +
+    `<div class="hs-out"></div>`;
+  enhanceSelectTree(body);
+  hsRenderOut();
+}
+
+/** Recompute + redraw ONLY the results block (so typing in a number input keeps its focus). */
+function hsRenderOut(): void {
+  const c = hsCalc;
+  if (!c) return;
+  const out = document.querySelector<HTMLElement>("#handstandsBody .hs-out");
+  if (!out) return;
+  const fam = familyOf(c.ex) ?? "HSPU";
+  const coeff = coeffFor(c.ex);
+  const bw = c.bw ?? 0;
+  const bwLoad = bw * coeff;
+  const mult = scalarFromVec(fam, c.vec);
+  const bandKg = bandAssistKg(fam, c.vec.band ?? "none");
+  const baseLoad = bwLoad + c.added;
+  const scaledLoad = baseLoad * mult - bandKg;
+  const formula = currentFormula();
+  const effE1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, c.reps, formula) : null;
+  const addedE1RM = effE1RM != null ? effE1RM - bwLoad : null;
+  const rows = hsRelevantDims(fam, c.vec).map((dim) => {
+    const eff = hsDimEffect(fam, dim, c.vec);
+    const lvl = afLevelText(dim, c.vec[dim] ?? "", fam);
+    const val = eff.kg !== undefined ? (eff.kg ? `−${hsR1(eff.kg)} kg` : "—") : `×${hsR3(eff.mult ?? 1)}`;
+    const neutral = eff.kg !== undefined ? eff.kg === 0 : (eff.mult ?? 1) === 1;
+    return `<div class="hs-brk-row${neutral ? " is-neutral" : ""}"><span class="hs-brk-dim">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><span class="hs-brk-lvl">${escapeHtml(lvl)}</span><span class="hs-brk-val">${val}</span></div>`;
+  }).join("");
+  out.innerHTML =
+    `<div class="hs-brk"><div class="hs-brk-head">tags</div>${rows}` +
+      `<div class="hs-brk-row hs-brk-total"><span class="hs-brk-dim">total multiplier</span><span class="hs-brk-lvl"></span><span class="hs-brk-val">×${hsR3(mult)}</span></div>` +
+    `</div>` +
+    `<div class="hs-steps">` +
+      `<div class="hs-step"><span>bodyweight share</span><span>${hsR1(bw)} × ${coeff} = <b>${hsR1(bwLoad)} kg</b></span></div>` +
+      `<div class="hs-step"><span>+ added weight</span><span><b>${hsR1(baseLoad)} kg</b></span></div>` +
+      `<div class="hs-step"><span>× tags${bandKg ? ` − band ${hsR1(bandKg)} kg` : ""}</span><span><b>${hsR1(scaledLoad)} kg</b> effective</span></div>` +
+    `</div>` +
+    `<div class="hs-results">` +
+      `<div class="hs-res"><span class="hs-res-lbl">effective 1RM</span><span class="hs-res-num">${effE1RM != null ? hsR1(effE1RM) + " kg" : "—"}</span></div>` +
+      `<div class="hs-res hs-res-main"><span class="hs-res-lbl">added-weight 1RM</span><span class="hs-res-num">${addedE1RM != null ? hsR1(addedE1RM) + " kg" : "—"}</span></div>` +
+    `</div>`;
+}
+
+function setupHandstands(): void {
+  const body = document.getElementById("handstandsBody");
+  if (!body) return;
+  body.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    if (!hsCalc) return;
+    if (t.matches(".hs-ex")) {
+      hsCalc.ex = (t as HTMLSelectElement).value;
+      hsCalc.vec = hsDefaultVec(familyOf(hsCalc.ex) ?? "HSPU");
+      renderHandstands(); // family changed → rebuild the dim controls
+      return;
+    }
+    if (t.matches(".hs-dim")) {
+      const dim = (t as HTMLElement).dataset.hsdim!;
+      hsCalc.vec[dim] = (t as HTMLSelectElement).value;
+      if (dim === "support") renderHandstands(); // support drives which dims apply
+      else hsRenderOut();
+    }
+  });
+  body.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    if (!hsCalc || !t.matches(".hs-num")) return;
+    const k = (t as HTMLElement).dataset.hsnum as "bw" | "added" | "reps";
+    const v = parseFloat((t as HTMLInputElement).value);
+    if (k === "bw") hsCalc.bw = Number.isFinite(v) ? v : null;
+    else if (k === "added") hsCalc.added = Number.isFinite(v) ? v : 0;
+    else if (k === "reps") hsCalc.reps = Number.isFinite(v) && v >= 1 ? Math.round(v) : 1;
+    hsRenderOut();
+  });
 }
 
 function setupTabs() {
