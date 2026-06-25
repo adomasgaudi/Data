@@ -23823,11 +23823,27 @@ function measureBox(target: HTMLElement): void {
   o.label.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - 8))}px`;
   o.label.style.top = `${Math.min(ly, window.innerHeight - 20)}px`;
 }
-function onBoxTap(e: Event): void {
+// Measure on LONG-PRESS only — a normal tap is NEVER blocked, so the page stays fully usable while
+// Boxes is on (the old version hijacked every click and froze the UI, even the Settings menu).
+let boxPressTimer: number | null = null;
+let boxPressAt: { x: number; y: number } | null = null;
+let boxSuppressClick = false;
+function cancelBoxPress(): void { if (boxPressTimer != null) { clearTimeout(boxPressTimer); boxPressTimer = null; } boxPressAt = null; }
+function onBoxDown(e: PointerEvent): void {
   const t = e.target as HTMLElement;
-  if (!t || t.id === "boxInspectBtn" || t.closest("#boxDbgOverlay")) return; // don't measure our own UI
-  e.preventDefault(); e.stopPropagation();
-  measureBox(t);
+  if (!t || t.closest("#boxDbgOverlay")) return;
+  boxPressAt = { x: e.clientX, y: e.clientY };
+  boxPressTimer = window.setTimeout(() => {
+    measureBox(t);
+    boxSuppressClick = true; // swallow ONLY the click that ends this long-press (so it doesn't also activate)
+    boxPressTimer = null;
+  }, 350);
+}
+function onBoxMove(e: PointerEvent): void {
+  if (boxPressAt && (Math.abs(e.clientX - boxPressAt.x) > 10 || Math.abs(e.clientY - boxPressAt.y) > 10)) cancelBoxPress();
+}
+function onBoxClickCapture(e: Event): void {
+  if (boxSuppressClick) { e.preventDefault(); e.stopPropagation(); boxSuppressClick = false; }
 }
 function toggleBoxInspect(): void {
   boxInspectOn = !boxInspectOn;
@@ -23836,18 +23852,28 @@ function toggleBoxInspect(): void {
     if (!document.getElementById("boxDbgStyle")) {
       const s = document.createElement("style");
       s.id = "boxDbgStyle";
-      // outline EVERY element; cycle 3 hues by depth so nested boxes are tellable apart
+      // outline EVERY element; cycle 3 hues by depth so nested boxes are tellable apart.
+      // `outline` is drawn outside the box and takes no layout space, so it never shifts/hides anything.
       s.textContent = "*{outline:1px solid rgba(232,93,117,.35)!important}" +
         "* * {outline-color:rgba(111,168,220,.35)!important}" +
         "* * * {outline-color:rgba(147,196,125,.35)!important}" +
         "* * * * {outline-color:rgba(232,93,117,.35)!important}";
       document.head.appendChild(s);
     }
-    document.addEventListener("click", onBoxTap, true);
+    document.addEventListener("pointerdown", onBoxDown, true);
+    document.addEventListener("pointermove", onBoxMove, true);
+    document.addEventListener("pointerup", cancelBoxPress, true);
+    document.addEventListener("pointercancel", cancelBoxPress, true);
+    document.addEventListener("click", onBoxClickCapture, true);
   } else {
     document.getElementById("boxDbgStyle")?.remove();
     boxOverlay?.wrap.remove(); boxOverlay = null;
-    document.removeEventListener("click", onBoxTap, true);
+    cancelBoxPress(); boxSuppressClick = false;
+    document.removeEventListener("pointerdown", onBoxDown, true);
+    document.removeEventListener("pointermove", onBoxMove, true);
+    document.removeEventListener("pointerup", cancelBoxPress, true);
+    document.removeEventListener("pointercancel", cancelBoxPress, true);
+    document.removeEventListener("click", onBoxClickCapture, true);
   }
   if (btn) { btn.setAttribute("aria-pressed", String(boxInspectOn)); btn.textContent = boxInspectOn ? "📦 Boxes ✓" : "📦 Boxes"; }
 }
