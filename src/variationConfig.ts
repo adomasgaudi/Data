@@ -208,6 +208,12 @@ export const FAMILIES: Record<string, FamilyDef> = {
   },
 };
 
+/** Every family that carries a given variation dimension (tag). Pure — used by the
+ * tag info panel's "used by" list so it can't drift from the real config. */
+export function familiesUsingDim(families: Record<string, FamilyDef>, dim: string): string[] {
+  return Object.keys(families).filter((fam) => !!families[fam]!.dims[dim]);
+}
+
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
   HSPU: {
     // wall orientation. Bare "wall" = back-to-wall (the common one); chest/face

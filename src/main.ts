@@ -83,7 +83,7 @@ import {
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
@@ -20108,11 +20108,12 @@ function tagActive(ex: string, fam: string | null, id: string): boolean {
   if (id === "rom") return false; // ROM has no "meaningful default" — passive until ＋added
   return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
 }
-/** The PASSIVE-tag palette shown ABOVE the set lines: ＋ for EVERY tag the exercise can carry
- * (each family variation dimension + ROM), labelled by what it IS (owner: "a list of all the
- * tags above the sets — press ＋ to add one next to the weight"). A ✓ marks the ones already
- * active; tapping toggles whether the tag shows on the set lines. Machine base weight / ÷
- * multiplier still live in the ⚙ cog. */
+/** The tag palette shown ABOVE the set lines, in TWO STACKED rows (owner: "passive tags above,
+ * active one layer below — one above another, not next to the weight"): the TOP row is the
+ * not-yet-added tags (dashed ＋ pills), the BOTTOM row the active ones (solid ✓ pills). Tapping a
+ * pill's body adds/removes it (an active tag also shows next to the weight, defaulted); each pill
+ * also carries a small ⓘ button (same pill) that opens the per-tag info/edit panel (what it does,
+ * its options + ×difficulty, rename, which exercises use it). Machine base wt / ÷ live in the ⚙ cog. */
 function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
   const fam = familyOf(ex);
@@ -20122,26 +20123,108 @@ function passivePaletteHtml(ex: string): string {
   // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
   // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
   if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
-  const pills = tags.map((t) => {
-    const on = tagActive(ex, fam, t.id);
-    // A tag with no obvious baseline can't be deselected (it has no "nothing special" level to fall
-    // back to) — show it ✓ and LOCKED so the owner isn't confused why tapping does nothing.
+  // Each tag is ONE pill = [label button that toggles add/remove] + [ⓘ info/edit button], so a tap
+  // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill
+  // opens more info / edit"). A tag with no obvious baseline can't be deselected → ✓ LOCKED.
+  const pill = (t: { id: string; label: string }, on: boolean): string => {
     const locked = on && !tagDeselectable(fam, t.id);
     const title = locked
       ? `${t.label} — always tagged (no obvious default to fall back to)`
       : on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`;
-    return `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}${locked ? " is-locked" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(title)}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>`;
-  }).join("");
+    return `<span class="addm-tag${on ? " is-on" : ""}${locked ? " is-locked" : ""}">` +
+      `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}${locked ? " is-locked" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(title)}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>` +
+      `<button type="button" class="addm-tag-info" data-taginfo="${escapeHtml(t.id)}" aria-label="About ${escapeHtml(t.label)}" title="What “${escapeHtml(t.label)}” does — its options, ×difficulty, rename, and which exercises use it">ⓘ</button>` +
+      `</span>`;
+  };
+  const passivePills = tags.filter((t) => !tagActive(ex, fam, t.id)).map((t) => pill(t, false)).join("");
+  const activePills = tags.filter((t) => tagActive(ex, fam, t.id)).map((t) => pill(t, true)).join("");
   // Unilateral indicator (owner: "if it's unilateral I should see it OUT of the settings, next to
-  // the passive tags"). Shown only when on; tapping it flips the per-exercise unilateral state
-  // (mirrors the ⚙ cog toggle). Distinct look from the tag pills (it's a state, not a tag).
+  // the tags"). Shown only when on; tapping it flips the per-exercise unilateral state (mirrors the
+  // ⚙ cog toggle). It's a STATE not a tag, so it rides at the end of the ACTIVE row.
   const uniInd = isUni(ex)
     ? `<button type="button" class="addm-uni-ind" data-uniex="${escapeHtml(ex)}" title="Unilateral — each set is a right + a left set (single-arm/leg); calculations use the weaker side. Tap to turn off.">⇄ unilateral</button>`
     : "";
-  // Label ABOVE the pills (its own header line), and a separator line below the whole block —
-  // so the TAGS palette reads as its own section, visually split from the set lines beneath it
-  // (owner annotation: "add a line to separate visually and move tag above").
-  return `<div class="addm-passive" aria-label="Add a tag"><span class="addm-passive-lbl muted">tags</span><div class="addm-passive-pills">${pills}${uniInd}</div></div>`;
+  // Two labelled rows, passive on top / active below; an empty row is dropped so the block stays
+  // tight. Separator under the whole palette splits it from the set lines beneath.
+  const grp = (lbl: string, pills: string) => pills ? `<div class="addm-passive-grp"><span class="addm-passive-lbl muted">${escapeHtml(lbl)}</span><div class="addm-passive-pills">${pills}</div></div>` : "";
+  const body = grp("add tag", passivePills) + grp("active", activePills + uniInd);
+  return body ? `<div class="addm-passive" aria-label="Tags">${body}</div>` : "";
+}
+/** What KIND of tag a dimension is, in one plain phrase (owner: "what kind of tag is it"). */
+function tagKindText(fam: string | null, id: string): string {
+  if (id === "band") return "assistance band — subtracts kilograms from the load";
+  if (id === "rom") return "range of motion — how much of the movement you do";
+  const levels = fam && FAMILIES[fam]?.dims[id] ? famLevels(fam, id) : null;
+  if (levels) {
+    const keys = Object.keys(levels);
+    const cm = keys.filter((k) => /-?\d+\s*cm/.test(k)).length;
+    if (cm >= keys.length - 1 && cm >= 2) return "measured in centimetres — each cm changes the difficulty";
+    return `pick one of ${keys.length} options — each has its own ×difficulty`;
+  }
+  return "a per-set attribute";
+}
+/** The per-tag INFO / EDIT panel opened by a pill's ⓘ (owner: "click a tag → info about it: what
+ * it affects, its options, what kind, edit everything, and which other exercises use it"). Reuses
+ * the existing family setters (setFamLabel / setFamFactor) so editing here can't drift from the
+ * inline dim pickers; the add/remove button reuses the palette pill's own click path. */
+function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
+  const fam = familyOf(ex);
+  const label = AF_DIM_LBL[id] ?? id;
+  const levels = fam && FAMILIES[fam]?.dims[id] ? famLevels(fam, id) : null;
+  // Which other exercises carry this tag — the logged lifts whose family has this dimension.
+  const usingFams = familiesUsingDim(FAMILIES, id);
+  const others = Array.from(new Set(computedRecords().map((r) => r.exerciseName)))
+    .filter((n) => n !== ex && usingFams.includes(familyOf(n) ?? ""))
+    .map((n) => displayName(n));
+  const renderHtml = (): string => {
+    const on = tagActive(ex, fam, id);
+    const locked = on && !tagDeselectable(fam, id);
+    const factorRange = levels ? (() => { const vs = Object.values(levels); return `${Math.min(...vs)}× – ${Math.max(...vs)}×`; })() : "";
+    // Editable rows: rename + ×factor per level (band is kg-derived → ×factor not used for scaling).
+    const levelRows = levels
+      ? `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
+          const ov = famFactorOverrides[fam!]?.[id]?.[lvl] !== undefined;
+          const isDef = famDefaultLevel(fam!, id) === lvl;
+          return `<div class="taginfo-lvl${ov ? " is-ov" : ""}">` +
+            `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(id, lvl, fam!))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
+            (id === "band" ? `<span class="taginfo-mult muted">kg</span>` : `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${levels[lvl]}" data-tlvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(lvl)} multiplier" />`) +
+            `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "This is the default level on new sets." : "Make this the default level on new sets."}">${isDef ? "★ default" : "default?"}</button>` +
+            `</div>`;
+        }).join("") + `</div>`
+      : `<div class="taginfo-sub muted">This tag has no fixed options to tune here.</div>`;
+    return (
+      `<div class="taginfo-hd">${escapeHtml(label)}</div>` +
+      `<div class="taginfo-sub muted">${escapeHtml(tagKindText(fam, id))}${factorRange ? ` · ${escapeHtml(factorRange)}` : ""}</div>` +
+      `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle${locked ? " disabled" : ""}>${on ? (locked ? "always on" : "✓ on sets — tap to remove") : "＋ add to sets"}</button>` +
+      (levels ? `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` : "") +
+      levelRows +
+      `<div class="taginfo-h muted">used by</div>` +
+      `<div class="taginfo-used">${others.length ? others.map((n) => `<span class="taginfo-ex">${escapeHtml(n)}</span>`).join("") : `<span class="muted">only ${escapeHtml(displayName(ex))}</span>`}</div>`
+    );
+  };
+  openFloatingPicker(anchor, {
+    className: "inc-pop taginfo-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      if (t.closest("[data-tagtoggle]")) {
+        // Reuse the palette pill's own toggle path (inserts/removes the inline pill + re-renders
+        // the palette), then close — the anchor pill is rebuilt by that handler.
+        const btn = addModalEl?.querySelector<HTMLElement>(`.addm-passive-pill[data-passive="${CSS.escape(id)}"]`);
+        closeFloatingPicker();
+        btn?.click();
+        return;
+      }
+      const def = t.closest<HTMLElement>(".taginfo-def");
+      if (def?.dataset.tdef && fam) { setFamDefaultLevel(fam, id, def.dataset.tdef); rerender(); return; }
+    },
+    onInput: (t) => {
+      if (!fam) return;
+      const nm = t.closest<HTMLInputElement>(".taginfo-name");
+      if (nm?.dataset.tlvl) { setFamLabel(fam, id, nm.dataset.tlvl, nm.value); return; }
+      const ml = t.closest<HTMLInputElement>(".taginfo-mult");
+      if (ml?.dataset.tlvl) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setFamFactor(fam, id, ml.dataset.tlvl, Math.round(v * 1000) / 1000); }
+    },
+  });
 }
 /** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
 function inclinePillLabel(dim: LevelDim, val: number): string {
@@ -20603,6 +20686,14 @@ function onAddModalClick(e: MouseEvent): void {
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
   const multPill = t.closest<HTMLElement>(".wo-af-multpill");
   if (multPill) { openCustomMultPicker(multPill); return; }
+  // ⓘ on a tag pill → its info/edit panel (what the tag does, options + ×difficulty, rename,
+  // which exercises use it). A sibling of the toggle button, so it never triggers add/remove.
+  const infoBtn = t.closest<HTMLElement>(".addm-tag-info");
+  if (infoBtn?.dataset.taginfo) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) openTagInfo(infoBtn, ex, infoBtn.dataset.taginfo);
+    return;
+  }
   // Tag palette ＋/✓ : SHOW or HIDE a tag for this exercise next to the weight. Hiding (deselect)
   // is allowed only when the tag has an obvious baseline to fall back to (tagDeselectable); a
   // locked tag does nothing. PB-48: a hidden tag is REMOVED from the DOM (insert/remove the one

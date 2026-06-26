@@ -1,6 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
 import { resolveNote } from "./variationModel";
+
+describe("familiesUsingDim", () => {
+  it("lists every family that carries a dimension", () => {
+    const band = familiesUsingDim(FAMILIES, "band");
+    expect(band).toContain("HSPU");
+    expect(band).toContain("PULLUP");
+    expect(familiesUsingDim(FAMILIES, "support")).toContain("HSPU");
+    // PUSHUP carries `position` but not `support`.
+    expect(familiesUsingDim(FAMILIES, "support")).not.toContain("PUSHUP");
+    expect(familiesUsingDim(FAMILIES, "position")).toContain("PUSHUP");
+  });
+  it("returns an empty list for an unknown dimension", () => {
+    expect(familiesUsingDim(FAMILIES, "nope")).toEqual([]);
+  });
+});
 
 describe("familyOf", () => {
   it("maps known exercise names to a family, else null", () => {

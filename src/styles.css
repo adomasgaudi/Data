@@ -3061,9 +3061,13 @@ sup.wr-bw { font-size: 0.85em; }
 /* TAGS palette: label on its OWN line above the pills, with a separator line under the whole
    block so it reads as a distinct section from the set lines below (owner: "add a line to
    separate visually and move tag above"). */
-.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.15rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); }
+.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); }
 .addm-passive:empty { display: none; }
-.addm-passive-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+/* Two stacked rows (passive "add tag" on top, "active" below): each is a label pinned at the left
+   with its pills scrolling beside it (owner: "passive above, active one layer below"). */
+.addm-passive-grp { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
+.addm-passive-grp .addm-passive-pills { flex: 1 1 auto; min-width: 0; }
+.addm-passive-lbl { flex: 0 0 auto; width: 2.6rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
 /* The pills themselves stay in ONE horizontally-scrolling row (the swipe-sideways strip). */
 .addm-passive-pills { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); }
 .addm-passive-pills::-webkit-scrollbar { display: none; }
@@ -3081,6 +3085,31 @@ sup.wr-bw { font-size: 0.85em; }
    as a calm fixed chip, not a tappable toggle. */
 .addm-passive-pill.is-locked { cursor: default; opacity: 0.8; }
 .addm-passive-pill.is-locked:hover { border-color: var(--accent); color: #fff; }
+/* One pill = the toggle button + a joined ⓘ info button (owner: "a small button in the SAME pill").
+   The two share one bordered shell; the pill button loses its right edge so they read as one. */
+.addm-tag { display: inline-flex; align-items: stretch; flex: 0 0 auto; min-height: var(--tap-min); }
+.addm-tag .addm-passive-pill { border-radius: var(--r-xs) 0 0 var(--r-xs); border-right: none; display: inline-flex; align-items: center; }
+.addm-tag-info { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 1.5rem; padding: 0 4px; font-size: 0.72rem; line-height: 1; cursor: pointer; color: var(--muted); background: none; border: 1px dashed var(--line); border-radius: 0 var(--r-xs) var(--r-xs) 0; }
+.addm-tag-info:hover { color: var(--accent); border-color: var(--accent); }
+.addm-tag.is-on .addm-passive-pill { border-right: none; }
+.addm-tag.is-on .addm-tag-info { border-style: solid; border-color: var(--accent); color: var(--accent); }
+/* Per-tag info / edit panel (the ⓘ popup): floats over everything like the inc/rom pickers. */
+.taginfo-pop { min-width: 14rem; max-width: min(20rem, calc(100vw - 1.5rem)); max-height: 70vh; overflow: auto; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.taginfo-hd { font-size: 0.95rem; font-weight: 700; text-transform: capitalize; }
+.taginfo-sub { font-size: 0.68rem; line-height: 1.3; }
+.taginfo-h { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.2rem; }
+.taginfo-toggle { font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--bg); color: var(--text); padding: 0 0.7rem; }
+.taginfo-toggle.is-on { border-color: var(--accent); background: var(--accent); color: #fff; }
+.taginfo-toggle[disabled] { opacity: 0.6; cursor: default; }
+.taginfo-levels { display: flex; flex-direction: column; gap: 0.25rem; }
+.taginfo-lvl { display: flex; align-items: center; gap: 0.3rem; }
+.taginfo-lvl.is-ov .taginfo-mult { border-color: var(--gold); }
+.taginfo-name { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.74rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); }
+.taginfo-mult { flex: 0 0 3.4rem; font: inherit; font-size: 0.74rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); field-sizing: content; }
+.taginfo-def { flex: 0 0 auto; font: inherit; font-size: 0.6rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); white-space: nowrap; border: 1px solid var(--line); border-radius: var(--r-xs); background: none; color: var(--muted); padding: 0 5px; }
+.taginfo-def.is-on { border-color: var(--gold); color: var(--gold); }
+.taginfo-used { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+.taginfo-ex { font-size: 0.66rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); color: var(--muted); }
 .addm-cog-pill {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
   padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);
