@@ -19486,7 +19486,51 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
     .map((l) => { const hint = afLevelHint(dim, l); return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`; })
     .join("");
   const cap = dimLabel(dim, fam);
+  // ROM is a cm SELECTOR like the lean tag (owner: "copy how the lean tag works, the same cm
+  // selector"). Its many cm levels made the inline xdd dropdown overflow the modal card and get
+  // clipped to a sliver (PB-55). So rom renders as a PILL that opens a FLOATING popup (never clipped,
+  // body-appended like the lean / value pickers) — backed by a HIDDEN <select> kept as the single
+  // source of truth so every save / read / edit / multiplier path (which all query `.wo-af-dim`)
+  // works UNCHANGED; `data-no-xdd` stops it being enhanced into the clipped dropdown.
+  if (dim === "rom") {
+    return `<span class="addm-vtag" data-dim="rom"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="rom" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
+      `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
+      `</span>`;
+  }
   return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
+}
+/** Floating cm-level popup for the ROM pill — modelled on the lean picker (openLeanPicker): a
+ * body-appended popup that CAN'T be clipped by the modal card. It drives the hidden `.wo-af-dim`
+ * select (the SSOT) so all existing read/save paths are untouched. */
+function openRomDimPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  if (!fam) return;
+  const dflt = sel.dataset.dimdefault ?? "";
+  const setLevel = (lvl: string) => {
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true })); // edit-mode vec sync + multiplier refresh
+    pill.textContent = afLevelText("rom", lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const renderHtml = (): string => {
+    const cur = sel.value;
+    const chips = Array.from(sel.options).map((o) =>
+      `<button type="button" class="rom-ref-chip${o.value === cur ? " is-on" : ""}" data-romdimlvl="${escapeHtml(o.value)}">${escapeHtml(o.textContent ?? o.value)}</button>`,
+    ).join("");
+    return `<div class="rom-ref-lbl muted">range of motion — hand height (cm)</div>` +
+      `<div class="rom-ref-chips romdim-chips">${chips}</div>`;
+  };
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop romdim-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const c = t.closest<HTMLElement>("[data-romdimlvl]");
+      if (c?.dataset.romdimlvl) { setLevel(c.dataset.romdimlvl); rerender(); }
+    },
+  });
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
@@ -20808,6 +20852,10 @@ function onAddModalClick(e: MouseEvent): void {
   // Lean pill → the hand-point + cm/block + hand-length distance picker.
   const leanPill = t.closest<HTMLElement>(".wo-af-leanpill");
   if (leanPill) { openLeanPicker(leanPill); return; }
+  // ROM cm pill → its floating cm-level popup (the lean-style picker; never clipped, unlike the
+  // old inline dropdown — PB-55).
+  const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
+  if (romDimPill) { openRomDimPicker(romDimPill); return; }
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
   const multPill = t.closest<HTMLElement>(".wo-af-multpill");
   if (multPill) { openCustomMultPicker(multPill); return; }
@@ -20840,7 +20888,10 @@ function onAddModalClick(e: MouseEvent): void {
       if (shown && !tagDeselectable(fam, id)) return; // locked — can't deselect (no obvious baseline)
       setTagShown(ex, id, !shown);
       const nowOn = !shown;
-      if (id === "rom") {
+      // A family WITH its own rom dim (e.g. HSPU) shows ROM as the cm pill (the generic dim path
+      // below builds it via dimVtagHtml → the floating-popup twin). Only families WITHOUT a rom dim
+      // use the generic %-ROM pill here.
+      if (id === "rom" && !FAMILIES[fam ?? ""]?.dims.rom) {
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
           if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);

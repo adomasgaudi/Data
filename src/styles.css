@@ -2971,15 +2971,18 @@ sup.wr-bw { font-size: 0.85em; }
 .inc-floor { font: inherit; font-size: 0.78rem; padding: 4px; border: none; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
 .inc-floor:hover { color: var(--accent); background: var(--accent-soft); }
 /* ROM unit-pill — same compact look as the incline pill; tap → the %/cm + reference picker. */
-.addm-line-vars .wo-af-rompill, .addm-line-vars .wo-af-leanpill {
+.addm-line-vars .wo-af-rompill, .addm-line-vars .wo-af-leanpill, .addm-line-vars .wo-af-romdimpill {
   flex: 0 0 auto; min-height: 0; width: auto;
   padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
   text-transform: uppercase; letter-spacing: 0.02em;
   border-radius: var(--r-xs); border: 1px solid var(--line);
   background: var(--line); color: var(--muted); cursor: pointer;
 }
-.addm-line-vars .wo-af-rompill:hover, .addm-line-vars .wo-af-leanpill:hover { border-color: var(--accent); color: var(--accent); }
-.addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+.addm-line-vars .wo-af-rompill:hover, .addm-line-vars .wo-af-leanpill:hover, .addm-line-vars .wo-af-romdimpill:hover { border-color: var(--accent); color: var(--accent); }
+.addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set, .addm-line-vars .wo-af-romdimpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* ROM cm-level popup chips (PB-55): the rom levels as a wrapped chip grid in the floating picker. */
+.romdim-pop .romdim-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; margin-top: 0.3rem; max-width: 16rem; }
+.romdim-pop .rom-ref-chip { font-size: 0.7rem; }
 /* Custom ×multiplier pill — same compact pill look; shows the live total, accent when a custom
    value is set. Tap → the value + mode (× on top / = total) picker (reuses .inc-pop). */
 .addm-line-vars .wo-af-multpill {
