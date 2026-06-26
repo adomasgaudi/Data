@@ -2893,6 +2893,11 @@ sup.wr-bw { font-size: 0.85em; }
    clips even position:fixed descendants to the row's box, slicing the popup to a sliver (the "ROM
    tag opens but it's hidden, I see a small section" bug). The open handler toggles .dd-open-within. */
 .addm-line-vars.dd-open-within, .addm-passive-pills.dd-open-within { -webkit-mask-image: none; mask-image: none; overflow: visible; }
+/* PB-55 (confirmed by the b.2.9.304 on-screen diagnostic): the modal CARD's `overflow: hidden auto`
+   is the real clipper of the opened dim dropdown — even though the menu is position:fixed, the card
+   clips it to its box. Drop the card's clip while a dropdown opened from inside it is showing so the
+   popup shows in full; the open handler adds .dd-open-within, close() removes it. */
+.addm-card.dd-open-within { overflow: visible; }
 /* PB-49 sibling (owner: "even scrolling to the end the tags are out of bounds / can't see them"):
    the right-edge fade mask is painted on the CONTAINER, so the rightmost ~1rem is ALWAYS faded —
    the last chip, flush at the right edge when fully scrolled, stays under it. An invisible

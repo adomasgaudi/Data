@@ -26673,8 +26673,9 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     menu?.setAttribute("hidden", "");
     // Undo any fixed-popup placement so the default absolute CSS resumes next open.
     if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
-    // Re-enable the scroll-row's right-edge fade mask once our popup is gone (see open handler).
-    dd.closest<HTMLElement>(".addm-line-vars, .addm-passive-pills")?.classList.remove("dd-open-within");
+    // Restore the clipping ancestors' mask/overflow once our popup is gone (see open handler).
+    for (const a of [".addm-line-vars", ".addm-passive-pills", ".addm-card"])
+      dd.closest<HTMLElement>(a)?.classList.remove("dd-open-within");
   };
   // Type-to-filter for the long-list search box (built in sync()): hide options whose
   // text doesn't contain the query, and any optgroup header left with no visible option.
@@ -26701,12 +26702,13 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
-      // The add-set tag rows (.addm-line-vars) carry a right-edge fade MASK (UI-53/PB-49). A CSS
-      // mask clips ALL descendants to the element's box — INCLUDING a position:fixed child — so an
-      // opened dim dropdown placed below the row gets clipped to a thin sliver (owner: "the ROM tag
-      // opens but it's hidden in the CSS, I see only a small section"). Drop the mask while OUR
-      // dropdown is open so it shows in full; close() restores it.
-      dd.closest<HTMLElement>(".addm-line-vars, .addm-passive-pills")?.classList.toggle("dd-open-within", opening);
+      // PB-55: an opened dim dropdown was clipped to a sliver. The on-screen diagnostic (b.2.9.304)
+      // proved the menu IS position:fixed at full height but `.addm-card` (overflow: hidden auto)
+      // is its CLIPPER — and the tag row's fade `mask` clips too. A fixed popup is NOT immune to an
+      // ancestor's overflow/mask here, so while OUR dropdown is open we drop the clip on every
+      // clipping ancestor (the scroll-row's mask + the modal card's overflow); close() restores them.
+      for (const a of [".addm-line-vars", ".addm-passive-pills", ".addm-card"])
+        dd.closest<HTMLElement>(a)?.classList.toggle("dd-open-within", opening);
       // Opening starts from a clean, unfiltered list (the menu HTML persists between opens).
       if (opening) { const srch = menu.querySelector<HTMLInputElement>(".xdd-search"); if (srch) { srch.value = ""; filterOpts(""); } }
       // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow: the add-set
@@ -26715,25 +26717,6 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill") || dd.classList.contains("login-input");
       if (opening && fixedPopup) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
       else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
-      // TEMP DIAGNOSTIC (PB-55, b.2.9.304): the ROM dropdown still opens clipped after two fix
-      // attempts — instrument instead of re-guessing. Shows, in a top banner, the open menu's real
-      // position + height + which ancestor actually clips it. REMOVE once the root is confirmed.
-      if (opening && (dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill"))) {
-        const mr = menu.getBoundingClientRect();
-        const cs = getComputedStyle(menu);
-        let clip = "none";
-        for (let a: HTMLElement | null = dd.parentElement; a && a !== document.body; a = a.parentElement) {
-          const s = getComputedStyle(a);
-          const masked = !!(s as unknown as { webkitMaskImage?: string }).webkitMaskImage && (s as unknown as { webkitMaskImage?: string }).webkitMaskImage !== "none";
-          if (s.overflowX !== "visible" || s.overflowY !== "visible" || s.transform !== "none" || s.filter !== "none" || masked || (s.contain !== "none" && s.contain !== "normal")) {
-            clip = `${(a.className || a.tagName).toString().trim().split(/\s+/)[0]}|oy=${s.overflowY}|tf=${s.transform !== "none" ? "Y" : "n"}|mask=${masked ? "Y" : "n"}|fl=${s.filter !== "none" ? "Y" : "n"}`;
-            break;
-          }
-        }
-        let bar = document.getElementById("ddDia");
-        if (!bar) { bar = document.createElement("div"); bar.id = "ddDia"; bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;background:#101418;color:#5f6;font:11px/1.3 monospace;padding:4px 6px;white-space:pre-wrap;word-break:break-all"; document.body.appendChild(bar); }
-        bar.textContent = `dim=${sel.dataset.dim} pos=${cs.position} top=${mr.top | 0} h=${mr.height | 0} fixHit=${fixedPopup} inDdw=${!!dd.closest(".dd-open-within")} clip=${clip}`;
-      }
       return;
     }
     // Tag editor: keep the menu OPEN (re-place if it's a fixed popup) after a tweak.
