@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
 import { resolveNote } from "./variationModel";
 
 describe("familiesUsingDim", () => {
@@ -14,6 +14,25 @@ describe("familiesUsingDim", () => {
   });
   it("returns an empty list for an unknown dimension", () => {
     expect(familiesUsingDim(FAMILIES, "nope")).toEqual([]);
+  });
+});
+
+describe("mergeDimOrder (built-in + user tags)", () => {
+  const ORDER = ["support", "band", "rom", "lean"];
+  const has = (dims: string[]) => (d: string) => dims.includes(d);
+  it("keeps built-in dims in display order, dropping ones the family lacks", () => {
+    expect(mergeDimOrder(ORDER, has(["band", "lean"]), [])).toEqual(["band", "lean"]);
+  });
+  it("appends user-created dims after the built-ins, order-stable", () => {
+    expect(mergeDimOrder(ORDER, has(["support"]), ["u_grip", "u_tempo"]))
+      .toEqual(["support", "u_grip", "u_tempo"]);
+  });
+  it("never duplicates a dim that is both built-in and listed as a user dim", () => {
+    expect(mergeDimOrder(ORDER, has(["support", "band"]), ["band", "u_grip"]))
+      .toEqual(["support", "band", "u_grip"]);
+  });
+  it("returns only user dims when the family has no built-ins", () => {
+    expect(mergeDimOrder(ORDER, has([]), ["u_a", "u_b"])).toEqual(["u_a", "u_b"]);
   });
 });
 

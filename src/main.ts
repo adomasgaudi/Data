@@ -83,7 +83,7 @@ import {
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
@@ -1767,9 +1767,19 @@ const FAM_DEFAULTS_KEY = "colosseum.famDefaults.v1";
 const famDefaultOverrides = loadJsonObject<Record<string, Record<string, string>>>(FAM_DEFAULTS_KEY);
 const FAM_LABELS_KEY = "colosseum.famLabels.v1";
 const famLabelOverrides = loadJsonObject<Record<string, Record<string, Record<string, string>>>>(FAM_LABELS_KEY);
-/** The config's reference default for a family dimension (first level if none set). */
+// ---- USER-CREATED tags (the owner's "＋ new tag") ---------------------------------------------.
+// A brand-new variation DIMENSION the owner adds to a family from the tag palette. Only the dim's
+// EXISTENCE + its display name + its baseline level live here; its OPTION levels/factors/labels/
+// gray flags reuse the SAME stores as built-in dims (famFactorOverrides / famLabelOverrides /
+// famGrayOverrides) — so a user tag behaves identically to a built-in one everywhere, no parallel
+// model (rule 65). `famDimOrder` / `famHasDim` / `dimLabel` (defined by AF_DIM_ORDER) merge these in.
+const FAM_USERDIMS_KEY = "colosseum.famUserDims.v1";
+interface UserDimDef { label: string; base: string }
+const famUserDims = loadJsonObject<Record<string, Record<string, UserDimDef>>>(FAM_USERDIMS_KEY);
+function saveUserDims(): void { saveJson(FAM_USERDIMS_KEY, famUserDims); }
+/** The config's reference default for a family dimension (user baseline / first level if none set). */
 function famBaseDefault(family: string, dim: string): string {
-  return FAMILIES[family]?.defaults[dim] ?? Object.keys(FAMILIES[family]?.dims[dim] ?? {})[0] ?? "";
+  return FAMILIES[family]?.defaults[dim] ?? famUserDims[family]?.[dim]?.base ?? Object.keys(famLevels(family, dim))[0] ?? "";
 }
 /** The DEFAULT level for a family dimension — the owner's override, else the config default. */
 function famDefaultLevel(family: string, dim: string): string {
@@ -1826,9 +1836,9 @@ function setFamGray(family: string, dim: string, level: string, gray: boolean): 
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
   const fam = FAMILIES[family];
-  if (!fam) return 1;
+  if (!fam && !famUserDims[family]) return 1;
   let s = 1;
-  for (const dim of Object.keys(fam.dims)) {
+  for (const dim of famDimOrder(family)) {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
@@ -8216,7 +8226,7 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
   // "just the exercise" and never a chip. The family "rom" depth dim is skipped — range is the
   // universal ROM chip's job (rendered separately), so it never double-shows. `suppress` hides a
   // dim whose value is already shown at the exercise header (hoisted common tag).
-  for (const dim of AF_DIM_ORDER) {
+  for (const dim of famDimOrder(fam)) {
     if (dim === "rom") continue;
     const v = vec[dim] != null ? String(vec[dim]) : null;
     if (!v || isGray(fam, dim, v)) continue;
@@ -8452,7 +8462,7 @@ function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
     return best && bestN > total / 2 ? best : null; // strict majority of ALL the exercise's sets
   };
   if (fam) {
-    for (const dim of AF_DIM_ORDER) {
+    for (const dim of famDimOrder(fam)) {
       if (dim === "rom") continue;
       const counts = new Map<string, number>();
       for (const s of sets) {
@@ -14610,7 +14620,7 @@ function exerciseInfoHtml(name: string): string {
   // options with their difficulty ×factor (band shows the −kg assist), the default ★, the
   // grayed/obvious levels muted, and each option's plain explanation. Empty for an unmodelled lift.
   const varFam = familyOf(name);
-  const varDims = varFam ? AF_DIM_ORDER.filter((d) => FAMILIES[varFam]!.dims[d]) : [];
+  const varDims = varFam ? famDimOrder(varFam) : [];
   const variationsBody = varDims.map((dim) => {
     const levels = famLevels(varFam!, dim);
     const opts = Object.keys(levels).map((l) => {
@@ -14626,7 +14636,7 @@ function exerciseInfoHtml(name: string): string {
         `</span>`
       );
     }).join("");
-    return `<div class="ex-var-dimrow"><span class="ex-var-dimname">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><div class="ex-var-opts">${opts}</div></div>`;
+    return `<div class="ex-var-dimrow"><span class="ex-var-dimname">${escapeHtml(dimLabel(dim, varFam))}</span><div class="ex-var-opts">${opts}</div></div>`;
   }).join("");
 
   const rows = [
@@ -14956,7 +14966,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `</div></div>`
     );
   };
-  const dims = Object.keys(FAMILIES[fam]!.dims)
+  const dims = famDimOrder(fam)
     // ladderGrip/ladderH live in the support block; lean is folded into the rom grid.
     .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH" && dim !== "shoulderDist" && !(hasGrid && dim === "lean"))
     .map((dim) => {
@@ -14987,7 +14997,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
           );
         })
         .join("");
-      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dimLabel(dim, fam))}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
     .join("");
   // The "final multiplier" folds in any extra factor (the per-set incline level shown
@@ -19294,6 +19304,66 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // only shows when you ＋reveal, after the common dims.
 const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "tapContact", "continuity", "band", "ladderGrip", "position"];
 const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", tapContact: "wall touch", continuity: "tempo", band: "band", position: "position" };
+/** Every dimension a family carries IN DISPLAY ORDER: built-ins (AF_DIM_ORDER), then the owner's
+ * user-created tags. The single SSOT for "what tags does this family have" — every enumeration
+ * site (palette, per-set pickers, variation editor, scaling) reads THIS so a new tag shows up
+ * everywhere at once (no half-wired tag). */
+function famDimOrder(family: string): string[] {
+  return mergeDimOrder(AF_DIM_ORDER, (d) => !!FAMILIES[family]?.dims[d], Object.keys(famUserDims[family] ?? {}));
+}
+/** Does a family carry this dim — built-in OR user-created? */
+function famHasDim(family: string, dim: string): boolean {
+  return !!FAMILIES[family]?.dims[dim] || !!famUserDims[family]?.[dim];
+}
+/** Is this a user-created tag (so it can be renamed/deleted, unlike a built-in)? */
+function isUserDim(family: string | null | undefined, dim: string): boolean {
+  return !!family && !!famUserDims[family]?.[dim] && !FAMILIES[family]?.dims[dim];
+}
+/** A dim's display label: built-in map → user tag's name → raw id. */
+function dimLabel(dim: string, family?: string | null): string {
+  return AF_DIM_LBL[dim] ?? (family ? famUserDims[family]?.[dim]?.label : undefined) ?? dim;
+}
+/** Slug a free-text label into a stable id (a-z0-9 + underscores). */
+function slugId(s: string, fallback: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || fallback;
+}
+/** Create a brand-new tag (dimension) on a family from the palette. It gets a GRAY baseline
+ * "none" (×1 = "just the exercise", the default) plus the owner's first option, so it's a normal
+ * deselectable passive tag from the start. Levels reuse the built-in stores (setFamFactor/Label),
+ * so it's identical to a built-in tag everywhere. Returns the new dim id (null if no name/family). */
+function addUserDim(family: string, label: string, firstOption: string): string | null {
+  const name = label.trim();
+  if (!name || !family) return null;
+  let dim = "u_" + slugId(name, "tag"); let i = 2;
+  while (famHasDim(family, dim)) dim = "u_" + slugId(name, "tag") + i++; // never collide
+  (famUserDims[family] ??= {})[dim] = { label: name, base: "none" };
+  saveUserDims();
+  setFamFactor(family, dim, "none", 1); setFamLabel(family, dim, "none", "none"); // baseline (gray default)
+  const opt = firstOption.trim();
+  if (opt) { const oid = slugId(opt, "on"); setFamFactor(family, dim, oid, 1); setFamLabel(family, dim, oid, opt); }
+  return dim;
+}
+/** Add another OPTION (level) to ANY tag — built-in or user (the owner can extend either). Returns
+ * the new level id. The factor starts ×1 (neutral) for the owner to tune in the same panel. */
+function addUserLevel(family: string, dim: string, label: string): string | null {
+  const nm = label.trim();
+  if (!nm || !family) return null;
+  let lvl = slugId(nm, "opt"); let i = 2; const have = famLevels(family, dim);
+  while (have[lvl] != null) lvl = slugId(nm, "opt") + i++;
+  setFamFactor(family, dim, lvl, 1); setFamLabel(family, dim, lvl, nm);
+  return lvl;
+}
+/** Delete a user-created tag entirely (built-in dims can't be deleted) and clear all its overrides. */
+function removeUserDim(family: string, dim: string): void {
+  if (!isUserDim(family, dim)) return;
+  delete famUserDims[family]?.[dim];
+  if (famUserDims[family] && Object.keys(famUserDims[family]).length === 0) delete famUserDims[family];
+  saveUserDims();
+  for (const [store, save] of [[famFactorOverrides, saveFamFactors], [famLabelOverrides, () => saveJson(FAM_LABELS_KEY, famLabelOverrides)], [famDefaultOverrides, () => saveJson(FAM_DEFAULTS_KEY, famDefaultOverrides)], [famGrayOverrides, () => saveJson(FAM_GRAY_KEY, famGrayOverrides)]] as const) {
+    const f = (store as Record<string, Record<string, unknown>>)[family];
+    if (f && f[dim] !== undefined) { delete f[dim]; (save as () => void)(); }
+  }
+}
 // ONE canonical label per (dimension, level), shared by the history TAG
 // (variationChipsHtml) and the add-set PICKER so the two can never drift — the
 // owner: "the variation selection should look like the tag and vice versa". The
@@ -19379,7 +19449,6 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
       `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(exerciseName)}" data-var-note="${escapeHtml(edit.note)}" aria-label="Difficulty for ${escapeHtml(edit.note)}" /></label></div>`
     );
   }
-  const famDef = FAMILIES[fam]!;
   // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
@@ -19391,8 +19460,8 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // The EDIT-arg path (the legacy per-set scaleEditPop) still renders EVERY dim so you can add any
   // variation there; the add-modal's own edit mode uses the no-edit call + inserts carried tags.
   // In the ADD path `lean` is its own rich pill (leanPillHtml), so it's skipped from the selects.
-  const selects = AF_DIM_ORDER
-    .filter((d) => famDef.dims[d] && !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d)))
+  const selects = famDimOrder(fam)
+    .filter((d) => !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d)))
     .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
     .join("");
   return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
@@ -19416,7 +19485,8 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
   const opts = Object.keys(levels)
     .map((l) => { const hint = afLevelHint(dim, l); return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`; })
     .join("");
-  return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></span>`;
+  const cap = dimLabel(dim, fam);
+  return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
@@ -20119,7 +20189,7 @@ function passivePaletteHtml(ex: string): string {
   const fam = familyOf(ex);
   const tags: { id: string; label: string }[] = [];
   // lean is excluded — it has its own always-shown rich pill (leanPillHtml), not a palette toggle.
-  if (fam) for (const dim of AF_DIM_ORDER) if (FAMILIES[fam]!.dims[dim] && dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: AF_DIM_LBL[dim] ?? dim });
+  if (fam) for (const dim of famDimOrder(fam)) if (dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: dimLabel(dim, fam) });
   // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
   // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
   if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
@@ -20144,17 +20214,52 @@ function passivePaletteHtml(ex: string): string {
   const uniInd = isUni(ex)
     ? `<button type="button" class="addm-uni-ind" data-uniex="${escapeHtml(ex)}" title="Unilateral — each set is a right + a left set (single-arm/leg); calculations use the weaker side. Tap to turn off.">⇄ unilateral</button>`
     : "";
+  // ＋ new tag — create a brand-new variation tag for this exercise (family lifts only; an
+  // unmodelled lift has no family to attach a dimension to). Sits at the end of the "add tag" row.
+  const newTagPill = fam ? `<button type="button" class="addm-newtag" data-newtag title="Create a brand-new tag for this exercise">＋ new tag</button>` : "";
   // Two labelled rows, passive on top / active below; an empty row is dropped so the block stays
   // tight. Separator under the whole palette splits it from the set lines beneath.
   const grp = (lbl: string, pills: string) => pills ? `<div class="addm-passive-grp"><span class="addm-passive-lbl muted">${escapeHtml(lbl)}</span><div class="addm-passive-pills">${pills}</div></div>` : "";
-  const body = grp("add tag", passivePills) + grp("active", activePills + uniInd);
+  const body = grp("add tag", passivePills + newTagPill) + grp("active", activePills + uniInd);
   return body ? `<div class="addm-passive" aria-label="Tags">${body}</div>` : "";
+}
+/** Re-render the add-modal's tag palette in place (after creating / deleting a tag or option). */
+function refreshAddmPalette(ex: string): void {
+  const slot = addModalEl?.querySelector<HTMLElement>(".addm-passive-slot");
+  if (slot) slot.innerHTML = passivePaletteHtml(ex);
+}
+/** The "＋ new tag" creator popup: name the tag + give its first option, then create it. The new
+ * tag is a normal passive pill afterwards (tap to add, ⓘ to add more options / tune ×difficulty). */
+function openNewTagCreator(anchor: HTMLElement, ex: string): void {
+  const fam = familyOf(ex);
+  if (!fam) return;
+  const renderHtml = (): string =>
+    `<div class="taginfo-hd">New tag</div>` +
+    `<div class="taginfo-sub muted">a new variation for ${escapeHtml(displayName(ex))} — name it and give one option to start</div>` +
+    `<div class="taginfo-lvl"><input type="text" class="taginfo-newtag-name" placeholder="tag name (e.g. grip)" aria-label="Tag name" /></div>` +
+    `<div class="taginfo-lvl"><input type="text" class="taginfo-newtag-opt" placeholder="first option (e.g. wide)" aria-label="First option" /></div>` +
+    `<button type="button" class="taginfo-toggle" data-newtag-create>＋ create tag</button>`;
+  openFloatingPicker(anchor, {
+    className: "inc-pop taginfo-pop",
+    renderHtml,
+    onClick: (t, _rerender) => {
+      if (!t.closest("[data-newtag-create]")) return;
+      const pop = t.closest<HTMLElement>(".taginfo-pop");
+      const name = pop?.querySelector<HTMLInputElement>(".taginfo-newtag-name")?.value ?? "";
+      const opt = pop?.querySelector<HTMLInputElement>(".taginfo-newtag-opt")?.value ?? "";
+      if (!name.trim()) return;
+      const dim = addUserDim(fam, name, opt);
+      closeFloatingPicker();
+      if (dim) { refreshAddmPalette(ex); const pill = addModalEl?.querySelector<HTMLElement>(`.addm-tag-info[data-taginfo="${CSS.escape(dim)}"]`); if (pill) openTagInfo(pill, ex, dim); }
+    },
+  });
 }
 /** What KIND of tag a dimension is, in one plain phrase (owner: "what kind of tag is it"). */
 function tagKindText(fam: string | null, id: string): string {
   if (id === "band") return "assistance band — subtracts kilograms from the load";
   if (id === "rom") return "range of motion — how much of the movement you do";
-  const levels = fam && FAMILIES[fam]?.dims[id] ? famLevels(fam, id) : null;
+  if (fam && isUserDim(fam, id)) return `your own tag — ${Object.keys(famLevels(fam, id)).length} option(s), tune each ×difficulty`;
+  const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
   if (levels) {
     const keys = Object.keys(levels);
     const cm = keys.filter((k) => /-?\d+\s*cm/.test(k)).length;
@@ -20169,8 +20274,9 @@ function tagKindText(fam: string | null, id: string): string {
  * inline dim pickers; the add/remove button reuses the palette pill's own click path. */
 function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
   const fam = familyOf(ex);
-  const label = AF_DIM_LBL[id] ?? id;
-  const levels = fam && FAMILIES[fam]?.dims[id] ? famLevels(fam, id) : null;
+  const label = dimLabel(id, fam);
+  const userDim = !!fam && isUserDim(fam, id);
+  const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
   // Which other exercises carry this tag — the logged lifts whose family has this dimension.
   const usingFams = familiesUsingDim(FAMILIES, id);
   const others = Array.from(new Set(computedRecords().map((r) => r.exerciseName)))
@@ -20198,8 +20304,14 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle${locked ? " disabled" : ""}>${on ? (locked ? "always on" : "✓ on sets — tap to remove") : "＋ add to sets"}</button>` +
       (levels ? `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` : "") +
       levelRows +
+      // Add a brand-new OPTION to this tag (band/ROM excepted — band is kg-based, ROM is free cm/%).
+      (levels && id !== "band" && id !== "rom"
+        ? `<div class="taginfo-addopt"><input type="text" class="taginfo-newopt" placeholder="add an option…" aria-label="New option name" /><button type="button" class="taginfo-addbtn" data-addopt title="Add this option">＋ option</button></div>`
+        : "") +
       `<div class="taginfo-h muted">used by</div>` +
-      `<div class="taginfo-used">${others.length ? others.map((n) => `<span class="taginfo-ex">${escapeHtml(n)}</span>`).join("") : `<span class="muted">only ${escapeHtml(displayName(ex))}</span>`}</div>`
+      `<div class="taginfo-used">${others.length ? others.map((n) => `<span class="taginfo-ex">${escapeHtml(n)}</span>`).join("") : `<span class="muted">only ${escapeHtml(displayName(ex))}</span>`}</div>` +
+      // A user-created tag can be DELETED entirely (built-in tags can't — only renamed/tuned).
+      (userDim ? `<button type="button" class="taginfo-del" data-deltag title="Delete this tag everywhere">🗑 delete tag “${escapeHtml(label)}”</button>` : "")
     );
   };
   openFloatingPicker(anchor, {
@@ -20216,6 +20328,19 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       }
       const def = t.closest<HTMLElement>(".taginfo-def");
       if (def?.dataset.tdef && fam) { setFamDefaultLevel(fam, id, def.dataset.tdef); rerender(); return; }
+      // ＋ option — add a new level to this tag, then re-render so it appears (and the palette below).
+      if (t.closest("[data-addopt]") && fam) {
+        const inp = t.closest<HTMLElement>(".taginfo-addopt")?.querySelector<HTMLInputElement>(".taginfo-newopt");
+        if (inp && inp.value.trim() && addUserLevel(fam, id, inp.value)) { refreshAddmPalette(ex); rerender(); }
+        return;
+      }
+      // 🗑 delete a user-created tag entirely → close + refresh the palette (the pill disappears).
+      if (t.closest("[data-deltag]") && fam && isUserDim(fam, id)) {
+        removeUserDim(fam, id);
+        closeFloatingPicker();
+        refreshAddmPalette(ex);
+        return;
+      }
     },
     onInput: (t) => {
       if (!fam) return;
@@ -20453,8 +20578,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       // PB-48: the add-modal renders only ACTIVE tags, so a dim this set CARRIES at a non-default
       // level (but isn't a promoted/active tag) wouldn't be rendered. Insert its pill into each
       // line's tag wrap so editing SHOWS (and can change) it; the loop below then pre-selects it.
-      for (const dim of AF_DIM_ORDER) {
-        if (!FAMILIES[fam]!.dims[dim] || dim === "lean") continue; // lean = its own pill
+      for (const dim of famDimOrder(fam)) {
+        if (dim === "lean") continue; // lean = its own pill
         const dflt = famDefaultLevel(fam, dim);
         if (String(effVec[dim] ?? dflt) === dflt) continue; // at default → not a carried tag
         for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
@@ -20692,6 +20817,13 @@ function onAddModalClick(e: MouseEvent): void {
   if (infoBtn?.dataset.taginfo) {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
     if (ex) openTagInfo(infoBtn, ex, infoBtn.dataset.taginfo);
+    return;
+  }
+  // ＋ new tag → the create-a-brand-new-tag popup (name + first option). Only shown for family lifts.
+  const newTagBtn = t.closest<HTMLElement>("[data-newtag]");
+  if (newTagBtn) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) openNewTagCreator(newTagBtn, ex);
     return;
   }
   // Tag palette ＋/✓ : SHOW or HIDE a tag for this exercise next to the weight. Hiding (deselect)
@@ -26198,10 +26330,7 @@ let hsCalc: HsCalc | null = null;
 /** The dims (in display order) that actually apply to the family + current support pick —
  * ladder grip/height only on a ladder, shoulder-gap only back-to-wall (mirrors scalarFromVec). */
 function hsRelevantDims(fam: string, vec: Record<string, string>): string[] {
-  const famDef = FAMILIES[fam];
-  if (!famDef) return [];
-  return AF_DIM_ORDER.filter((dim) => {
-    if (!famDef.dims[dim]) return false;
+  return famDimOrder(fam).filter((dim) => {
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") return false;
     if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
     return true;
@@ -26210,9 +26339,7 @@ function hsRelevantDims(fam: string, vec: Record<string, string>): string[] {
 /** A fresh tag vector for a family = each dimension at its (owner-pinned) default level. */
 function hsDefaultVec(fam: string): Record<string, string> {
   const out: Record<string, string> = {};
-  const famDef = FAMILIES[fam];
-  if (!famDef) return out;
-  for (const dim of Object.keys(famDef.dims)) out[dim] = famDefaultLevel(fam, dim);
+  for (const dim of famDimOrder(fam)) out[dim] = famDefaultLevel(fam, dim);
   return out;
 }
 /** A (dim, level)'s effect: a MULTIPLIER, or a kg subtraction (band). */
@@ -26255,7 +26382,7 @@ function hsSpectrumSvg(fam: string, dim: string, vec: Record<string, string>): s
   const oneY = yAt(1).toFixed(1);
   const sel = pts.find((p) => p.sel);
   const selTxt = sel ? `<text x="${xAt(sel.cm).toFixed(1)}" y="${(yAt(sel.f) - 8).toFixed(1)}" class="hs-svg-sel" text-anchor="middle">${sel.cm}cm · ×${hsR3(sel.f)}</text>` : "";
-  return `<svg class="hs-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)} multiplier across cm">` +
+  return `<svg class="hs-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(dimLabel(dim, fam))} multiplier across cm">` +
     `<line x1="${padL}" y1="${oneY}" x2="${W - padR}" y2="${oneY}" class="hs-svg-ref" />` +
     `<text x="${W - padR}" y="${(parseFloat(oneY) - 3).toFixed(1)}" class="hs-svg-ax" text-anchor="end">×1.0</text>` +
     `<polyline points="${poly}" class="hs-svg-line" />${dots}${selTxt}` +
@@ -26281,7 +26408,7 @@ function renderHandstands(): void {
   const dimControls = hsRelevantDims(fam, c.vec).filter((d) => hsIsSpectrum(fam, d)).map((dim) => {
     const cur = c.vec[dim] ?? famDefaultLevel(fam, dim);
     const opts = Object.keys(famLevels(fam, dim)).map((lv) => `<option value="${escapeHtml(lv)}"${lv === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, lv, fam))}</option>`).join("");
-    return `<label class="hs-field"><span class="hs-field-lbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="hs-dim" data-hsdim="${escapeHtml(dim)}">${opts}</select></label>`;
+    return `<label class="hs-field"><span class="hs-field-lbl">${escapeHtml(dimLabel(dim, fam))}</span><select class="hs-dim" data-hsdim="${escapeHtml(dim)}">${opts}</select></label>`;
   }).join("");
   body.innerHTML =
     `<div class="hs-controls">` +
@@ -26318,7 +26445,7 @@ function hsRenderOut(): void {
   const addedE1RM = effE1RM != null ? effE1RM - bwLoad : null;
   // FULL reference — every variation of every relevant tag and its effect.
   const refCards = hsRelevantDims(fam, c.vec).map((dim) => {
-    const lbl = escapeHtml(AF_DIM_LBL[dim] ?? dim);
+    const lbl = escapeHtml(dimLabel(dim, fam));
     if (hsIsSpectrum(fam, dim)) {
       const curF = hsLevelEffect(fam, dim, c.vec[dim] ?? "", c.vec).mult ?? 1;
       return `<div class="hs-ref-card hs-ref-card--wide"><div class="hs-ref-dim">${lbl}<span class="hs-ref-cur">${escapeHtml(afLevelText(dim, c.vec[dim] ?? "", fam))} · ×${hsR3(curF)}</span></div>${hsSpectrumSvg(fam, dim, c.vec)}</div>`;
@@ -26530,7 +26657,7 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     // For the tag editor, a header naming WHAT this tag controls + a one-line legend for the
     // three per-row icons (owner: "more text describing what each tag does; the icons are unclear").
     const vtagHead = isVtag()
-      ? `<div class="vtag-legend"><div class="vtag-legend-dim">${escapeHtml(AF_DIM_LBL[vtagDim] ?? vtagDim)}</div>` +
+      ? `<div class="vtag-legend"><div class="vtag-legend-dim">${escapeHtml(dimLabel(vtagDim, vtagFam()))}</div>` +
         `<div class="vtag-legend-sub">Pick how this set was done. The ×number is its difficulty vs the plain lift.</div>` +
         `<div class="vtag-legend-row"><span>${vtagIco("show")} show in history</span><span>${vtagIco("star")} default</span><span>${vtagIco("edit")} rename / ×</span></div></div>`
       : "";

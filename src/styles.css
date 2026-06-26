@@ -3110,6 +3110,22 @@ sup.wr-bw { font-size: 0.85em; }
 .taginfo-def.is-on { border-color: var(--gold); color: var(--gold); }
 .taginfo-used { display: flex; flex-wrap: wrap; gap: 0.25rem; }
 .taginfo-ex { font-size: 0.66rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); color: var(--muted); }
+/* ＋ new tag — the create-a-tag pill in the palette's "add tag" row. A dashed accent affordance,
+   distinct from the muted passive pills so "make a new one" reads clearly. */
+.addm-newtag {
+  flex: 0 0 auto; min-height: var(--tap-min); padding: 2px 8px; font: inherit; font-size: 0.62rem;
+  font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; cursor: pointer;
+  border: 1px dashed var(--accent); border-radius: var(--r-xs); background: none; color: var(--accent);
+}
+.addm-newtag:hover { background: var(--accent); color: #fff; }
+/* ＋ option — add a new level to a tag, inside its ⓘ panel. Input + button on one tight row. */
+.taginfo-addopt { display: flex; align-items: center; gap: 0.3rem; }
+.taginfo-newopt, .taginfo-newtag-name, .taginfo-newtag-opt { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.74rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); }
+.taginfo-addbtn { flex: 0 0 auto; font: inherit; font-size: 0.6rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); white-space: nowrap; border: 1px dashed var(--accent); border-radius: var(--r-xs); background: none; color: var(--accent); padding: 0 6px; }
+.taginfo-addbtn:hover { background: var(--accent); color: #fff; }
+/* 🗑 delete tag — destructive, only on user-created tags; uses the shared --remove colour (rule 28). */
+.taginfo-del { font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); margin-top: 0.2rem; border: 1px solid var(--remove); border-radius: var(--r-xs); background: none; color: var(--remove); padding: 0 0.6rem; }
+.taginfo-del:hover { background: var(--remove); color: #fff; }
 .addm-cog-pill {
   font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; min-height: var(--tap-min);
   padding: 3px 10px; border-radius: var(--r-pill); border: 1px solid var(--line);

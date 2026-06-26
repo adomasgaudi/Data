@@ -214,6 +214,16 @@ export function familiesUsingDim(families: Record<string, FamilyDef>, dim: strin
   return Object.keys(families).filter((fam) => !!families[fam]!.dims[dim]);
 }
 
+/** A family's tag (dimension) list IN DISPLAY ORDER: the built-in dims it carries (kept in
+ * `order`), then any USER-created dims appended (order-stable, deduped). Pure — the single source
+ * for "which tags does a family show", so the palette, per-set pickers, variation editor and
+ * scaling all enumerate the same set and a new tag can never appear in one place but not another. */
+export function mergeDimOrder(order: string[], hasDim: (dim: string) => boolean, userDims: string[]): string[] {
+  const base = order.filter(hasDim);
+  const user = userDims.filter((d) => !base.includes(d));
+  return [...base, ...user];
+}
+
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
   HSPU: {
     // wall orientation. Bare "wall" = back-to-wall (the common one); chest/face
