@@ -26673,6 +26673,8 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     menu?.setAttribute("hidden", "");
     // Undo any fixed-popup placement so the default absolute CSS resumes next open.
     if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
+    // Re-enable the scroll-row's right-edge fade mask once our popup is gone (see open handler).
+    dd.closest<HTMLElement>(".addm-line-vars, .addm-passive-pills")?.classList.remove("dd-open-within");
   };
   // Type-to-filter for the long-list search box (built in sync()): hide options whose
   // text doesn't contain the query, and any optgroup header left with no visible option.
@@ -26699,12 +26701,18 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
+      // The add-set tag rows (.addm-line-vars) carry a right-edge fade MASK (UI-53/PB-49). A CSS
+      // mask clips ALL descendants to the element's box — INCLUDING a position:fixed child — so an
+      // opened dim dropdown placed below the row gets clipped to a thin sliver (owner: "the ROM tag
+      // opens but it's hidden in the CSS, I see only a small section"). Drop the mask while OUR
+      // dropdown is open so it shows in full; close() restores it.
+      dd.closest<HTMLElement>(".addm-line-vars, .addm-passive-pills")?.classList.toggle("dd-open-within", opening);
       // Opening starts from a clean, unfiltered list (the menu HTML persists between opens).
       if (opening) { const srch = menu.querySelector<HTMLInputElement>(".xdd-search"); if (srch) { srch.value = ""; filterOpts(""); } }
-      // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow:
-      // the add-set pickers (squashed in a clipping scroll-row) and the login user
-      // picker (low on a centred card → its long list ran off the bottom of the screen).
-      const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("login-input");
+      // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow: the add-set
+      // pickers (any dim/lean PILL in the clipping scroll-row → wo-af-dim / wo-af-dimpill) and the
+      // login user picker (low on a centred card → its long list ran off the bottom of the screen).
+      const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill") || dd.classList.contains("login-input");
       if (opening && fixedPopup) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
       else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
       return;

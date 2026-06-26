@@ -1,5 +1,13 @@
 # Persistent bugs (recurring — learn from these)
 
+## PB-55 — Add-set tag dropdown opens as an unusable sliver (a CSS MASK clips a position:fixed popup)
+
+- **First seen / reported:** 2026-06-26, mobile (Brave, Android, b.2.9.302), Add set — Handstand Push Ups. Owner: "cannot use the ROM tag — it opens but it's hidden in the CSS, I can only see a small section of it." Screenshot showed the ROM dim dropdown open but clipped to the row's height (only the legend line visible, the option rows cut off).
+- **Why it's the recurring "floating menu clipped/escapes" class (PB-10 / PB-17 lineage):** the add-set tag rows (`.addm-line-vars`) scroll horizontally and carry a right-edge fade `-webkit-mask-image` / `mask-image` (added UI-53/PB-49 so the last chip clears the swipe cue). The dim pills' dropdowns live INSIDE that row. Even though the dropdown is `placeXddFixed`'d to `position:fixed` (which escapes ancestor `overflow`), a CSS **mask clips the element's ENTIRE descendant subtree to its box — including fixed-position children** (Chromium). The popup, placed BELOW the row, falls outside the masked box → sliced to the strip that overlaps the row. So `overflow` was handled (fixed escapes it) but the MASK was the hidden second clipper.
+- **Fix (b.2.9.303, UI-56/PB-55):** while a dropdown opened from the row is showing, the xdd open handler adds `.dd-open-within` to the masked ancestor (`.addm-line-vars` / `.addm-passive-pills`); CSS then sets `mask-image: none` + `overflow: visible` there so the popup shows in full; `close()` removes the class to restore the fade. Also broadened the fixed-popup trigger from only `.wo-af-dim` to any `.wo-af-dimpill` so every variation pill's menu escapes the scroll-row.
+- **Watch:** any `mask-image`/`filter`/`transform`/`clip-path` on a SCROLL CONTAINER that also hosts pop-out menus will clip those menus even when they're `position:fixed`. Before adding such an effect to a row with dropdowns, either portal the menu to `<body>` or disable the effect while a child popup is open. A fixed popup escapes `overflow`, NOT `mask`/`filter`/`transform`.
+- **Recurrences:** 1 (new CSS variant of the PB-10/PB-17 floating-menu-clipping class).
+
 ## PB-54 — Unilateral set: the EDIT menu drops the second side (add ≠ edit)
 
 - **First seen / reported:** recurring; latest 2026-06-25, mobile (Brave, Android, b.2.9.295), Edit set — One Arm Dumbbell Preacher Curl. Owner #persistent: the ADD menu shows the two-sided unilateral layout (`R 9×10 · L W×reps`) but the EDIT menu shows only ONE pair (`8×8`) — you can't see or edit the left side. "the add and edit menus should be made from the same base component, single source, why are they different?"

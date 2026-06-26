@@ -2889,6 +2889,10 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-line-vars::-webkit-scrollbar { display: none; }
 .addm-line-vars:empty { display: none; }
+/* While a dim/tag dropdown opened from this row is showing, DROP the fade mask + clip: a CSS mask
+   clips even position:fixed descendants to the row's box, slicing the popup to a sliver (the "ROM
+   tag opens but it's hidden, I see a small section" bug). The open handler toggles .dd-open-within. */
+.addm-line-vars.dd-open-within, .addm-passive-pills.dd-open-within { -webkit-mask-image: none; mask-image: none; overflow: visible; }
 /* PB-49 sibling (owner: "even scrolling to the end the tags are out of bounds / can't see them"):
    the right-edge fade mask is painted on the CONTAINER, so the rightmost ~1rem is ALWAYS faded —
    the last chip, flush at the right edge when fully scrolled, stays under it. An invisible
