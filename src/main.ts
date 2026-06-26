@@ -26715,6 +26715,25 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill") || dd.classList.contains("login-input");
       if (opening && fixedPopup) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
       else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
+      // TEMP DIAGNOSTIC (PB-55, b.2.9.304): the ROM dropdown still opens clipped after two fix
+      // attempts — instrument instead of re-guessing. Shows, in a top banner, the open menu's real
+      // position + height + which ancestor actually clips it. REMOVE once the root is confirmed.
+      if (opening && (dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill"))) {
+        const mr = menu.getBoundingClientRect();
+        const cs = getComputedStyle(menu);
+        let clip = "none";
+        for (let a: HTMLElement | null = dd.parentElement; a && a !== document.body; a = a.parentElement) {
+          const s = getComputedStyle(a);
+          const masked = !!(s as unknown as { webkitMaskImage?: string }).webkitMaskImage && (s as unknown as { webkitMaskImage?: string }).webkitMaskImage !== "none";
+          if (s.overflowX !== "visible" || s.overflowY !== "visible" || s.transform !== "none" || s.filter !== "none" || masked || (s.contain !== "none" && s.contain !== "normal")) {
+            clip = `${(a.className || a.tagName).toString().trim().split(/\s+/)[0]}|oy=${s.overflowY}|tf=${s.transform !== "none" ? "Y" : "n"}|mask=${masked ? "Y" : "n"}|fl=${s.filter !== "none" ? "Y" : "n"}`;
+            break;
+          }
+        }
+        let bar = document.getElementById("ddDia");
+        if (!bar) { bar = document.createElement("div"); bar.id = "ddDia"; bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99999;background:#101418;color:#5f6;font:11px/1.3 monospace;padding:4px 6px;white-space:pre-wrap;word-break:break-all"; document.body.appendChild(bar); }
+        bar.textContent = `dim=${sel.dataset.dim} pos=${cs.position} top=${mr.top | 0} h=${mr.height | 0} fixHit=${fixedPopup} inDdw=${!!dd.closest(".dd-open-within")} clip=${clip}`;
+      }
       return;
     }
     // Tag editor: keep the menu OPEN (re-place if it's a fixed popup) after a tweak.
