@@ -19500,35 +19500,60 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
   }
   return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
 }
-/** Floating cm-level popup for the ROM pill — modelled on the lean picker (openLeanPicker): a
- * body-appended popup that CAN'T be clipped by the modal card. It drives the hidden `.wo-af-dim`
- * select (the SSOT) so all existing read/save paths are untouched. */
+/** Floating cm-level popup for the ROM pill — SAME cm selection menu as the lean picker
+ * (openLeanPicker, owner): a cm/block unit toggle + a −/+ cm stepper, NOT a grid of preset
+ * pills. The typed/stepped cm snaps to the family's nearest discrete ROM level (via the
+ * generic snapToLeanLevelCm — the rom keys "+25cm".."-20cm" parse straight to cm); a yoga
+ * block under the hands RAISES them, so a block reads as +its cm. Body-appended so it can't
+ * be clipped by the modal card; drives the hidden `.wo-af-dim` select (the SSOT) so every
+ * save/read/edit path is untouched. */
 function openRomDimPicker(pill: HTMLElement): void {
   const sel = pill.previousElementSibling;
   if (!(sel instanceof HTMLSelectElement)) return;
   const fam = familyOf(sel.dataset.ex ?? "");
   if (!fam) return;
   const dflt = sel.dataset.dimdefault ?? "";
+  const keys = Array.from(sel.options).map((o) => o.value);
+  let unit: "cm" | "block" = "cm";
+  let reading = parseFloat(sel.value) || 0; // cm typed/stepped (block fills it in block mode)
+  let block: YogaBlockSide = "medium";
+  const cm = (): number => (unit === "cm" ? reading : YOGA_BLOCK_CM[block]); // a block raises the hands → +cm
   const setLevel = (lvl: string) => {
     sel.value = lvl;
     sel.dispatchEvent(new Event("change", { bubbles: true })); // edit-mode vec sync + multiplier refresh
     pill.textContent = afLevelText("rom", lvl, fam);
     pill.classList.toggle("is-set", lvl !== dflt);
   };
-  const renderHtml = (): string => {
-    const cur = sel.value;
-    const chips = Array.from(sel.options).map((o) =>
-      `<button type="button" class="rom-ref-chip${o.value === cur ? " is-on" : ""}" data-romdimlvl="${escapeHtml(o.value)}">${escapeHtml(o.textContent ?? o.value)}</button>`,
-    ).join("");
-    return `<div class="rom-ref-lbl muted">range of motion — hand height (cm)</div>` +
-      `<div class="rom-ref-chips romdim-chips">${chips}</div>`;
-  };
+  const commit = () => setLevel(snapToLeanLevelCm(cm(), keys));
+  const eqText = () => `= ${Math.round(cm())}cm → tag ${afLevelText("rom", snapToLeanLevelCm(cm(), keys), fam)}`;
+  const renderHtml = (): string =>
+    `<div class="rom-ref-lbl muted">range of motion — hand height (cm)</div>` +
+    `<div class="inc-units">` +
+    `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-romdimunit="cm">cm</button>` +
+    `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-romdimunit="block">block</button>` +
+    `</div>` +
+    (unit === "cm"
+      ? `<div class="inc-valrow"><button type="button" class="inc-step" data-romdimstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val romdim-val" step="1" value="${reading}" inputmode="decimal" aria-label="Hand height (cm)" />` +
+        `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-romdimstep="1" aria-label="Higher">+</button></div>`
+      : `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-romdimblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`) +
+    `<div class="inc-eq muted">${eqText()}</div>` +
+    `<button type="button" class="inc-floor" data-romdimdefaultbtn>default (${escapeHtml(afLevelText("rom", dflt, fam))})</button>`;
   openFloatingPicker(pill, {
     className: "inc-pop rom-pop romdim-pop",
     renderHtml,
     onClick: (t, rerender) => {
-      const c = t.closest<HTMLElement>("[data-romdimlvl]");
-      if (c?.dataset.romdimlvl) { setLevel(c.dataset.romdimlvl); rerender(); }
+      const u = t.closest<HTMLElement>("[data-romdimunit]");
+      if (u?.dataset.romdimunit) { unit = u.dataset.romdimunit === "block" ? "block" : "cm"; rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>("[data-romdimstep]");
+      if (s?.dataset.romdimstep) { reading = Math.round(reading + Number(s.dataset.romdimstep)); rerender(); commit(); return; }
+      const bl = t.closest<HTMLElement>("[data-romdimblock]");
+      if (bl?.dataset.romdimblock) { block = bl.dataset.romdimblock as YogaBlockSide; rerender(); commit(); return; }
+      if (t.closest("[data-romdimdefaultbtn]")) { unit = "cm"; reading = parseFloat(dflt) || 0; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".romdim-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = v; commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } }
     },
   });
 }
