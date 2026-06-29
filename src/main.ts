@@ -19846,8 +19846,8 @@ function tagActive(ex: string, fam: string | null, id: string): boolean {
  * active one layer below — one above another, not next to the weight"): the TOP row is the
  * not-yet-added tags (dashed ＋ pills), the BOTTOM row the active ones (solid ✓ pills). Tapping a
  * pill's body adds/removes it (an active tag also shows next to the weight, defaulted); each pill
- * also carries a small ⓘ button (same pill) that opens the per-tag info/edit panel (what it does,
- * its options + ×difficulty, rename, which exercises use it). Machine base wt / ÷ live in the ⚙ cog. */
+ * also carries a small ⓘ button (same pill) that opens the per-tag info/edit panel. Machine /
+ * counterweight / unilateral / machine-wt live in the DEFAULTS row above this palette. */
 function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
   const fam = familyOf(ex);
@@ -19872,19 +19872,13 @@ function passivePaletteHtml(ex: string): string {
   };
   const passivePills = tags.filter((t) => !tagActive(ex, fam, t.id)).map((t) => pill(t, false)).join("");
   const activePills = tags.filter((t) => tagActive(ex, fam, t.id)).map((t) => pill(t, true)).join("");
-  // Unilateral indicator (owner: "if it's unilateral I should see it OUT of the settings, next to
-  // the tags"). Shown only when on; tapping it flips the per-exercise unilateral state (mirrors the
-  // ⚙ cog toggle). It's a STATE not a tag, so it rides at the end of the ACTIVE row.
-  const uniInd = isUni(ex)
-    ? `<button type="button" class="addm-uni-ind" data-uniex="${escapeHtml(ex)}" title="Unilateral — each set is a right + a left set (single-arm/leg); calculations use the weaker side. Tap to turn off.">⇄ unilateral</button>`
-    : "";
   // ＋ new tag — create a brand-new variation tag for this exercise (family lifts only; an
   // unmodelled lift has no family to attach a dimension to). Sits at the end of the "add tag" row.
   const newTagPill = fam ? `<button type="button" class="addm-newtag" data-newtag title="Create a brand-new tag for this exercise">＋ new tag</button>` : "";
   // Two labelled rows, passive on top / active below; an empty row is dropped so the block stays
   // tight. Separator under the whole palette splits it from the set lines beneath.
   const grp = (lbl: string, pills: string) => pills ? `<div class="addm-passive-grp"><span class="addm-passive-lbl muted">${escapeHtml(lbl)}</span><div class="addm-passive-pills">${pills}</div></div>` : "";
-  const body = grp("add tag", passivePills + newTagPill) + grp("active", activePills + uniInd);
+  const body = grp("add tag", passivePills + newTagPill) + grp("active", activePills);
   return body ? `<div class="addm-passive" aria-label="Tags">${body}</div>` : "";
 }
 /** Re-render the add-modal's tag palette in place (after creating / deleting a tag or option). */
@@ -20151,10 +20145,9 @@ function openInclinePicker(pill: HTMLElement): void {
     },
   });
 }
-/** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the add-page ⚙ cog's
- * expanded per-exercise settings — assisted-machine, machine weight, ÷ multiplier, unilateral.
- * Reuses the SSOT getters/setters; rebuilt in place on every edit so its state stays live.
- * (Today these are per-exercise; Phase 3 re-homes them onto the chosen equipment.) */
+/** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the obvious per-exercise
+ * defaults — machine picker, counterweight assist, unilateral, machine base weight, ÷ multiplier.
+ * Shown INLINE above the passive tag palette (owner: separate defaults from optional tags). */
 function addmSettingsPanelInner(ex: string): string {
   if (!ex) return `<span class="muted addm-cog-hint">Name the exercise first.</span>`;
   const assisted = isAssistedMachine(ex);
@@ -20171,7 +20164,7 @@ function addmSettingsPanelInner(ex: string): string {
   return (
     `<label class="addm-cog-num" title="Which machine / equipment this lift uses. New sets are stamped with it; switching never changes past sets. Settings below belong to the chosen machine.">machine <select class="addm-cog-equip" aria-label="Equipment / machine">${equipOpts}</select></label>` +
     (named ? `<label class="addm-cog-num">name <input class="addm-cog-name" type="text" value="${escapeHtml(named.name)}" aria-label="Machine name" /></label>` : "") +
-    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~${fmt(eq.divisor)}× the real help), counted at a fraction for strength.">${assisted ? "assisted ½" : "assisted?"}</button>` +
+    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Counterweight machine (pull-ups / dips) — a NEGATIVE logged weight is the machine's counterweight (reads ~${fmt(eq.divisor)}× the real help). Bands are a separate tag.">${assisted ? "counterweight ½" : "counterweight?"}</button>` +
     `<button type="button" class="addm-cog-pill${uni ? " is-on" : ""}" data-cog="uni" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg).">${uni ? "unilateral" : "unilateral?"}</button>` +
     `<label class="addm-cog-num" title="Machine base weight (kg) — a hidden resistance the machine adds even at the lowest pin; shown as the 20+30 formula.">machine wt <input class="addm-cog-mw" type="number" inputmode="decimal" step="1" min="0" max="200" value="${eq.kgBase || ""}" placeholder="0" aria-label="Machine base weight (kg)" /> kg</label>` +
     (assisted
@@ -20179,46 +20172,29 @@ function addmSettingsPanelInner(ex: string): string {
       : "")
   );
 }
+/** The DEFAULTS row above passive tags — machine / counterweight / unilateral / machine wt. */
+function addmDefaultTagsHtml(ex: string): string {
+  if (!ex) return "";
+  return (
+    `<div class="addm-default-tags" data-defex="${escapeHtml(ex)}" aria-label="Exercise defaults">` +
+    `<div class="addm-default-grp"><span class="addm-default-lbl muted">defaults</span>` +
+    `<div class="addm-default-pills">${addmSettingsPanelInner(ex)}</div></div></div>`
+  );
+}
+/** Re-derive the open add-modal's default-tags row from the live exercise. */
+function refreshAddmSettings(): void {
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  const slot = addModalEl?.querySelector<HTMLElement>(".addm-default-tags-slot");
+  if (!form || !slot) return;
+  const ex = addmCogEx(form);
+  slot.innerHTML = addmDefaultTagsHtml(ex);
+}
 /** Re-derive the open add-modal's cog exercise (the typed new-lift name, else the fixed one). */
 function addmCogEx(form: HTMLElement): string {
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
   return (exInput ? exInput.value.trim() : (form.dataset.addex ?? "")) || "";
 }
-/** Rebuild the cog panel body in place from the live exercise, keeping its open state. */
-function refreshAddmSettings(): void {
-  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
-  const body = addModalEl?.querySelector<HTMLElement>(".addm-set-cog");
-  if (!form || !body) return;
-  body.dataset.cogex = addmCogEx(form);
-  body.innerHTML = addmSettingsPanelInner(body.dataset.cogex);
-}
-/** Place the ⚙ cog popup as a fixed, viewport-clamped card under (or above) its button. */
-function placeCogPop(panel: HTMLElement, anchor: HTMLElement): void {
-  const r = anchor.getBoundingClientRect();
-  const w = Math.min(window.innerWidth - 16, 320);
-  panel.style.width = `${w}px`;
-  const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
-  const h = panel.offsetHeight || 220;
-  let top = r.bottom + 6;
-  if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - 6 - h);
-  panel.style.left = `${left}px`;
-  panel.style.top = `${top}px`;
-}
-function closeCogPop(): void {
-  const panel = addModalEl?.querySelector<HTMLElement>(".addm-set-cog");
-  if (panel) { panel.hidden = true; panel.classList.remove("addm-set-cog--pop"); panel.style.cssText = ""; }
-  const cog = addModalEl?.querySelector<HTMLElement>(".addm-cog");
-  cog?.classList.remove("is-on"); cog?.setAttribute("aria-expanded", "false");
-  document.removeEventListener("click", cogOutside, true);
-}
-function cogOutside(e: MouseEvent): void {
-  const t = e.target as HTMLElement;
-  if (t.closest(".addm-set-cog") || t.closest(".addm-cog")) return; // a tap inside the popup / on the cog
-  e.stopPropagation(); // first outside tap closes the cog ONLY (not the whole modal)
-  closeCogPop();
-}
 function closeAddModal(): void {
-  closeCogPop();
   addModalEl?.remove();
   addModalEl = null;
   addmStrength = null; // drop the cached strength map (recomputed on next open)
@@ -20274,8 +20250,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
   const form =
     `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
     exField +
-    `<div class="addm-set-cog" data-cogex="${escapeHtml(ex)}" hidden>${addmSettingsPanelInner(ex)}</div>` +
     afWhenToggle(date, today) +
+    `<div class="addm-default-tags-slot">${addmDefaultTagsHtml(ex)}</div>` +
     `<div class="addm-passive-slot">${passivePaletteHtml(ex)}</div>` +
     `<div class="addm-lines">${afLine(ex)}</div>` +
     `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
@@ -20288,7 +20264,6 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
   wrap.innerHTML =
     `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isEdit ? "Edit a set" : isNew ? "Add an exercise" : "Add a set"}">` +
     `<div class="addm-head"><span class="addm-title">${isEdit ? `Edit set — ${escapeHtml(displayName(ex))}` : isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
-    `<button type="button" class="addm-cog" aria-label="Exercise settings" aria-expanded="false" title="Exercise settings — assisted machine, machine weight, multiplier, unilateral">⚙</button>` +
     `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
     form +
     `</div>`;
@@ -20439,7 +20414,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
   // No panel rebuild here (the input has already blurred) so the typed value stays put.
   wrap.addEventListener("change", (ev) => {
     const el = ev.target as HTMLElement;
-    const cex = wrap.querySelector<HTMLElement>(".addm-set-cog")?.dataset.cogex ?? "";
+    const formEl = wrap.querySelector<HTMLElement>(".wo-addform")!;
+    const cex = wrap.querySelector<HTMLElement>(".addm-default-tags")?.dataset.defex ?? addmCogEx(formEl);
     if (!cex) return;
     const curId = currentEquipmentIdFor(cex); // null = Default (legacy per-exercise settings)
     if (el.classList.contains("addm-cog-equip")) {
@@ -20502,6 +20478,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
         // The passive-tag palette (＋ ROM …) is per-exercise → rebuild it for the typed lift.
         const ps = wrap.querySelector<HTMLElement>(".addm-passive-slot");
         if (ps) ps.innerHTML = passivePaletteHtml(name);
+        const ds = wrap.querySelector<HTMLElement>(".addm-default-tags-slot");
+        if (ds) ds.innerHTML = addmDefaultTagsHtml(name);
         // Rebuilt selects start showing every dim — re-run the only-set hide once they're
         // xdd-enhanced (rAF), so defaults collapse in the Add-exercise modal too.
         const f = wrap.querySelector<HTMLElement>(".wo-addform");
@@ -20509,8 +20487,8 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       };
       exInput.addEventListener("change", refreshVariant);
       exInput.addEventListener("input", refreshVariant);
-      // The ⚙ cog targets the typed lift — re-point it when the name settles.
       exInput.addEventListener("change", refreshAddmSettings);
+      exInput.addEventListener("input", refreshAddmSettings);
     }
   }
   // Owner: do NOT auto-focus a field on open — that pops the on-screen keyboard the moment
@@ -20648,46 +20626,16 @@ function onAddModalClick(e: MouseEvent): void {
     }
     return;
   }
-  // ⚙ Exercise-settings cog: toggle the expanded per-exercise panel (rebuilt from the live
-  // exercise so a just-typed new lift targets the right name).
-  const cogBtn = t.closest<HTMLElement>(".addm-cog");
-  if (cogBtn) {
-    const panel = wrap.querySelector<HTMLElement>(".addm-set-cog");
-    if (panel) {
-      if (panel.hasAttribute("hidden")) {
-        // Owner: the cog should open a floating POPUP, not push the layout down with an inline
-        // expansion. The panel stays inside the modal (so its existing click/change handlers keep
-        // working) but renders as a fixed, viewport-clamped card closed by an outside tap.
-        refreshAddmSettings();
-        panel.hidden = false;
-        panel.classList.add("addm-set-cog--pop");
-        placeCogPop(panel, cogBtn);
-        cogBtn.classList.add("is-on");
-        cogBtn.setAttribute("aria-expanded", "true");
-        setTimeout(() => document.addEventListener("click", cogOutside, true), 0);
-      } else closeCogPop();
-    }
-    return;
-  }
-  // Cog panel assisted / unilateral toggles — flip the SSOT, rebuild the panel in place, and
-  // refresh the live preview (the −20/N formula reads these).
+  // Default-tags row: counterweight / unilateral toggles — flip the SSOT, rebuild in place.
   const cogPill = t.closest<HTMLElement>(".addm-cog-pill");
   if (cogPill) {
-    const cex = wrap.querySelector<HTMLElement>(".addm-set-cog")?.dataset.cogex ?? "";
+    const cex = wrap.querySelector<HTMLElement>(".addm-default-tags")?.dataset.defex ?? addmCogEx(form);
     if (cex) {
       if (cogPill.dataset.cog === "assisted") setAssistedOverride(cex, !isAssistedMachine(cex));
       else if (cogPill.dataset.cog === "uni") setUnilateralOverride(cex, !isUni(cex));
       refreshAddmSettings();
       syncPendingFromModal();
     }
-    return;
-  }
-  // The unilateral INDICATOR next to the passive tags — tapping flips uni off (mirrors the cog).
-  const uniInd = t.closest<HTMLElement>(".addm-uni-ind");
-  if (uniInd?.dataset.uniex) {
-    setUnilateralOverride(uniInd.dataset.uniex, !isUni(uniInd.dataset.uniex));
-    refreshAddmSettings();
-    syncPendingFromModal();
     return;
   }
   // Add-line RIR picker: toggle the menu, toggle bands (multi-select, owner), "specify" an exact

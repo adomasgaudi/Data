@@ -3054,24 +3054,15 @@ sup.wr-bw { font-size: 0.85em; }
   box-shadow: 0 8px 40px rgba(20, 24, 38, 0.28); padding: 0.7rem 0.9rem 1rem;
 }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
-.addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; } /* grows so the ⚙ + × sit together at the right */
+.addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; }
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
-/* ⚙ Exercise-settings cog (Phase 1, equipment model) + its expanded per-exercise panel. */
-.addm-cog {
-  font-size: 1.15rem; line-height: 1; cursor: pointer; background: none; border: none;
-  color: var(--muted); padding: 0 4px; min-height: var(--tap-min);
-}
-.addm-cog.is-on { color: var(--accent); }
-.addm-set-cog {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem;
-  margin: 0.1rem 0 0.45rem; padding: 0.5rem 0.6rem; border: 1px solid var(--line);
-  border-radius: var(--r-pill); background: var(--accent-soft);
-}
-/* Owner: the ⚙ cog opens a floating POPUP, not an inline expansion that pushes the form down. */
-.addm-set-cog--pop {
-  position: fixed; z-index: 221; margin: 0; max-height: 70vh; overflow: auto;
-  border-radius: 10px; background: var(--panel); box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-}
+/* Exercise DEFAULTS row — machine / counterweight / unilateral / machine wt (above passive tags). */
+.addm-default-tags-slot { min-width: 0; max-width: 100%; }
+.addm-default-tags { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.15rem 0 0.25rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); min-width: 0; max-width: 100%; }
+.addm-default-tags:empty { display: none; }
+.addm-default-grp { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); align-items: center; gap: 0.4rem; min-width: 0; max-width: 100%; }
+.addm-default-lbl { width: 2.6rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.addm-default-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; min-width: 0; }
 /* TAG palette above the sets: a ＋ for EVERY tag the exercise can carry (owner: "a list of all
    the tags above the sets"). A ＋ promotes the tag to a pill on every set line; once on it shows
    ✓ and removes on a second tap. Many tags now → ONE horizontally-scrolling row (rule #cram),
@@ -3290,13 +3281,6 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-set-chip .wo-af-weight-l:focus, .addm-set-chip .wo-af-reps-l:focus {
   outline: none; border-color: var(--accent); background: var(--panel);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-/* Unilateral indicator next to the passive-tag palette (a STATE, not a tag → its own look). */
-.addm-uni-ind {
-  font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer;
-  padding: 2px 8px; border: 1px solid var(--accent); border-radius: var(--r-pill);
-  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent);
-  min-height: var(--tap-min); display: inline-flex; align-items: center;
 }
 /* Variant tag strip shown inside the chip before the weight */
 .addm-vtag-strip { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; margin-right: 4px; align-self: center; }
