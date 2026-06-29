@@ -3153,6 +3153,8 @@ sup.wr-bw { font-size: 0.85em; }
 .taginfo-curve-at { flex: 0 0 auto; font-size: 0.66rem; white-space: nowrap; }
 .taginfo-addanchor { display: flex; align-items: center; gap: 0.3rem; }
 .taginfo-newcm { flex: 0 0 4rem; font: inherit; font-size: 0.74rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); }
+.taginfo-rm { flex: 0 0 auto; font: inherit; font-size: 0.72rem; font-weight: 700; cursor: pointer; min-width: var(--tap-min); min-height: var(--tap-min); border: 1px solid var(--line); border-radius: var(--r-xs); background: none; color: var(--muted); padding: 0 5px; line-height: 1; }
+.taginfo-cmstep { flex: 0 0 2.8rem; font: inherit; font-size: 0.74rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--accent); field-sizing: content; }
 /* 🗑 delete tag — destructive, only on user-created tags; uses the shared --remove colour (rule 28). */
 .taginfo-del { font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); margin-top: 0.2rem; border: 1px solid var(--remove); border-radius: var(--r-xs); background: none; color: var(--remove); padding: 0 0.6rem; }
 .taginfo-del:hover { background: var(--remove); color: #fff; }

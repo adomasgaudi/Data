@@ -7,6 +7,9 @@ import {
   inferCmKeyStyle,
   namedUnitCm,
   factorForCmDimLevel,
+  defaultSparseAnchorCms,
+  defaultSparseAnchors,
+  mergeCmCurveAnchors,
 } from "./cmDimEdit";
 
 describe("cmDimEdit", () => {
@@ -46,5 +49,23 @@ describe("cmDimEdit", () => {
 
   it("interpolates off-preset cm", () => {
     expect(factorForCmDimLevel(romAnchors, "+32cm")).toBeCloseTo(0.437, 2);
+  });
+
+  it("derives sparse anchor cms from a full ROM table", () => {
+    const full = {
+      "+25cm": 0.56, "+23cm": 0.6, "+20cm": 0.66, "+15cm": 0.72, "+10cm": 0.8,
+      "+5cm": 0.88, "+2cm": 0.94, "0cm": 1.0, "-3cm": 1.06, "-5cm": 1.1,
+      "-10cm": 1.22, "-15cm": 1.35, "-20cm": 1.5,
+    };
+    expect(defaultSparseAnchorCms(full)).toEqual([-20, 0, 25]);
+    const sparse = defaultSparseAnchors(full);
+    expect(Object.keys(sparse)).toEqual(["-20cm", "0cm", "+25cm"]);
+    expect(sparse["0cm"]).toBe(1);
+    expect(sparse["+25cm"]).toBe(0.56);
+  });
+
+  it("merges sparse anchor overrides", () => {
+    const base = { "0cm": 1, "+25cm": 0.56 };
+    expect(mergeCmCurveAnchors(base, { "+10cm": 0.8 })).toEqual({ "0cm": 1, "+25cm": 0.56, "+10cm": 0.8 });
   });
 });

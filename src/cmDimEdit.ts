@@ -94,3 +94,37 @@ export function sortedCmAnchors(anchors: Record<string, number>): Array<{ key: s
     .filter((r) => Number.isFinite(r.cm))
     .sort((a, b) => a.cm - b.cm);
 }
+
+/** The few cm heights that define the editable curve — min, 0 (when in range), max. */
+export function defaultSparseAnchorCms(levels: Record<string, number>): number[] {
+  const { anchors } = splitCmDimLevels(levels);
+  const cms = sortedCmAnchors(anchors).map((a) => a.cm);
+  if (cms.length <= 3) return cms;
+  const min = cms[0]!, max = cms[cms.length - 1]!;
+  const zero = cms.find((c) => c === 0);
+  const mid = cms[Math.floor(cms.length / 2)]!;
+  const picked = new Set<number>([min, max]);
+  if (zero !== undefined) picked.add(0);
+  else picked.add(mid);
+  return [...picked].sort((a, b) => a - b);
+}
+
+/** Sparse cm→× anchors derived from a full preset table (for the formula editor, not every step). */
+export function defaultSparseAnchors(levels: Record<string, number>): Record<string, number> {
+  const { anchors } = splitCmDimLevels(levels);
+  const style = inferCmKeyStyle(Object.keys(anchors));
+  const out: Record<string, number> = {};
+  for (const cm of defaultSparseAnchorCms(levels)) {
+    const key = formatCmLevelKey(cm, style);
+    out[key] = anchors[key] ?? factorForCmDimLevel(anchors, key, cm);
+  }
+  return out;
+}
+
+/** Layer owner sparse-anchor edits over defaults (extra keys = user-added anchors). */
+export function mergeCmCurveAnchors(
+  defaults: Record<string, number>,
+  overrides: Record<string, number> = {},
+): Record<string, number> {
+  return { ...defaults, ...overrides };
+}
