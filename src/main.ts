@@ -13919,24 +13919,19 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
   type BarColor = { r: number; g: number; b: number };
   type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number; shTip: { X: number; Y: number } };
-  // COLOUR: a cool→warm ramp (deep teal → warm brick-red) where RED = a HIGHER ESTIMATED
-  // 1RM for that weight×reps cell (owner: "the red should be the 1RM calc for that w × reps,
-  // not the rep amount"). So the strongest combos glow red; easy light/high-rep sets stay
-  // teal — normalised across the cells shown. World-fixed light then shades each face.
-  const wRange = Math.max(1, d.hiW - d.loW);
+  // COLOUR: a cool→warm ramp (deep teal → warm brick-red) where RED = a TALLER bar — that rep
+  // was done MORE times in the window (owner: "the color shows the height of each bar, not the
+  // 1RM"). So the most-repeated cells glow red; rarely-hit cells stay teal — normalised across
+  // the counts shown. World-fixed light then shades each face. (Was: red = estimated 1RM.)
   const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
   const COOL: [number, number, number] = [40, 132, 150];
   const WARM: [number, number, number] = [198, 74, 52];
-  const mapFormula = currentFormula();
-  const e1rmOf = (w: number, reps: number): number => estimate1RM(w, reps, mapFormula) ?? 0;
-  let e1rmLo = Infinity, e1rmHi = -Infinity;
-  for (const p of d.pts) { const e = e1rmOf(p.w, p.reps); if (e < e1rmLo) e1rmLo = e; if (e > e1rmHi) e1rmHi = e; }
-  const e1rmRange = Math.max(1e-6, e1rmHi - e1rmLo);
-  const barColor = (w: number, reps: number): BarColor => {
-    const wf = clamp01((w - d.loW) / wRange);
-    const rf = clamp01((e1rmOf(w, reps) - e1rmLo) / e1rmRange); // RED = higher estimated 1RM
-    const dk = 1 - 0.4 * wf; // a touch darker as raw weight rises (form cue)
-    return { r: (COOL[0] + (WARM[0] - COOL[0]) * rf) * dk, g: (COOL[1] + (WARM[1] - COOL[1]) * rf) * dk, b: (COOL[2] + (WARM[2] - COOL[2]) * rf) * dk };
+  let cntLo = Infinity, cntHi = -Infinity;
+  for (const p of d.pts) { if (p.count < cntLo) cntLo = p.count; if (p.count > cntHi) cntHi = p.count; }
+  const cntRange = Math.max(1e-6, cntHi - cntLo);
+  const barColor = (count: number): BarColor => {
+    const rf = clamp01((count - cntLo) / cntRange); // RED = taller bar (more reps done)
+    return { r: COOL[0] + (WARM[0] - COOL[0]) * rf, g: COOL[1] + (WARM[1] - COOL[1]) * rf, b: COOL[2] + (WARM[2] - COOL[2]) * rf };
   };
   const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
   const faceFill = (c: BarColor, t: number) => { const f = 0.55 + 0.62 * t; return `rgb(${cl(c.r * f)},${cl(c.g * f)},${cl(c.b * f)})`; };
@@ -13984,7 +13979,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     // height — so taller bars throw longer shadows and rotating moves them (light is world-fixed).
     const shLen = mapH(p.count) * 0.5 + 0.12;
     const shT = rot(cx - Lw.x * shLen, cy0, cz - Lw.z * shLen);
-    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.w, p.reps), cx, cz, topY, shTip: { X: shT.X, Y: shT.Y } });
+    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.count), cx, cz, topY, shTip: { X: shT.X, Y: shT.Y } });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
