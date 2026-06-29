@@ -87,7 +87,7 @@ import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim,
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
-  cmLevelKey, interpCmFactor,
+  cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
@@ -19519,8 +19519,11 @@ function openRomDimPicker(pill: HTMLElement): void {
   if (!fam) return;
   const dflt = sel.dataset.dimdefault ?? "";
   let unit: "cm" | "block" = "cm";
-  let reading = parseFloat(sel.value) || 0; // cm typed/stepped (block fills it in block mode)
-  let block: YogaBlockSide = "medium";
+  const initCm = parseCmLevelKey(sel.value) ?? 0;
+  let reading = initCm; // cm typed/stepped (kept in sync with block picks)
+  let block: YogaBlockSide = nearestYogaBlockSide(initCm);
+  const syncBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
   const cm = (): number => (unit === "cm" ? reading : YOGA_BLOCK_CM[block]); // a block raises the hands → +cm
   const setLevel = (lvl: string) => {
     // ROM is CONTINUOUS (owner: tag must show "exactly what i set", not a snapped preset):
@@ -19552,16 +19555,22 @@ function openRomDimPicker(pill: HTMLElement): void {
     renderHtml,
     onClick: (t, rerender) => {
       const u = t.closest<HTMLElement>("[data-romdimunit]");
-      if (u?.dataset.romdimunit) { unit = u.dataset.romdimunit === "block" ? "block" : "cm"; rerender(); commit(); return; }
+      if (u?.dataset.romdimunit) {
+        const newUnit = u.dataset.romdimunit === "block" ? "block" : "cm";
+        if (newUnit === "cm" && unit === "block") syncReadingFromBlock();
+        else if (newUnit === "block" && unit === "cm") syncBlockFromReading();
+        unit = newUnit;
+        rerender(); commit(); return;
+      }
       const s = t.closest<HTMLElement>("[data-romdimstep]");
-      if (s?.dataset.romdimstep) { reading = Math.round(reading + Number(s.dataset.romdimstep)); rerender(); commit(); return; }
+      if (s?.dataset.romdimstep) { reading = Math.round(reading + Number(s.dataset.romdimstep)); syncBlockFromReading(); rerender(); commit(); return; }
       const bl = t.closest<HTMLElement>("[data-romdimblock]");
-      if (bl?.dataset.romdimblock) { block = bl.dataset.romdimblock as YogaBlockSide; rerender(); commit(); return; }
-      if (t.closest("[data-romdimdefaultbtn]")) { unit = "cm"; reading = parseFloat(dflt) || 0; rerender(); commit(); return; }
+      if (bl?.dataset.romdimblock) { block = bl.dataset.romdimblock as YogaBlockSide; syncReadingFromBlock(); rerender(); commit(); return; }
+      if (t.closest("[data-romdimdefaultbtn]")) { unit = "cm"; reading = parseCmLevelKey(dflt) ?? 0; syncBlockFromReading(); rerender(); commit(); return; }
     },
     onInput: (t, pop) => {
       const vi = t.closest<HTMLInputElement>(".romdim-val");
-      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = v; commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } }
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = v; syncBlockFromReading(); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } }
     },
   });
 }
@@ -20154,9 +20163,12 @@ function openLeanPicker(pill: HTMLElement): void {
   const username = els.athlete.value;
   let unit: "cm" | "block" = "cm";
   let point: HandPoint = DEFAULT_HAND_POINT;
-  let reading = 0; // cm read at `point` (the cm unit)
-  let block: YogaBlockSide = "medium";
   let hand = handLengthFor(username);
+  const canonFromLevel = parseCmLevelKey(pill.dataset.leanlevel ?? "0cm") ?? 0;
+  let reading = Math.max(0, canonFromLevel - handPointOffsetCm(point, hand)); // cm read at `point`
+  let block: YogaBlockSide = nearestYogaBlockSide(reading);
+  const syncLeanBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncLeanReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
   const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
   const eqText = () => `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`;
   const commit = () => {
@@ -20189,18 +20201,24 @@ function openLeanPicker(pill: HTMLElement): void {
     renderHtml,
     onClick: (t, rerender) => {
       const u = t.closest<HTMLElement>("[data-leanunit]");
-      if (u?.dataset.leanunit) { unit = u.dataset.leanunit === "block" ? "block" : "cm"; rerender(); commit(); return; }
+      if (u?.dataset.leanunit) {
+        const newUnit = u.dataset.leanunit === "block" ? "block" : "cm";
+        if (newUnit === "cm" && unit === "block") syncLeanReadingFromBlock();
+        else if (newUnit === "block" && unit === "cm") syncLeanBlockFromReading();
+        unit = newUnit;
+        rerender(); commit(); return;
+      }
       const s = t.closest<HTMLElement>("[data-leanstep]");
-      if (s?.dataset.leanstep) { reading = Math.max(0, Math.round(reading + Number(s.dataset.leanstep))); rerender(); commit(); return; }
+      if (s?.dataset.leanstep) { reading = Math.max(0, Math.round(reading + Number(s.dataset.leanstep))); syncLeanBlockFromReading(); rerender(); commit(); return; }
       const bl = t.closest<HTMLElement>("[data-leanblock]");
-      if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; rerender(); commit(); return; }
+      if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; syncLeanReadingFromBlock(); rerender(); commit(); return; }
       const pt = t.closest<HTMLElement>("[data-leanpoint]");
       if (pt?.dataset.leanpoint) { point = pt.dataset.leanpoint as HandPoint; rerender(); commit(); return; }
-      if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; rerender(); commit(); return; }
+      if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; syncLeanBlockFromReading(); rerender(); commit(); return; }
     },
     onInput: (t, pop) => {
       const vi = t.closest<HTMLInputElement>(".lean-val");
-      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); syncLeanBlockFromReading(); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
       const hi = t.closest<HTMLInputElement>(".lean-hand-val");
       if (hi) { const v = parseFloat(hi.value); if (Number.isFinite(v) && v > 0) { hand = v; setHandLength(username, v); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
     },

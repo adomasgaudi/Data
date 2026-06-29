@@ -68,6 +68,25 @@ export function snapToLeanLevelCm(canonicalCm: number, levelKeys: readonly strin
 /** Match a cm-level KEY like "+25cm" / "0cm" / "-3cm" (the rom/lean dim key shape). */
 const CM_KEY_RE = /^[+-]?\d+(\.\d+)?cm$/;
 
+/** Parse a cm level KEY ("+23cm", "0cm", "-3cm") back to a numeric cm value. */
+export function parseCmLevelKey(key: string): number | undefined {
+  if (!CM_KEY_RE.test(key)) return undefined;
+  const n = parseFloat(key);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/** Pick the yoga-block side whose cm height is nearest to `cm` (blocks are positive heights). */
+export function nearestYogaBlockSide(cm: number): YogaBlockSide {
+  const target = Math.max(0, cm);
+  let best: YogaBlockSide = "small";
+  let bestDiff = Infinity;
+  for (const side of ["small", "medium", "large"] as const) {
+    const d = Math.abs(YOGA_BLOCK_CM[side] - target);
+    if (d < bestDiff) { bestDiff = d; best = side; }
+  }
+  return best;
+}
+
 /** Format a cm value as a level KEY in the table's style: "+32cm" / "0cm" / "-3cm".
  * The inverse of parsing a key with parseFloat — lets a CONTINUOUS cm picker store an
  * exact value (e.g. the owner's 32cm) as a key, instead of snapping to a preset level. */

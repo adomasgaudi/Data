@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   handPointOffsetCm, leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm,
-  cmLevelKey, interpCmFactor,
+  cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   YOGA_BLOCK_CM, TAP_CONTACT_ORDER, TAP_CONTACT_LABEL,
   DEFAULT_HAND_LENGTH_CM,
 } from "./handstandLean";
@@ -44,6 +44,18 @@ describe("continuous cm dim (ROM) — exact key + interpolated factor", () => {
     expect(cmLevelKey(0)).toBe("0cm");
     expect(cmLevelKey(-3)).toBe("-3cm");
     expect(cmLevelKey(25.4)).toBe("+25cm"); // rounds to a whole-cm key
+  });
+  it("parses a cm level key back to a number", () => {
+    expect(parseCmLevelKey("+23cm")).toBe(23);
+    expect(parseCmLevelKey("0cm")).toBe(0);
+    expect(parseCmLevelKey("-5cm")).toBe(-5);
+    expect(parseCmLevelKey("free")).toBeUndefined();
+  });
+  it("maps a cm height to the nearest yoga-block side", () => {
+    expect(nearestYogaBlockSide(23)).toBe("large");
+    expect(nearestYogaBlockSide(15)).toBe("medium");
+    expect(nearestYogaBlockSide(5)).toBe("small");
+    expect(nearestYogaBlockSide(-3)).toBe("small"); // blocks are positive heights
   });
   it("returns the exact factor for an on-table key", () => {
     expect(interpCmFactor(rom, "+25cm")).toBe(rom["+25cm"]);
