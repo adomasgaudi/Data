@@ -3072,7 +3072,15 @@ sup.wr-bw { font-size: 0.85em; }
 /* TAGS palette: label on its OWN line above the pills, with a separator line under the whole
    block so it reads as a distinct section from the set lines below (owner: "add a line to
    separate visually and move tag above"). */
-.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); }
+/* PB-53 recurrence-5 ROOT (found via the on-screen overflow diag): the passive ADD-TAG
+   palette is a nowrap scroller (.addm-passive-pills) ~565px wide. min-width:0 was on the
+   pills + .addm-passive-grp but NOT on the wrappers above them (.addm-passive-slot, this
+   .addm-passive) — and a flex child floors at min-content unless EVERY level gets
+   min-width:0 (PB-24). So .addm-passive-slot (a direct flex child of the form) floored at
+   565px and, via align-items:stretch, dragged the whole form — note input + Add button
+   included — out of bounds. Add min-width:0 to every level so the scroller can shrink. */
+.addm-passive-slot { min-width: 0; }
+.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); min-width: 0; }
 .addm-passive:empty { display: none; }
 /* Two stacked rows (passive "add tag" on top, "active" below): each is a label pinned at the left
    with its pills scrolling beside it (owner: "passive above, active one layer below"). */
@@ -3300,7 +3308,7 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-edit-del { color: var(--remove); border-color: color-mix(in srgb, var(--remove) 40%, var(--line)); margin-left: auto; }
 .addm-edit-del:hover { color: #fff; background: var(--remove); border-color: var(--remove); }
 /* Suggestions: below the lines, gray ghost pills with a direct-add "+" button. */
-.addm-sugg { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0 0.2rem; }
+.addm-sugg { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.45rem 0 0.2rem; min-width: 0; }
 .addm-sugg-row { display: flex; flex-wrap: nowrap; gap: 0.4rem; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2px; }
 /* Each suggestion: chip label + "+" direct-add button joined as one unit */
 .addm-sugg-item { display: inline-flex; align-items: stretch; flex: 0 0 auto; border-radius: var(--r-pill); overflow: hidden; }
