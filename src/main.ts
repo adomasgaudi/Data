@@ -8330,12 +8330,12 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   const sid = setId(raw);
   const hasVariant = machineModeEligible(s.exerciseName) || !!familyOf(s.exerciseName) || !!note || s.levelDim !== undefined;
   // Tapping a collapsed set opens a small ACTION MENU (owner): duplicate it, change its
-  // variant, or add a suggested next set. A set that HAS a variant carries the variant
-  // attrs (so the menu can open the editor) and — when the Var toggle is on — shows the
-  // outline highlight the owner likes. Spectators (can't edit) get plain text.
+  // variant, or add a suggested next set. Variant attrs ride on the button when the set
+  // has a model/note/level so the menu can open the editor. No outer pill/outline — tags
+  // are styled individually (owner). Spectators (can't edit) get plain text.
   const finish = (h: string): string =>
     canEditCurrentAthlete()
-      ? `<button type="button" class="wo-set-menu${hasVariant && S.showVariants ? " has-var" : ""}" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
+      ? `<button type="button" class="wo-set-menu" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
       : h;
   // Glue the tag block + weight^reps together (owner: "you cannot wrap the weight away from
   // the tags — they have to be in line"). An inline-flex row keeps the chips box (which wraps
