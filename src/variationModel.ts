@@ -150,7 +150,7 @@ export function resolveNote(
     // Exact table key first; for a CONTINUOUS cm dim (rom) an off-table value like
     // "+32cm" interpolates from the cm anchors instead of flagging bad_level.
     const factor = level !== undefined
-      ? (fam.dims[dim]![level] ?? interpCmFactor(fam.dims[dim]!, level))
+      ? (fam.dims[dim]![level] ?? ((dim === "rom" || dim === "floorHeight") ? interpCmFactor(fam.dims[dim]!, level) : undefined))
       : undefined;
     if (typeof factor === "number") scalar *= factor;
     else flags.push({ type: "bad_level", detail: `${dim}=${level}` });
