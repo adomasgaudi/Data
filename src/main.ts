@@ -8217,19 +8217,16 @@ function setVec(r: SetRecord): Record<string, unknown> {
 /** How many variation chips show before the rest collapse behind a "see more" (＋N)
  * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
  * off as a long horizontal line. >6 is rare (handstands at most), so the overflow is tucked
- * away and revealed in place by tapping ＋N. Applies to both per-set chips AND the hoisted
- * common tags (commonTagsChips renders through here). */
+ * away and revealed in place by tapping ＋N. */
 const MAX_VAR_CHIPS = 6;
 function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>, username: string = els.athlete.value): string {
   if (!fam) return "";
   const items: { cls: string; txt: string }[] = [];
   // Collect EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
   // show, not just support/band). A GRAY level (the obvious baseline, or an owner 👁 override) is
-  // "just the exercise" and never a chip. The family "rom" depth dim is skipped — range is the
-  // universal ROM chip's job (rendered separately), so it never double-shows. `suppress` hides a
-  // dim whose value is already shown at the exercise header (hoisted common tag).
+  // "just the exercise" and never a chip. The universal %-ROM attribute is romOfSet's chip;
+  // the family's own `rom` dim (e.g. HSPU hand height) shows here when non-gray.
   for (const dim of famDimOrder(fam)) {
-    if (dim === "rom") continue;
     const v = vec[dim] != null ? String(vec[dim]) : null;
     if (!v || isGray(fam, dim, v)) continue;
     if (suppress && suppress[dim] === v) continue;
@@ -8302,10 +8299,6 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // Suppress the ROM chip when this set's ROM is the hoisted common one (shown at the header).
   const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const note = romRes.note;
-  // Bodyweight = no real added weight (0, 1, or unlogged null): the VARIATION (tag / ×N) is
-  // the description and becomes the shaded base, with reps as the trailing superscript — so a
-  // bodyweight set reads "B2W⁷" / "×0.82⁷", never "0⁷ ×0.82" (owner: tags before reps, reps last).
-  const bw = s.weight === 0 || s.weight === 1 || s.weight === null;
   // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
   // you dialed (the editable part). Empty for normal lifts.
   const mwp = machineWeightPrefixForSet(s);
@@ -8352,7 +8345,7 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
   // show "UN" with the reps instead of a weight number.
   if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
-    return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`)));
+    return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${weightHtml}${mach}`)));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -8360,7 +8353,6 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // for a bodyweight lift it fills the empty weight slot (×0.6⁵); for a weighted
   // lift it tags onto the real weight^reps.
   if (scaled) {
-    const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
     // Owner: the ×N multiplier is NOISE when tag CHIPS already say what the variation is.
     // Show ×N ONLY for a manual per-set override (custom multiplier tag) or when the ×N-mode
     // pill forces every multiplier on — never as a fallback when chips are empty.
@@ -8375,10 +8367,10 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
       const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
       const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
       const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-      return finish(effWrap(core(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${weightHtml}${tag}${mach}`)));
+      return finish(effWrap(core(`${chips}${weightHtml}${tag}${mach}`)));
     }
-    // Multiplier implied by the chip → show just the chip (+ weight) and reps, no ×N.
-    return finish(effWrap(core(bw ? `${chips}${repsSup}${mach}` : `${chips}${weightHtml}${mach}`)));
+    // Multiplier implied by the chips → tags + weight^reps, no ×N.
+    return finish(effWrap(core(`${chips}${weightHtml}${mach}`)));
   }
   // A NOTE never sits in the tag/weight slot (owner: "the note shouldn't be in the same
   // position as the tags; write it as a very small text right underneath the weight — under
@@ -8444,47 +8436,6 @@ function setListHtml(setsAsc: readonly SetRecord[], suppress?: Record<string, st
       return `<span class="wo-sess" title="${escapeHtml(periodGroupLabel(mondayKey(wk[0]!.date), "week"))}">${inner}</span>`;
     })
     .join(" ");
-}
-/** The variation tags shared by a MAJORITY of an exercise's sets, to hoist up to the exercise
- * header (owner: don't repeat the same tag on every set). Returns { dim → value } for each tag
- * a strict majority share — plus "__rom" → the ROM label when a majority share that. A variable
- * tag (e.g. ROM differing per set) has no majority value, so it's never hoisted. */
-function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
-  const out: Record<string, string> = {};
-  const fam = sets.length ? familyOf(sets[0]!.exerciseName) : null;
-  if (sets.length < 2) return out;
-  const total = sets.length;
-  const majority = (counts: Map<string, number>): string | null => {
-    let best: string | null = null, bestN = 0;
-    for (const [v, n] of counts) if (n > bestN) { best = v; bestN = n; }
-    return best && bestN > total / 2 ? best : null; // strict majority of ALL the exercise's sets
-  };
-  if (fam) {
-    for (const dim of famDimOrder(fam)) {
-      if (dim === "rom") continue;
-      const counts = new Map<string, number>();
-      for (const s of sets) {
-        const v = setVec(s)[dim];
-        const sv = v != null ? String(v) : null;
-        if (sv && !isGray(fam, dim, sv)) counts.set(sv, (counts.get(sv) ?? 0) + 1);
-      }
-      const m = majority(counts);
-      if (m) out[dim] = m;
-    }
-  }
-  // ROM (the universal chip) — hoist its label when a majority share the same one.
-  const romCounts = new Map<string, number>();
-  for (const s of sets) { const l = romOfSet(setId(s), s.notes).label; if (l) romCounts.set(l, (romCounts.get(l) ?? 0) + 1); }
-  const rm = majority(romCounts);
-  if (rm) out["__rom"] = rm;
-  return out;
-}
-/** The hoisted common tags rendered as chips for the exercise header (variation chips + the ROM
- * chip), or "" when nothing is shared by a majority. */
-function commonTagsChips(fam: string | null, common: Record<string, string>): string {
-  const vecChips = variationChipsFromVec(fam, common); // common is a {dim: value} map → renders the shared dims
-  const romChip = common["__rom"] ? `<span class="set-rom" title="${escapeHtml(common["__rom"])} — range of motion (most sets)">${escapeHtml(shortRomLabel(common["__rom"]))}</span>` : "";
-  return vecChips + romChip;
 }
 
 // The golden "best RM" column normally shows each lift's estimated 1RM. The X-RM
@@ -8716,11 +8667,7 @@ function renderWorkoutsPage() {
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        // Hoist the tags a MAJORITY of these sets share up to the header (owner: don't repeat the
-        // same tag on every set); suppress them per-set so only the sets that DIFFER show their own.
-        const common = commonTagsFor(sets);
-        const commonChips = commonTagsChips(familyOf(exerciseName), common);
-        const setsTxt = setListHtml(sets, common) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
+        const setsTxt = setListHtml(sets) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
         const name = displayName(exerciseName);
         // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
         // each set keeps its real source lift in originalExerciseName. Show the distinct
@@ -8765,7 +8712,7 @@ function renderWorkoutsPage() {
         // the shared tags are pushed to the right and stack into their own compact column, so
         // they stay IN LINE with the exercise instead of wrapping underneath it (owner). The
         // per-set list sits on its own line below.
-        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -9191,15 +9138,10 @@ function exerciseSetRowsHtml(
   // Newest-first: reverse the date-sorted sets so the latest day/set leads (matches
   // the history's newest→oldest order); the day/week dividers fire on each date change.
   const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
-  // Hoist the tags a MAJORITY of these sets share up to the exercise header (owner: don't
-  // repeat the same tag on every set) and suppress them per-set. For the inline single-exercise
-  // expand (no header here) the collapsed .wo-ex-line above already carries these chips.
-  const common = commonTagsFor(exSets);
-  const commonChips = commonTagsChips(familyOf(e.exerciseName), common);
   const header =
     `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
     `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
-    `${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""}${addBtn}</td></tr>`;
+    `${addBtn}</td></tr>`;
   let lastDay: string | null = null;
   let lastWeek: string | null = null;
   const setRows = exSets
@@ -9213,7 +9155,7 @@ function exerciseSetRowsHtml(
         lastDay = s.date;
         lastWeek = wk;
       }
-      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common);
+      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
     })
     .join("");
   // The inline single-exercise expand omits this header — the collapsed .wo-ex-line
@@ -10875,16 +10817,12 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     if (g) g.push(s);
     else byDate.set(s.date, [s]);
   }
-  // Hoist the tags a MAJORITY of this exercise's sets share to a single header row, and suppress
-  // them per-set (owner: a tag shared by the whole exercise shouldn't repeat on every set).
-  const common = commonTagsFor(sets);
-  const commonChips = commonTagsChips(sets.length ? familyOf(sets[0]!.exerciseName) : null, common);
-  const commonRow = commonChips ? `<tr class="set-ex-row"><td colspan="5"><span class="wo-ex-commontags">${commonChips}</span></td></tr>` : "";
+  // Every set row carries its own full tag list (owner: see ALL active tags per set).
   const body = Array.from(byDate, ([date, daySets]) => {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common)).join("");
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
   }).join("");
-  return `<table class="data-table detail-table">${setsHead()}<tbody>${commonRow}${body}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}</tbody></table>`;
 }
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
