@@ -8205,16 +8205,14 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 // same. A dimension's BASELINE level is "just the exercise" (a free push-up) and is
 // NOT a tag: only levels that differ from the family's config default get a chip, and
 // every label comes from the shared AF_LEVEL_LBL map (afLevelText). (WO-235 #prune)
-/** A model-lift set's resolved variation vec — the note's implied vec + the per-set `__set:<id>`
- * picked tags (so noteless picks resolve too). {} for a non-model lift. */
+/** A model-lift set's resolved variation vec — the SAME vec scaleForRecord uses (note
+ * tokens + per-set `__set:<id>` picks + family defaults for unspecified sets). */
 function setVec(r: SetRecord): Record<string, unknown> {
   const fam = familyOf(r.exerciseName);
   if (!fam) return {};
-  const note = (r.notes ?? "").trim();
-  return {
-    ...(note ? { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) } : {}),
-    ...noteVecOverride(r.exerciseName, `__set:${setId(r)}`),
-  };
+  const note = variationNote(r);
+  if (!note) return {};
+  return { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
 }
 /** How many variation chips show before the rest collapse behind a "see more" (＋N)
  * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
@@ -8363,16 +8361,12 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // lift it tags onto the real weight^reps.
   if (scaled) {
     const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
-    // Owner: the ×N multiplier is NOISE on the collapsed line when a variation CHIP already
-    // conveys the variation (B2W / LEAN…) — the chip says WHAT, and the exact factor is one
-    // tap away in the set editor. So show ×N here ONLY when it's CUSTOM: a manual per-set
-    // "Scale ×" override, OR there's no chip at all (then ×N is the only indicator — e.g. a
-    // plain note the owner gave a difficulty). Otherwise drop it and keep just the chip+reps.
-    // "×N" mode (the scaleModeToggle pill) forces EVERY multiplier on; default "variation"
-    // mode shows ×N only when it's CUSTOM or has no chip to imply it.
+    // Owner: the ×N multiplier is NOISE when tag CHIPS already say what the variation is.
+    // Show ×N ONLY for a manual per-set override (custom multiplier tag) or when the ×N-mode
+    // pill forces every multiplier on — never as a fallback when chips are empty.
     const ovSc = setOverrides[setId(s)];
     const customScale = (ovSc?.scale ?? 1) !== 1 || ovSc?.scaleAbs != null;
-    const showScale = S.showAllScale || customScale || chips === "";
+    const showScale = S.showAllScale || customScale;
     if (showScale) {
       // Colour ENCODES the direction (added info, not just a number): a HARDER variation
       // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
@@ -9705,14 +9699,12 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The setId + the readable note ride along so the popover can show the ORIGINAL note
   // and edit THIS set's incline level (per-set override).
   const rawNote = (s.notes ?? "").trim();
-  // Tag-first display (owner): the named variation CHIP (B2W / band / lean …) IS the tag, and
-  // tapping the row opens its editor — so there's ONE control, not a styled chip PLUS a raw ×N
-  // picker. The ×N multiplier shows ONLY when there's no chip to imply it (or a manual per-set
-  // scale, or the ×N-mode pill forces it) — the same rule the collapsed line (setDisplay) uses.
-  // UN (not-comparable) always shows.
+  // Tag-first display (owner): named variation CHIPS (B2W / band / lean …) ARE the tags.
+  // The ×N multiplier shows ONLY for a manual per-set custom scale, not-comparable, or
+  // when the ×N-mode pill is on — never as a fallback when chips are empty.
   const namedChips = variationChipsHtml(s, suppress);
   const customScale = (setOverrides[sid]?.scale ?? 1) !== 1 || setOverrides[sid]?.scaleAbs != null;
-  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale || namedChips === ""));
+  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale));
   const scaleTag = !showScaleNum
     ? ""
     : editNote
