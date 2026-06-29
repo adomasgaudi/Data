@@ -90,9 +90,10 @@ import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact
   cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import {
-  dimUsesCmCurve, splitCmDimLevels, sortedCmAnchors, inferCmKeyStyle, formatCmLevelKey,
-  factorForCmDimLevel, namedUnitCm as defaultNamedUnitCm, parseCmLevel,
-  defaultSparseAnchors, mergeCmCurveAnchors,
+  dimUsesCmCurve, splitCmDimLevels,
+  namedUnitCm as defaultNamedUnitCm, parseCmLevel,
+  defaultCmCurveFormula, cmCurveFormulaMult, cmCurveFormulaSamples,
+  type CmCurveFormula,
 } from "./cmDimEdit";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
@@ -1794,13 +1795,34 @@ function setYogaBlockCm(side: YogaBlockSide, cm: number): void {
   else yogaBlockCmOverrides[side] = cm;
   saveYogaBlockCm();
 }
-// ---- Sparse cm→× curve anchors (formula editor) — NOT one row per preset cm step ----.
-// Like push-up incline: a handful of editable anchor heights; any cm (or yoga-block /
-// named unit mapped to cm) reads off the interpolated curve. Defaults = min / 0 / max
-// from the built-in table; owner edits + extra anchors live here.
-const CM_CURVE_ANCHORS_KEY = "colosseum.cmCurveAnchors.v1";
-const cmCurveAnchorOverrides = loadJsonObject<Record<string, Record<string, Record<string, number>>>>(CM_CURVE_ANCHORS_KEY);
-function saveCmCurveAnchors(): void { saveJson(CM_CURVE_ANCHORS_KEY, cmCurveAnchorOverrides); }
+// ---- Parametric cm→× curve formula (ROM / lean / shoulder gap…) — NOT anchor rows ----.
+// × at any cm comes from editable slopes + clamp (0cm = ×1). Named units map to cm
+// and read off the same formula; yoga-block / cm-step tune the picker intervals.
+const CM_CURVE_FORMULA_KEY = "colosseum.cmCurveFormula.v1";
+const cmCurveFormulaOverrides = loadJsonObject<Record<string, Record<string, CmCurveFormula>>>(CM_CURVE_FORMULA_KEY);
+function saveCmCurveFormula(): void { saveJson(CM_CURVE_FORMULA_KEY, cmCurveFormulaOverrides); }
+function cmCurveFormula(family: string, dim: string): CmCurveFormula {
+  return cmCurveFormulaOverrides[family]?.[dim] ?? defaultCmCurveFormula(cmCurveBaseLevels(family, dim));
+}
+function setCmCurveFormulaField(family: string, dim: string, field: keyof CmCurveFormula, value: number): void {
+  if (!Number.isFinite(value)) return;
+  const def = defaultCmCurveFormula(cmCurveBaseLevels(family, dim));
+  const cur = cmCurveFormula(family, dim);
+  const next = { ...cur, [field]: value };
+  const fam = (cmCurveFormulaOverrides[family] ??= {});
+  const same = (Object.keys(def) as (keyof CmCurveFormula)[]).every((k) => Math.abs(next[k] - def[k]) < 1e-9);
+  if (same) delete fam[dim];
+  else fam[dim] = next;
+  if (Object.keys(fam).length === 0) delete cmCurveFormulaOverrides[family];
+  saveCmCurveFormula();
+}
+function cmCurveFactorAt(family: string, dim: string, cm: number): number {
+  return cmCurveFormulaMult(cm, cmCurveFormula(family, dim));
+}
+function cmCurveFactorForLevel(family: string, dim: string, level: string, namedCm?: number): number {
+  const cm = parseCmLevel(level) ?? namedCm;
+  return cm !== undefined ? cmCurveFactorAt(family, dim, cm) : 1;
+}
 const CM_CURVE_STEP_KEY = "colosseum.cmCurveStep.v1";
 const cmCurveStepOverrides = loadJsonObject<Record<string, Record<string, number>>>(CM_CURVE_STEP_KEY);
 const DEFAULT_CM_CURVE_STEP = 1;
@@ -1817,66 +1839,6 @@ function setCmCurveStep(family: string, dim: string, step: number): void {
 }
 function cmCurveBaseLevels(family: string, dim: string): Record<string, number> {
   return FAMILIES[family]?.dims[dim] ?? {};
-}
-/** The sparse cm→× anchors for a curve dim (defaults + owner sparse edits + legacy per-key overrides on defaults). */
-function cmCurveAnchors(family: string, dim: string): Record<string, number> {
-  const defaults = defaultSparseAnchors(cmCurveBaseLevels(family, dim));
-  const legacy = famFactorOverrides[family]?.[dim] ?? {};
-  const mergedDefaults = { ...defaults };
-  for (const k of Object.keys(defaults)) {
-    if (legacy[k] !== undefined) mergedDefaults[k] = legacy[k]!;
-  }
-  return mergeCmCurveAnchors(mergedDefaults, cmCurveAnchorOverrides[family]?.[dim]);
-}
-function defaultCmCurveAnchorFactor(family: string, dim: string, key: string): number | undefined {
-  const full = splitCmDimLevels(cmCurveBaseLevels(family, dim)).anchors;
-  if (key in full) return full[key];
-  const cm = parseCmLevel(key);
-  return cm !== undefined ? factorForCmDimLevel(full, key, cm) : undefined;
-}
-function setCmCurveAnchor(family: string, dim: string, level: string, value: number): void {
-  const def = defaultCmCurveAnchorFactor(family, dim, level)
-    ?? defaultSparseAnchors(cmCurveBaseLevels(family, dim))[level];
-  const fam = (cmCurveAnchorOverrides[family] ??= {});
-  const d = (fam[dim] ??= {});
-  if (def !== undefined && Math.abs(value - def) < 1e-9) {
-    delete d[level];
-    if (Object.keys(d).length === 0) delete fam[dim];
-    if (Object.keys(fam).length === 0) delete cmCurveAnchorOverrides[family];
-  } else {
-    d[level] = value;
-  }
-  // Sparse curve is authoritative — drop any legacy full-table override for this key.
-  const leg = famFactorOverrides[family]?.[dim];
-  if (leg?.[level] !== undefined) {
-    delete leg[level];
-    if (Object.keys(leg).length === 0) delete famFactorOverrides[family]![dim];
-    if (famFactorOverrides[family] && Object.keys(famFactorOverrides[family]!).length === 0) delete famFactorOverrides[family];
-    saveFamFactors();
-  }
-  saveCmCurveAnchors();
-}
-function removeCmCurveAnchor(family: string, dim: string, level: string): boolean {
-  const defaults = defaultSparseAnchors(cmCurveBaseLevels(family, dim));
-  if (level in defaults) return false;
-  const d = cmCurveAnchorOverrides[family]?.[dim];
-  if (!d?.[level]) return false;
-  delete d[level];
-  if (Object.keys(d).length === 0) delete cmCurveAnchorOverrides[family]![dim];
-  if (cmCurveAnchorOverrides[family] && Object.keys(cmCurveAnchorOverrides[family]!).length === 0) delete cmCurveAnchorOverrides[family];
-  saveCmCurveAnchors();
-  return true;
-}
-/** Add a new cm anchor to a curve dim (interpolated × from the full preset table). */
-function addCmAnchor(family: string, dim: string, cm: number): string | null {
-  if (!Number.isFinite(cm)) return null;
-  const style = inferCmKeyStyle(Object.keys(cmCurveBaseLevels(family, dim)));
-  const key = formatCmLevelKey(cm, style);
-  if (cmCurveAnchors(family, dim)[key] !== undefined) return key;
-  const full = splitCmDimLevels(cmCurveBaseLevels(family, dim)).anchors;
-  const f = factorForCmDimLevel(full, key, cm);
-  setCmCurveAnchor(family, dim, key, f);
-  return key;
 }
 
 // ---- Per-family DEFAULT level + LEVEL LABEL overrides (the tag editor) ----.
@@ -1974,9 +1936,8 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     const lv = vec[dim] ?? "";
     let f: number;
     if (dimUsesCmCurve(levels)) {
-      const anchors = cmCurveAnchors(family, dim);
-      const ncm = lv in anchors || parseCmLevel(lv) !== undefined ? undefined : getNamedUnitCm(family, dim, lv);
-      f = factorForCmDimLevel(anchors, lv, ncm);
+      const ncm = parseCmLevel(lv) !== undefined ? undefined : getNamedUnitCm(family, dim, lv);
+      f = cmCurveFactorForLevel(family, dim, lv, ncm);
     } else {
       f = levels[lv] ?? interpCmFactor(levels, lv) ?? 1;
     }
@@ -8390,20 +8351,26 @@ function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): st
   if (Object.keys(vec).length === 0) return "";
   return variationChipsFromVec(fam, vec, suppress, r.username);
 }
+/** Incline/height label for a set — empty at floor (0cm). */
+function inclineTagKey(s: SetRecord): string | null {
+  if (!isInclineLevelExercise(s.exerciseName)) return null;
+  if (s.levelDim === undefined || s.levelValue === undefined) return null;
+  if (levelCm(s.levelDim, s.levelValue) === 0) return null;
+  return s.levelLabel ?? levelLabel(s.levelDim, s.levelValue);
+}
 /** Incline/height chip — push-up levels (SQ / Smith / cm / box) live on the set record,
  * not in the family variation vec, but they're active tags the owner set. */
-function inclineTagChip(s: SetRecord): string {
-  if (!isInclineLevelExercise(s.exerciseName)) return "";
-  if (s.levelDim === undefined || s.levelValue === undefined) return "";
-  if (levelCm(s.levelDim, s.levelValue) === 0) return "";
-  const lbl = s.levelLabel ?? levelLabel(s.levelDim, s.levelValue);
+function inclineTagChip(s: SetRecord, suppress?: Record<string, string>): string {
+  const lbl = inclineTagKey(s);
+  if (!lbl) return "";
+  if (suppress?.["__incline"] === lbl) return "";
   return `<span class="wo-var-chip" title="Hand height / incline — ${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>`;
 }
 /** Variation + ROM + incline chips merged for one set line (collapsed or expanded). */
 function setTagChipsBlock(s: SetRecord, suppress?: Record<string, string>): string {
   const romRes = romOfSet(setId(s), s.notes);
   const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
-  const inc = inclineTagChip(s);
+  const inc = inclineTagChip(s, suppress);
   const vars = variationChipsHtml(s, suppress);
   if (!vars && !romChip && !inc) return "";
   if (vars) return (inc ? vars.replace(/<\/span>\s*$/, inc + "</span>") : vars) + romChip;
@@ -8412,6 +8379,55 @@ function setTagChipsBlock(s: SetRecord, suppress?: Record<string, string>): stri
 }
 function setHasDescriptiveTags(s: SetRecord, suppress?: Record<string, string>): boolean {
   return !!setTagChipsBlock(s, suppress);
+}
+
+/** Tags a STRICT MAJORITY of an exercise's sets share — hoisted to the exercise title
+ * (owner: don't repeat FREE +23cm on every set). Sets that differ keep their own tag. */
+function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fam = sets.length ? familyOf(sets[0]!.exerciseName) : null;
+  if (sets.length < 2) return out;
+  const total = sets.length;
+  const majority = (counts: Map<string, number>): string | null => {
+    let best: string | null = null, bestN = 0;
+    for (const [v, n] of counts) if (n > bestN) { best = v; bestN = n; }
+    return best && bestN > total / 2 ? best : null;
+  };
+  if (fam) {
+    for (const dim of famDimOrder(fam)) {
+      const counts = new Map<string, number>();
+      for (const s of sets) {
+        const v = setVec(s)[dim];
+        const sv = v != null ? String(v) : null;
+        if (sv && !isGray(fam, dim, sv)) counts.set(sv, (counts.get(sv) ?? 0) + 1);
+      }
+      const m = majority(counts);
+      if (m) out[dim] = m;
+    }
+  }
+  const romCounts = new Map<string, number>();
+  for (const s of sets) { const l = romOfSet(setId(s), s.notes).label; if (l) romCounts.set(l, (romCounts.get(l) ?? 0) + 1); }
+  const rm = majority(romCounts);
+  if (rm) out["__rom"] = rm;
+  const incCounts = new Map<string, number>();
+  for (const s of sets) { const l = inclineTagKey(s); if (l) incCounts.set(l, (incCounts.get(l) ?? 0) + 1); }
+  const im = majority(incCounts);
+  if (im) out["__incline"] = im;
+  return out;
+}
+/** Hoisted common tags as chips for the exercise header. */
+function commonTagsChips(fam: string | null, common: Record<string, string>): string {
+  const vecChips = variationChipsFromVec(fam, common);
+  const romChip = common["__rom"]
+    ? `<span class="set-rom" title="${escapeHtml(common["__rom"])} — range of motion (most sets)">${escapeHtml(shortRomLabel(common["__rom"]))}</span>`
+    : "";
+  const incChip = common["__incline"]
+    ? `<span class="wo-var-chip" title="Hand height / incline (most sets)">${escapeHtml(common["__incline"])}</span>`
+    : "";
+  if (!vecChips && !romChip && !incChip) return "";
+  if (vecChips) return (incChip ? vecChips.replace(/<\/span>\s*$/, incChip + "</span>") : vecChips) + romChip;
+  const inner = incChip + romChip;
+  return inner ? `<span class="wo-var-chips">${inner}</span>` : "";
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
@@ -8824,7 +8840,9 @@ function renderWorkoutsPage() {
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        const setsTxt = setListHtml(sets) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
+        const common = commonTagsFor(sets);
+        const commonChips = commonTagsChips(familyOf(exerciseName), common);
+        const setsTxt = setListHtml(sets, common) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
         const name = displayName(exerciseName);
         // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
         // each set keeps its real source lift in originalExerciseName. Show the distinct
@@ -8869,7 +8887,7 @@ function renderWorkoutsPage() {
         // the shared tags are pushed to the right and stack into their own compact column, so
         // they stay IN LINE with the exercise instead of wrapping underneath it (owner). The
         // per-set list sits on its own line below.
-        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -9295,10 +9313,12 @@ function exerciseSetRowsHtml(
   // Newest-first: reverse the date-sorted sets so the latest day/set leads (matches
   // the history's newest→oldest order); the day/week dividers fire on each date change.
   const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
+  const common = commonTagsFor(exSets);
+  const commonChips = commonTagsChips(familyOf(e.exerciseName), common);
   const header =
     `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
     `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
-    `${addBtn}</td></tr>`;
+    `${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""}${addBtn}</td></tr>`;
   let lastDay: string | null = null;
   let lastWeek: string | null = null;
   const setRows = exSets
@@ -9312,7 +9332,7 @@ function exerciseSetRowsHtml(
         lastDay = s.date;
         lastWeek = wk;
       }
-      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
+      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common);
     })
     .join("");
   // The inline single-exercise expand omits this header — the collapsed .wo-ex-line
@@ -10967,12 +10987,14 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     if (g) g.push(s);
     else byDate.set(s.date, [s]);
   }
-  // Every set row carries its own full tag list (owner: see ALL active tags per set).
+  const common = commonTagsFor(sets);
+  const commonChips = commonTagsChips(sets.length ? familyOf(sets[0]!.exerciseName) : null, common);
+  const commonRow = commonChips ? `<tr class="set-ex-row"><td colspan="5"><span class="wo-ex-commontags">${commonChips}</span></td></tr>` : "";
   const body = Array.from(byDate, ([date, daySets]) => {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common)).join("");
   }).join("");
-  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${commonRow}${body}</tbody></table>`;
 }
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
@@ -19729,6 +19751,12 @@ function openFloatingPicker(
   const place = () => {
     const r = pill.getBoundingClientRect();
     const w = pop.offsetWidth || 220, h = pop.offsetHeight || 180;
+    if (pop.classList.contains("taginfo-pop")) {
+      const left = Math.max(6, (window.innerWidth - w) / 2);
+      const top = Math.max(6, (window.innerHeight - Math.min(h, window.innerHeight - 12)) / 2);
+      pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+      return;
+    }
     const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
     let top = r.bottom + 4;
     if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
@@ -20108,33 +20136,34 @@ function openNewTagCreator(anchor: HTMLElement, ex: string): void {
     },
   });
 }
-/** Curve-based tag settings (owner): sparse cm→× formula + named units + interval units —
- * NOT a flat list of every preset cm step. Mirrors the push-up incline editor. */
+/** SVG curve preview only (shown above the toggle). */
+function tagCmCurvePreviewHtml(fam: string, dim: string): string {
+  const def = famDefaultLevel(fam, dim);
+  const svg = cmCurveSpectrumSvg(fam, dim, { [dim]: def });
+  return svg ? `<div class="taginfo-curve-wrap">${svg}</div>` : "";
+}
+/** Curve-based tag settings (owner): parametric cm→× formula + named units + interval units. */
 function tagCmCurveEditorHtml(fam: string, dim: string): string {
-  const anchors = cmCurveAnchors(fam, dim);
-  const defaults = defaultSparseAnchors(cmCurveBaseLevels(fam, dim));
+  const formula = cmCurveFormula(fam, dim);
   const { named } = splitCmDimLevels(cmCurveBaseLevels(fam, dim));
   const def = famDefaultLevel(fam, dim);
-  const vec: Record<string, string> = { [dim]: def };
-  const svg = cmCurveSpectrumSvg(fam, dim, vec);
-  const anchorRows = sortedCmAnchors(anchors)
-    .map(({ key, cm, factor }) => {
-      const ov = cmCurveAnchorOverrides[fam]?.[dim]?.[key] !== undefined
-        || famFactorOverrides[fam]?.[dim]?.[key] !== undefined;
-      const isDef = def === key;
-      const removable = !(key in defaults);
-      return `<div class="taginfo-lvl taginfo-anchor${ov ? " is-ov" : ""}">` +
-        `<span class="taginfo-cm-lbl">${escapeHtml(String(cm))}cm</span>` +
-        `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${factor}" data-tcurve="${escapeHtml(key)}" aria-label="${cm}cm multiplier" />` +
-        `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(key)}" title="${isDef ? "Default on new sets." : "Make default."}">${isDef ? "★ default" : "default?"}</button>` +
-        (removable ? `<button type="button" class="taginfo-rm" data-rmanchor="${escapeHtml(key)}" title="Remove anchor">×</button>` : "") +
-        `</div>`;
-    })
-    .join("");
+  const ov = (k: keyof CmCurveFormula) => cmCurveFormulaOverrides[fam]?.[dim]?.[k] !== undefined;
+  const formulaRows =
+    `<label class="taginfo-lvl taginfo-formula"><span class="taginfo-cm-lbl">0cm</span><span class="muted">= ×1 (reference)</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("deeperPerCm") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">deeper</span>` +
+    `<input type="number" class="taginfo-mult" step="0.0001" value="${formula.deeperPerCm}" data-cmform="deeperPerCm" aria-label="× change per +1cm (easier)" title="× change per +1cm hand depth" />` +
+    `<span class="muted">× / +1cm</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("shallowerPerCm") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">shallower</span>` +
+    `<input type="number" class="taginfo-mult" step="0.0001" min="0" value="${formula.shallowerPerCm}" data-cmform="shallowerPerCm" aria-label="× change per −1cm (harder)" title="× change per −1cm below reference" />` +
+    `<span class="muted">× / −1cm</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("min") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">min ×</span>` +
+    `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${formula.min}" data-cmform="min" aria-label="Minimum multiplier" /></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("max") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">max ×</span>` +
+    `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${formula.max}" data-cmform="max" aria-label="Maximum multiplier" /></label>`;
   const namedRows = Object.keys(named).length
     ? Object.keys(named).map((lvl) => {
         const ncm = getNamedUnitCm(fam, dim, lvl) ?? 0;
-        const curveF = factorForCmDimLevel(anchors, lvl, ncm);
+        const curveF = ncm !== undefined ? cmCurveFactorAt(fam, dim, ncm) : 1;
         const isDef = def === lvl;
         return `<div class="taginfo-lvl taginfo-named">` +
           `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(dim, lvl, fam))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
@@ -20152,15 +20181,13 @@ function tagCmCurveEditorHtml(fam: string, dim: string): string {
     : "";
   const stepRow = `<label class="taginfo-lvl taginfo-step"><span class="taginfo-cm-lbl">cm step</span>` +
     `<input type="number" class="taginfo-cmstep" step="0.5" min="0.5" max="20" value="${cmCurveStep(fam, dim)}" data-cmstepdim="${escapeHtml(dim)}" aria-label="cm per step in the picker" /><span class="muted">cm / step</span></label>`;
-  const preview = sortedCmAnchors(anchors).slice(0, 2).map(({ cm }) => {
-    const f = factorForCmDimLevel(anchors, formatCmLevelKey(cm, inferCmKeyStyle(Object.keys(anchors))), cm);
-    return `<span class="inc-prev-item">${cm}cm<span class="muted"> → ×${f}</span></span>`;
-  }).join("");
+  const samples = cmCurveFormulaSamples(cmCurveBaseLevels(fam, dim), formula, 4);
+  const preview = samples.filter((_, i) => i % 2 === 0).map(({ cm, factor }) =>
+    `<span class="inc-prev-item">${cm}cm<span class="muted"> → ×${factor}</span></span>`,
+  ).join("");
   return (
-    (svg ? `<div class="taginfo-curve-wrap">${svg}</div>` : "") +
-    `<div class="taginfo-h muted">formula · cm → × curve (anchor points — between = interpolated)</div>` +
-    `<div class="taginfo-levels taginfo-anchors">${anchorRows}</div>` +
-    `<div class="taginfo-addanchor"><input type="number" class="taginfo-newcm" step="1" placeholder="cm" aria-label="New anchor cm" /><button type="button" class="taginfo-addbtn" data-addanchor title="Add anchor on the curve">＋ anchor</button></div>` +
+    `<div class="taginfo-h muted">formula · cm → × (0cm = ×1; slopes + clamp — not anchor rows)</div>` +
+    `<div class="taginfo-levels taginfo-formulas">${formulaRows}</div>` +
     (preview ? `<div class="inc-prev muted">${preview}</div>` : "") +
     `<div class="taginfo-h muted">predictable units · cm step + yoga-block heights (picker intervals)</div>` +
     `<div class="taginfo-levels taginfo-intervals">${stepRow}${yogaRows}</div>` +
@@ -20171,11 +20198,11 @@ function tagCmCurveEditorHtml(fam: string, dim: string): string {
 /** What KIND of tag a dimension is, in one plain phrase (owner: "what kind of tag is it"). */
 function tagKindText(fam: string | null, id: string): string {
   if (id === "band") return "assistance band — subtracts kilograms from the load";
-  if (id === "rom") return "range of motion — cm curve (interpolated); tune anchors + named units";
-  if (id === "lean") return "forward lean — cm curve (interpolated); tune anchors + yoga-block heights";
+  if (id === "rom") return "range of motion — cm formula (slopes + clamp); tune variables + named units";
+  if (id === "lean") return "forward lean — cm formula (slopes + clamp); tune variables + yoga-block heights";
   if (fam && isUserDim(fam, id)) return `your own tag — ${Object.keys(famLevels(fam, id)).length} option(s), tune each ×difficulty`;
   const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
-  if (levels && dimUsesCmCurve(levels)) return "cm scale — anchor curve + named units (not one row per cm)";
+  if (levels && dimUsesCmCurve(levels)) return "cm scale — formula slopes + named units (not one row per cm)";
   if (levels) {
     const keys = Object.keys(levels);
     return `pick one of ${keys.length} options — each has its own ×difficulty`;
@@ -20224,8 +20251,8 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
     const locked = on && !tagDeselectable(fam, id);
     const factorRange = levels ? (() => {
       if (useCurve) {
-        const anchors = cmCurveAnchors(fam!, id);
-        const vs = Object.values(anchors);
+        const formula = cmCurveFormula(fam!, id);
+        const vs = cmCurveFormulaSamples(cmCurveBaseLevels(fam!, id), formula).map((p) => p.factor);
         return vs.length ? `${Math.min(...vs)}× – ${Math.max(...vs)}×` : "";
       }
       const vs = Object.values(levels);
@@ -20235,7 +20262,8 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       ? `<div class="taginfo-sub muted">This tag has no fixed options to tune here.</div>`
       : useCurve
         ? tagCmCurveEditorHtml(fam!, id)
-        : `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
+        : `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` +
+          `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
             const ov = famFactorOverrides[fam!]?.[id]?.[lvl] !== undefined;
             const isDef = famDefaultLevel(fam!, id) === lvl;
             return `<div class="taginfo-lvl${ov ? " is-ov" : ""}">` +
@@ -20247,15 +20275,14 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
     return (
       `<div class="taginfo-hd">${escapeHtml(label)}</div>` +
       `<div class="taginfo-sub muted">${escapeHtml(tagKindText(fam, id))}${factorRange ? ` · ${escapeHtml(factorRange)}` : ""}</div>` +
+      (useCurve ? tagCmCurvePreviewHtml(fam!, id) : "") +
       `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle${locked ? " disabled" : ""}>${on ? (locked ? "always on" : "✓ on sets — tap to remove") : "＋ add to sets"}</button>` +
-      (levels && !useCurve ? `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` : "") +
       levelRows +
       (levels && !useCurve && id !== "band"
         ? `<div class="taginfo-addopt"><input type="text" class="taginfo-newopt" placeholder="add an option…" aria-label="New option name" /><button type="button" class="taginfo-addbtn" data-addopt title="Add this option">＋ option</button></div>`
         : "") +
       `<div class="taginfo-h muted">used by</div>` +
       `<div class="taginfo-used">${others.length ? others.map((n) => `<span class="taginfo-ex">${escapeHtml(n)}</span>`).join("") : `<span class="muted">only ${escapeHtml(displayName(ex))}</span>`}</div>` +
-      // A user-created tag can be DELETED entirely (built-in tags can't — only renamed/tuned).
       (userDim ? `<button type="button" class="taginfo-del" data-deltag title="Delete this tag everywhere">🗑 delete tag “${escapeHtml(label)}”</button>` : "")
     );
   };
@@ -20273,19 +20300,6 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       }
       const def = t.closest<HTMLElement>(".taginfo-def");
       if (def?.dataset.tdef && fam) { setFamDefaultLevel(fam, id, def.dataset.tdef); rerender(); return; }
-      // ＋ anchor — add a cm point on the curve (ROM / shoulder gap / …).
-      if (t.closest("[data-addanchor]") && fam) {
-        const pop = t.closest<HTMLElement>(".taginfo-pop");
-        const inp = pop?.querySelector<HTMLInputElement>(".taginfo-newcm");
-        const cm = parseFloat(inp?.value ?? "");
-        if (Number.isFinite(cm) && addCmAnchor(fam, id, cm)) { if (inp) inp.value = ""; rerender(); }
-        return;
-      }
-      const rm = t.closest<HTMLElement>(".taginfo-rm");
-      if (rm?.dataset.rmanchor && fam) {
-        if (removeCmCurveAnchor(fam, id, rm.dataset.rmanchor)) rerender();
-        return;
-      }
       // ＋ option — add a new level to this tag, then re-render so it appears (and the palette below).
       if (t.closest("[data-addopt]") && fam) {
         const inp = t.closest<HTMLElement>(".taginfo-addopt")?.querySelector<HTMLInputElement>(".taginfo-newopt");
@@ -20304,8 +20318,14 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       if (!fam) return;
       const nm = t.closest<HTMLInputElement>(".taginfo-name");
       if (nm?.dataset.tlvl) { setFamLabel(fam, id, nm.dataset.tlvl, nm.value); return; }
+      const ff = t.closest<HTMLInputElement>("[data-cmform]");
+      if (ff?.dataset.cmform) {
+        const v = parseFloat(ff.value);
+        if (Number.isFinite(v)) setCmCurveFormulaField(fam, id, ff.dataset.cmform as keyof CmCurveFormula, v);
+        rerender();
+        return;
+      }
       const ml = t.closest<HTMLInputElement>(".taginfo-mult");
-      if (ml?.dataset.tcurve) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setCmCurveAnchor(fam, id, ml.dataset.tcurve, Math.round(v * 1000) / 1000); rerender(); return; }
       if (ml?.dataset.tlvl) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setFamFactor(fam, id, ml.dataset.tlvl, Math.round(v * 1000) / 1000); return; }
       const ncm = t.closest<HTMLInputElement>(".taginfo-namedcm");
       if (ncm?.dataset.namedlvl) { const v = parseFloat(ncm.value); if (Number.isFinite(v)) { setNamedUnitCm(fam, id, ncm.dataset.namedlvl, v); rerender(); } return; }
@@ -26576,9 +26596,8 @@ function hsLevelEffect(fam: string, dim: string, level: string, vec: Record<stri
   if (dim === "lean") return { mult: leanFactorFor(fam, vec.support ?? "free", level) };
   const levels = famLevels(fam, dim);
   if (dimUsesCmCurve(levels)) {
-    const anchors = cmCurveAnchors(fam, dim);
-    const ncm = level in anchors || parseCmLevel(level) !== undefined ? undefined : getNamedUnitCm(fam, dim, level);
-    return { mult: factorForCmDimLevel(anchors, level, ncm) };
+    const ncm = parseCmLevel(level) !== undefined ? undefined : getNamedUnitCm(fam, dim, level);
+    return { mult: cmCurveFactorForLevel(fam, dim, level, ncm) };
   }
   return { mult: levels[level] ?? 1 };
 }
@@ -26594,17 +26613,17 @@ function hsCmOf(level: string): number | null {
 function hsIsSpectrum(fam: string, dim: string): boolean {
   return dimUsesCmCurve(cmCurveBaseLevels(fam, dim));
 }
-/** SVG preview of a curve dim's sparse cm→× formula (interpolated between anchors). */
+/** SVG preview of a curve dim's parametric cm→× formula. */
 function cmCurveSpectrumSvg(fam: string, dim: string, vec: Record<string, string>): string {
-  const anchors = cmCurveAnchors(fam, dim);
-  const rows = sortedCmAnchors(anchors);
+  const formula = cmCurveFormula(fam, dim);
+  const rows = cmCurveFormulaSamples(cmCurveBaseLevels(fam, dim), formula);
   if (rows.length < 2) return "";
   const curCm = parseCmLevel(vec[dim] ?? "");
   const curF = curCm !== undefined
-    ? factorForCmDimLevel(anchors, vec[dim] ?? "", curCm)
+    ? cmCurveFactorAt(fam, dim, curCm)
     : (() => {
         const ncm = getNamedUnitCm(fam, dim, vec[dim] ?? "");
-        return ncm !== undefined ? factorForCmDimLevel(anchors, vec[dim] ?? "", ncm) : undefined;
+        return ncm !== undefined ? cmCurveFactorAt(fam, dim, ncm) : undefined;
       })();
   const pts = rows.map(({ cm, factor }) => ({
     cm,

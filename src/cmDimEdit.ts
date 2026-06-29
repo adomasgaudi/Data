@@ -128,3 +128,54 @@ export function mergeCmCurveAnchors(
 ): Record<string, number> {
   return { ...defaults, ...overrides };
 }
+
+/** Parametric cm→× curve — 0cm is always ×1; slopes above/below are editable. */
+export interface CmCurveFormula {
+  /** × change per +1cm (deeper / easier) — a negative number. */
+  deeperPerCm: number;
+  /** × change per −1cm (shallower / harder) — a positive number. */
+  shallowerPerCm: number;
+  min: number;
+  max: number;
+}
+
+/** Derive default formula slopes from the built-in preset table endpoints. */
+export function defaultCmCurveFormula(levels: Record<string, number>): CmCurveFormula {
+  const { anchors } = splitCmDimLevels(levels);
+  const rows = sortedCmAnchors(anchors);
+  const at0 = rows.find((r) => r.cm === 0)?.factor ?? 1;
+  const pos = rows.filter((r) => r.cm > 0).sort((a, b) => b.cm - a.cm);
+  const neg = rows.filter((r) => r.cm < 0).sort((a, b) => a.cm - b.cm);
+  const deeperPerCm = pos.length ? (pos[0]!.factor - at0) / pos[0]!.cm : -0.02;
+  const shallowerPerCm = neg.length ? (neg[0]!.factor - at0) / (-neg[0]!.cm) : 0.025;
+  const fs = rows.map((r) => r.factor);
+  return {
+    deeperPerCm: Math.round(deeperPerCm * 1e6) / 1e6,
+    shallowerPerCm: Math.round(shallowerPerCm * 1e6) / 1e6,
+    min: Math.min(0.4, ...fs, 1),
+    max: Math.max(1.6, ...fs, 1),
+  };
+}
+
+/** × multiplier at `cm` from the parametric formula (0cm → ×1 before clamp). */
+export function cmCurveFormulaMult(cm: number, f: CmCurveFormula): number {
+  const raw = cm >= 0 ? 1 + f.deeperPerCm * cm : 1 + f.shallowerPerCm * (-cm);
+  return Math.max(f.min, Math.min(f.max, Math.round(raw * 1000) / 1000));
+}
+
+/** Sample the formula across the preset cm span (for SVG + previews). */
+export function cmCurveFormulaSamples(
+  levels: Record<string, number>,
+  formula: CmCurveFormula,
+  steps = 24,
+): Array<{ cm: number; factor: number }> {
+  const cms = sortedCmAnchors(splitCmDimLevels(levels).anchors).map((r) => r.cm);
+  const minCm = cms[0] ?? -20;
+  const maxCm = cms[cms.length - 1] ?? 25;
+  const out: Array<{ cm: number; factor: number }> = [];
+  for (let i = 0; i <= steps; i++) {
+    const cm = Math.round((minCm + ((maxCm - minCm) * i) / steps) * 10) / 10;
+    out.push({ cm, factor: cmCurveFormulaMult(cm, formula) });
+  }
+  return out;
+}

@@ -3115,7 +3115,7 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-tag.is-on .addm-passive-pill { border-right: none; }
 .addm-tag.is-on .addm-tag-info { border-style: solid; border-color: var(--accent); color: var(--accent); }
 /* Per-tag info / edit panel (the ⓘ popup): floats over everything like the inc/rom pickers. */
-.taginfo-pop { min-width: 14rem; max-width: min(20rem, calc(100vw - 1.5rem)); max-height: 70vh; overflow: auto; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.taginfo-pop { min-width: 14rem; max-width: min(22rem, calc(100vw - 1.5rem)); max-height: min(85vh, calc(100dvh - 1rem)); overflow: auto; padding: 0.6rem 0.7rem; display: flex; flex-direction: column; gap: 0.35rem; z-index: 250; }
 .taginfo-hd { font-size: 0.95rem; font-weight: 700; text-transform: capitalize; }
 .taginfo-sub { font-size: 0.68rem; line-height: 1.3; }
 .taginfo-h { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.2rem; }
@@ -3146,8 +3146,8 @@ sup.wr-bw { font-size: 0.85em; }
 .taginfo-addbtn:hover { background: var(--accent); color: #fff; }
 /* Curve-based cm tag editor (ROM / shoulder gap / …) — anchors + named units. */
 .taginfo-pop { max-width: min(22rem, calc(100vw - 1.5rem)); }
-.taginfo-curve-wrap { margin: 0.15rem 0; overflow-x: auto; }
-.taginfo-curve-wrap .hs-svg { display: block; width: 100%; max-width: 20rem; height: auto; }
+.taginfo-curve-wrap { flex-shrink: 0; margin: 0.1rem 0 0.25rem; padding: 0.35rem 0.4rem; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-xs); overflow: visible; }
+.taginfo-curve-wrap .hs-svg { display: block; width: 100%; max-width: none; min-height: 5.5rem; height: auto; }
 .taginfo-anchor .taginfo-cm-lbl { flex: 1 1 auto; min-width: 0; font-size: 0.74rem; font-weight: 600; }
 .taginfo-namedcm, .taginfo-yogacm { flex: 0 0 2.8rem; font: inherit; font-size: 0.74rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--accent); field-sizing: content; }
 .taginfo-curve-at { flex: 0 0 auto; font-size: 0.66rem; white-space: nowrap; }

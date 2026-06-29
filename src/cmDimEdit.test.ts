@@ -10,6 +10,8 @@ import {
   defaultSparseAnchorCms,
   defaultSparseAnchors,
   mergeCmCurveAnchors,
+  defaultCmCurveFormula,
+  cmCurveFormulaMult,
 } from "./cmDimEdit";
 
 describe("cmDimEdit", () => {
@@ -67,5 +69,17 @@ describe("cmDimEdit", () => {
   it("merges sparse anchor overrides", () => {
     const base = { "0cm": 1, "+25cm": 0.56 };
     expect(mergeCmCurveAnchors(base, { "+10cm": 0.8 })).toEqual({ "0cm": 1, "+25cm": 0.56, "+10cm": 0.8 });
+  });
+
+  it("derives ROM formula from preset endpoints", () => {
+    const f = defaultCmCurveFormula(romAnchors);
+    expect(cmCurveFormulaMult(0, f)).toBe(1);
+    expect(cmCurveFormulaMult(25, f)).toBeCloseTo(0.56, 2);
+    expect(cmCurveFormulaMult(-20, f)).toBeCloseTo(1.5, 2);
+  });
+
+  it("interpolates off-preset cm via formula", () => {
+    const f = defaultCmCurveFormula(romAnchors);
+    expect(cmCurveFormulaMult(32, f)).toBeCloseTo(0.437, 2);
   });
 });
