@@ -3073,19 +3073,19 @@ sup.wr-bw { font-size: 0.85em; }
    block so it reads as a distinct section from the set lines below (owner: "add a line to
    separate visually and move tag above"). */
 /* PB-53 recurrence-5 ROOT (found via the on-screen overflow diag): the passive ADD-TAG
-   palette is a nowrap scroller (.addm-passive-pills) ~565px wide. min-width:0 was on the
-   pills + .addm-passive-grp but NOT on the wrappers above them (.addm-passive-slot, this
-   .addm-passive) — and a flex child floors at min-content unless EVERY level gets
-   min-width:0 (PB-24). So .addm-passive-slot (a direct flex child of the form) floored at
-   565px and, via align-items:stretch, dragged the whole form — note input + Add button
-   included — out of bounds. Add min-width:0 to every level so the scroller can shrink. */
-.addm-passive-slot { min-width: 0; }
-.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); min-width: 0; }
+   palette is a nowrap scroller (.addm-passive-pills) ~565px wide. min-width:0 alone on the
+   wrappers (.addm-passive-slot, .addm-passive) was NOT enough on device (v.314 still showed
+   w=565 overCard=105) — flex children still floor at min-content. Fix: GRID with
+   minmax(0,1fr) for the pills column (same bulletproof pattern as .addm-inputs, PB-53
+   recurrence-2) + max-width:100% on every wrapper so the scroller shrinks and scrolls
+   instead of dragging the stretch-form (note + Add button) out of bounds. */
+.addm-passive-slot { min-width: 0; max-width: 100%; }
+.addm-passive { display: flex; flex-direction: column; align-items: stretch; gap: 0.25rem; margin: 0.15rem 0 0.35rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); min-width: 0; max-width: 100%; }
 .addm-passive:empty { display: none; }
 /* Two stacked rows (passive "add tag" on top, "active" below): each is a label pinned at the left
    with its pills scrolling beside it (owner: "passive above, active one layer below"). */
-.addm-passive-grp { display: flex; align-items: center; gap: 0.4rem; min-width: 0; }
-.addm-passive-grp .addm-passive-pills { flex: 1 1 auto; min-width: 0; }
+.addm-passive-grp { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); align-items: center; gap: 0.4rem; min-width: 0; max-width: 100%; }
+.addm-passive-grp .addm-passive-pills { min-width: 0; }
 .addm-passive-lbl { flex: 0 0 auto; width: 2.6rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
 /* The pills themselves stay in ONE horizontally-scrolling row (the swipe-sideways strip). */
 .addm-passive-pills { display: flex; flex-wrap: nowrap; align-items: center; gap: 0.3rem; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1.1rem), transparent); }
