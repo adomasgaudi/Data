@@ -75,6 +75,25 @@
             "command": "node scripts/active-task-inject.cjs",
             "timeout": 10,
             "statusMessage": "Re-anchoring on the locked task (if any)"
+          },
+          {
+            "type": "command",
+            "command": "node scripts/cmd-inject.cjs",
+            "timeout": 10,
+            "statusMessage": "Loading the #command playbook (if any)"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node scripts/rule-inject.cjs",
+            "timeout": 10,
+            "statusMessage": "Loading the area ruleset (if editing a keyed file)"
           }
         ]
       }

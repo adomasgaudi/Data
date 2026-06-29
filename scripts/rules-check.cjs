@@ -147,7 +147,8 @@ const transcript = newestTranscript();
 if (transcript) checkReplyFormat(lastAssistantText(transcript));
 
 // Which files did this session touch? uncommitted + commits ahead of deployed.
-const DEPLOYED = "origin/claude/strength-training-dashboard-SdAlT";
+// Authoritative/deployed branch is opus-4.8 (the old canonical is DEPRECATED).
+const DEPLOYED = "origin/opus-4.8";
 const changed = new Set();
 for (const line of sh("git status --porcelain").split("\n")) {
   const f = line.slice(3).trim();

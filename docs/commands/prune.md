@@ -1,0 +1,6 @@
+<!-- Loaded when: owner types #prune -->
+Sweep the WHOLE class of bug, never just the shown case — fixing only the one reported is a HARD FAIL.
+
+**`#prune <mistake-type>` — THE MOST-IGNORED COMMAND. Fixing ONLY the shown case is a HARD FAIL of this command — do not do it.** The reported case is the TIP; the same class is almost always lurking in features you haven't opened and bugs nobody reported. So before touching anything: **grep the WHOLE codebase for every sibling of that shape** (every call/handler/pattern), **walk every tab/feature/render path**, and assume more exist until your search proves otherwise — spend real effort *discovering problems you don't yet know exist*. Then present the full severity-tagged find-list (rule 11), fix them in BROAD batches (the root/shared fix that kills many beats one-offs), verify each, and keep going across turns until the class is genuinely gone. **ALWAYS record every find (done + still-open, with codes) in `docs/cleanup-backlog.md`** so the sweep compounds across sessions. If you only patched the one screenshot, you ignored this command.
+
+(rule 11 = pickable, severity-tagged, UNPADDED task lists: tag each item with a short code e.g. `CLN-3` AND a severity 🔴 burning · 🟠 worth-it · 🟢 nice-to-have; list the REAL items however many, never pad to a round count.)
