@@ -1822,12 +1822,10 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 /* Quick-edit "Variant" chip: a collapsed-line set token made tappable (history ⚙ → Var).
    A faint pill background signals it opens the variant editor; the token reads as before. */
 /* Tap a collapsed set → its action menu (duplicate / change variant / add suggested).
-   A near-invisible button with a touch of padding (a bigger tap target) that lights up
-   on press; a set WITH a variant gets the outline highlight (.has-var) the owner likes. */
-.wo-set-menu { font: inherit; color: inherit; cursor: pointer; background: none; border: 1px solid transparent; border-radius: var(--r-pill); padding: 1px 4px; }
-.wo-set-menu:hover, .wo-set-menu:active { background: var(--accent-soft); }
-.wo-set-menu.has-var { background: var(--accent-soft); }
-.wo-set-menu.has-var:hover { border-color: var(--accent); }
+   Invisible button — padding only for tap target; no persistent outline/shade on any set
+   (tags carry their own chip styling; WO-224 dropped the outer wrapper shade). */
+.wo-set-menu { font: inherit; color: inherit; cursor: pointer; background: none; border: none; border-radius: 0; padding: 1px 4px; }
+.wo-set-menu:hover, .wo-set-menu:active { background: var(--accent-soft); border-radius: var(--r-pill); }
 /* The small per-set action menu (rule 32: fixed + clampMenuIntoView). */
 .set-act-menu {
   position: fixed; z-index: 140; min-width: 9.5rem; max-width: 88vw;
