@@ -87,6 +87,7 @@ import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim,
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
+  cmLevelKey, interpCmFactor,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
@@ -1850,7 +1851,10 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
       s *= leanFactorFor(family, vec.support ?? "free", vec.lean ?? "");
       continue;
     }
-    const f = famLevels(family, dim)[vec[dim] ?? ""];
+    const levels = famLevels(family, dim);
+    const lv = vec[dim] ?? "";
+    // Exact preset, else interpolate a cm dim (rom) for an off-table value like "+32cm".
+    const f = levels[lv] ?? interpCmFactor(levels, lv);
     if (typeof f === "number") s *= f;
   }
   return Math.round(s * 1e6) / 1e6;
@@ -19475,7 +19479,8 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
   const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
   const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
   let cur: string;
-  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = levels[v] != null ? v : dflt; }
+  // ROM is continuous: an off-preset cm (e.g. "+32cm") is a VALID stored value, keep it.
+  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = (levels[v] != null || (dim === "rom" && /^[+-]?\d+cm$/.test(v))) ? v : dflt; }
   else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
   else cur = dflt;
   const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
@@ -19493,8 +19498,13 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
   // source of truth so every save / read / edit / multiplier path (which all query `.wo-af-dim`)
   // works UNCHANGED; `data-no-xdd` stops it being enhanced into the clipped dropdown.
   if (dim === "rom") {
+    // Continuous ROM: if the stored value is an off-preset cm, the preset `opts` won't
+    // contain it — inject a selected option so the hidden <select> SSOT actually holds it.
+    const extraOpt = (cur && levels[cur] == null && /^[+-]?\d+cm$/.test(cur))
+      ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(afLevelText("rom", cur, fam))}</option>`
+      : "";
     return `<span class="addm-vtag" data-dim="rom"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
-      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="rom" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="rom" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
       `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
       `</span>`;
   }
@@ -19513,19 +19523,22 @@ function openRomDimPicker(pill: HTMLElement): void {
   const fam = familyOf(sel.dataset.ex ?? "");
   if (!fam) return;
   const dflt = sel.dataset.dimdefault ?? "";
-  const keys = Array.from(sel.options).map((o) => o.value);
   let unit: "cm" | "block" = "cm";
   let reading = parseFloat(sel.value) || 0; // cm typed/stepped (block fills it in block mode)
   let block: YogaBlockSide = "medium";
   const cm = (): number => (unit === "cm" ? reading : YOGA_BLOCK_CM[block]); // a block raises the hands → +cm
   const setLevel = (lvl: string) => {
+    // ROM is CONTINUOUS (owner: tag must show "exactly what i set", not a snapped preset):
+    // store the exact cm as the level key. The hidden <select> SSOT only holds values it
+    // has options for, so inject one for an off-preset cm before selecting it.
+    if (![...sel.options].some((o) => o.value === lvl)) sel.add(new Option(afLevelText("rom", lvl, fam), lvl));
     sel.value = lvl;
     sel.dispatchEvent(new Event("change", { bubbles: true })); // edit-mode vec sync + multiplier refresh
     pill.textContent = afLevelText("rom", lvl, fam);
     pill.classList.toggle("is-set", lvl !== dflt);
   };
-  const commit = () => setLevel(snapToLeanLevelCm(cm(), keys));
-  const eqText = () => `= ${Math.round(cm())}cm → tag ${afLevelText("rom", snapToLeanLevelCm(cm(), keys), fam)}`;
+  const commit = () => setLevel(cmLevelKey(cm()));
+  const eqText = () => `= ${Math.round(cm())}cm → tag ${afLevelText("rom", cmLevelKey(cm()), fam)}`;
   const renderHtml = (): string =>
     `<div class="rom-ref-lbl muted">range of motion — hand height (cm)</div>` +
     `<div class="inc-units">` +

@@ -65,6 +65,44 @@ export function snapToLeanLevelCm(canonicalCm: number, levelKeys: readonly strin
   return best;
 }
 
+/** Match a cm-level KEY like "+25cm" / "0cm" / "-3cm" (the rom/lean dim key shape). */
+const CM_KEY_RE = /^[+-]?\d+(\.\d+)?cm$/;
+
+/** Format a cm value as a level KEY in the table's style: "+32cm" / "0cm" / "-3cm".
+ * The inverse of parsing a key with parseFloat — lets a CONTINUOUS cm picker store an
+ * exact value (e.g. the owner's 32cm) as a key, instead of snapping to a preset level. */
+export function cmLevelKey(cm: number): string {
+  const n = Math.round(cm);
+  return n > 0 ? `+${n}cm` : `${n}cm`; // n<=0 → "0cm" / "-3cm" (Math.round(-0)===0)
+}
+
+/** Linear interpolate / extrapolate a multiplier for a CM-KEYED dimension table (keys
+ * like "+25cm".."-20cm", each → a difficulty factor). Returns the factor for `level` (a
+ * cm key, possibly NOT present in the table — e.g. "+32cm"), or undefined if the table or
+ * `level` isn't cm-shaped (so callers can safely fall through for non-cm dims). Between
+ * anchors it interpolates; beyond the ends it extrapolates along the nearest segment,
+ * clamped to a small positive floor so the factor can never go ≤0. This is what makes ROM
+ * continuous: any typed cm gets a smooth difficulty, not a snapped preset. */
+export function interpCmFactor(table: Record<string, number>, level: string): number | undefined {
+  if (!CM_KEY_RE.test(level)) return undefined;
+  const target = parseFloat(level);
+  const pts = Object.keys(table)
+    .filter((k) => CM_KEY_RE.test(k))
+    .map((k) => ({ cm: parseFloat(k), f: table[k]! }))
+    .filter((p) => Number.isFinite(p.cm) && Number.isFinite(p.f))
+    .sort((a, b) => a.cm - b.cm);
+  if (pts.length < 2) return pts.length === 1 ? pts[0]!.f : undefined;
+  const at = (a: { cm: number; f: number }, b: { cm: number; f: number }): number => {
+    const f = a.f + ((b.f - a.f) / (b.cm - a.cm)) * (target - a.cm);
+    return Math.max(0.05, Math.round(f * 1e4) / 1e4); // floor so it never goes ≤0
+  };
+  const last = pts.length - 1;
+  if (target <= pts[0]!.cm) return target === pts[0]!.cm ? pts[0]!.f : at(pts[0]!, pts[1]!);
+  if (target >= pts[last]!.cm) return target === pts[last]!.cm ? pts[last]!.f : at(pts[last - 1]!, pts[last]!);
+  for (let i = 0; i < last; i++) if (target >= pts[i]!.cm && target <= pts[i + 1]!.cm) return at(pts[i]!, pts[i + 1]!);
+  return undefined;
+}
+
 // ── Wall-tap CONTACT (what touches the wall × rest vs light tap) ────────────────
 // One tag for the handstand WALL-TAP touch variation. Two attributes (what contacts:
 // hips+shoulders vs shoulders-only; and contact: rest vs light tap) → 4 levels. Short
