@@ -209,6 +209,11 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
   "Knee Raises": 0.35,
   "Hanging Knee Raise": 0.35,
   "Hanging Knee Raises": 0.35,
+  "L Sit": 0.35,
+  "L-Sit": 0.35,
+  "L Sits": 0.35,
+  "Pike L-Sit": 0.35,
+  "Pike L Sit": 0.35,
   "Cross-Legged Squats": 0.6,
   "Cross-Legged Squat": 0.6,
 };
