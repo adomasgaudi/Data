@@ -8361,8 +8361,17 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
         ? ` <span class="wo-mach" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
   // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
-  // show "UN" with the reps instead of a weight number.
-  if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
+  // show "UN" with the reps instead of a weight number. Experimental lifts are
+  // inherently uncomparable (the exp tag says so) — show the NOTE that names what
+  // you were trying instead of the redundant UN pill.
+  const manualNc = notComparableSets.has(sid) || (!!note && isNoteNotComparable(s.exerciseName, note));
+  if (isExperimental(s.exerciseName) && computedForMach.notComparable && !manualNc) {
+    const noteLabel = note
+      ? `<span class="wo-exp-note" title="Experimental — the note names what you were trying">${escapeHtml(displayNote(s.exerciseName, note))}</span>`
+      : "";
+    return finish(effWrap(core(`${chips}${noteLabel}${weightHtml}${mach}`)));
+  }
+  if (computedForMach.notComparable || manualNc)
     return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${weightHtml}${mach}`)));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);

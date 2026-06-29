@@ -2600,6 +2600,11 @@ select.subtle-select:hover, select.subtle-select:focus {
 .num.volcell .set-varnote { display: inline-block; color: var(--muted); font-size: 0.82em; }
 /* A "not comparable" set in the compact list reads "UN" in muted grey. */
 .wo-uncmp { color: var(--muted); }
+/* Experimental sets: the note names the movement — no redundant UN pill. */
+.wo-exp-note {
+  font-size: 0.78rem; font-weight: 600; color: var(--muted);
+  white-space: nowrap; max-width: 14rem; overflow: hidden; text-overflow: ellipsis;
+}
 .wo-setlist sup { font-size: 0.82em; margin-right: 0.3rem; }
 /* The day's record (best) estimated 1RM for a lift — its own left column, right-
    aligned so the digits sit next to the exercise name they belong to. */
