@@ -8538,15 +8538,25 @@ function inclineTagChip(s: SetRecord, suppress?: Record<string, string>): string
   if (suppress?.["__incline"] === lbl) return "";
   return `<span class="wo-var-chip" title="Hand height / incline — ${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>`;
 }
-/** Variation + ROM + incline chips merged for one set line (collapsed or expanded). */
+/** Experimental lifts are described by free-form notes — show the note as a normal tag
+ * chip (not the UN not-comparable mark or the tiny caption under the weight). */
+function experimentalNoteChip(note: string): string {
+  const txt = note.length > 20 ? `${note.slice(0, 20)}…` : note;
+  return `<span class="wo-var-chip wo-var-note" title="${escapeHtml(note)}">${escapeHtml(txt)}</span>`;
+}
+/** Variation + ROM + incline + experimental-note chips merged for one set line. */
 function setTagChipsBlock(s: SetRecord, suppress?: Record<string, string>): string {
   const romRes = romOfSet(setId(s), s.notes);
   const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const inc = inclineTagChip(s, suppress);
   const vars = variationChipsHtml(s, suppress);
-  if (!vars && !romChip && !inc) return "";
-  if (vars) return (inc ? vars.replace(/<\/span>\s*$/, inc + "</span>") : vars) + romChip;
-  const inner = inc + romChip;
+  const expNote = isExperimental(s.exerciseName) && romRes.note ? experimentalNoteChip(romRes.note) : "";
+  if (vars) {
+    let out = inc ? vars.replace(/<\/span>\s*$/, inc + "</span>") : vars;
+    if (expNote) out = out.replace(/<\/span>\s*$/, expNote + "</span>");
+    return out + romChip;
+  }
+  const inner = inc + expNote + romChip;
   return inner ? `<span class="wo-var-chips">${inner}</span>` : "";
 }
 function setHasDescriptiveTags(s: SetRecord, suppress?: Record<string, string>): boolean {
@@ -8677,18 +8687,12 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
       : computedForMach.machineType === "gravity"
         ? ` <span class="wo-mach" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
-  // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
-  // show "UN" with the reps instead of a weight number. Experimental lifts are
-  // inherently uncomparable (the exp tag says so) — show the NOTE that names what
-  // you were trying instead of the redundant UN pill.
+  // A manually marked "not comparable" set (per-set flag OR per-note) shows "UN" — but
+  // EXPERIMENTAL lifts are auto-excluded from metrics and are described by their NOTES
+  // instead (note chips in setTagChipsBlock), so UN is wrong/noise there.
   const manualNc = notComparableSets.has(sid) || (!!note && isNoteNotComparable(s.exerciseName, note));
-  if (isExperimental(s.exerciseName) && computedForMach.notComparable && !manualNc) {
-    const noteLabel = note
-      ? `<span class="wo-exp-note" title="Experimental — the note names what you were trying">${escapeHtml(displayNote(s.exerciseName, note))}</span>`
-      : "";
-    return finish(effWrap(core(`${chips}${noteLabel}${weightHtml}${mach}`)));
-  }
-  if (computedForMach.notComparable || manualNc)
+  const isExp = isExperimental(s.exerciseName);
+  if (!isExp && (computedForMach.notComparable || manualNc))
     return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${weightHtml}${mach}`)));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
@@ -8721,7 +8725,7 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // position as the tags; write it as a very small text right underneath the weight — under
   // the tag + weight if there are tags — not instead of it, and no extra height"). So the chip
   // shows tags + weight^reps as normal, and the note is a tiny truncated caption BELOW it.
-  const noteSub = note
+  const noteSub = note && !isExp
     ? `<span class="wo-set-note-sub" title="${escapeHtml(note)}">${escapeHtml(note.length > 16 ? `${note.slice(0, 16)}…` : note)}</span>`
     : "";
   const stack = (chip: string): string => (noteSub ? `<span class="wo-set-stack"><span class="wo-set-main">${chip}</span>${noteSub}</span>` : chip);
@@ -9973,8 +9977,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // note (e.g. a hand-added handstand) — a per-set synthetic key, so its banded/lean/
   // ROM form is editable just like a logged-note set.
   const editNote = scaleNote || (familyOf(s.exerciseName) ? `__set:${sid}` : "");
-  // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
-  const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
+  // A manually marked "not comparable" note/set shows "UN" — not experimental lifts (notes
+  // are their tag chips; auto-excluded from metrics without the UN label).
+  const isExp = isExperimental(s.exerciseName);
+  const uncmp = !isExp && (notComparableSets.has(sid) || (!!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote)));
   const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
   // The set's incline level (smith/sq/cm) rides along as data-attrs so the popover can
   // show it as the "incline" and edit its scale beside the family variation.
@@ -10031,7 +10037,7 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const trailTags = `${machineTag}${assistTag}${uniTag}`;
   // Variation INFO for the Vol cell: technique level (e.g. "Sq 3") · ROM · the note. Shown
   // when present, else the volume number, else "—".
-  const varInfo = note ? `<span class="set-varnote">${escapeHtml(note)}</span>` : "";
+  const varInfo = note && !isExp ? `<span class="set-varnote">${escapeHtml(note)}</span>` : "";
   const cellFor = (id: string): string => {
     switch (id) {
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the

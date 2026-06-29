@@ -2580,6 +2580,7 @@ select.subtle-select:hover, select.subtle-select:focus {
    off as one long line; the weight stays glued beside it via .wo-set-core. */
 .wo-var-chips { display: inline-flex; flex-wrap: wrap; align-content: flex-start; gap: 1px 3px; margin-right: 4px; vertical-align: middle; max-width: 6.5rem; }
 .wo-var-chip { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; color: var(--muted); background: var(--line); border-radius: var(--r-xs); padding: 0 4px; line-height: 1.5; }
+.wo-var-chip.wo-var-note { text-transform: none; font-weight: 600; letter-spacing: 0; } /* experimental free-form note — not an acronym */
 .wo-var-chip.wo-var-sup { color: #fff; background: var(--accent); }
 .wo-var-chip.wo-var-band { color: #fff; background: var(--gold); }
 /* Overflow tags collapse behind a ＋N "see more" chip (max 6 visible). Tapping ＋N adds
