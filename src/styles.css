@@ -4178,6 +4178,16 @@ tr.open .bw-ex-name .caret { transform: rotate(90deg); }
 .pairs-mgr-name { font-size: 0.74rem; font-weight: 700; padding: 2px 4px 2px 9px; }
 /* Nuzzo reps→%1RM curve — now the shared svgChart engine (.svgc) mounts into this box. */
 .lt-nuzzo { width: 100%; }
+/* Exercise-info Curve graph — same dashboard chrome as Analysis (gdash-*), scoped here. */
+.exinfo-graph-host { width: 100%; margin: 0.2rem 0 0.35rem; }
+.exinfo-graph-stage { min-height: 300px; }
+.exinfo-graph-overlay {
+  position: absolute; top: 4px; right: 5px; z-index: 7;
+  display: flex; align-items: flex-start; gap: 4px; flex-wrap: nowrap;
+}
+.exinfo-graph-foot { margin-top: 0.35rem; }
+.exinfo-graph-foot .wa-graph-fold { flex: 0 0 auto; }
+.exinfo-graph-foot .wa-graph-fold-cur { display: none; }
 /* Exercise info card sub-tabs (Curve / Volume). */
 .lt-tabs { display: flex; gap: 0.4rem; padding: 0.4rem 0 0.5rem; }
 .lt-tab {

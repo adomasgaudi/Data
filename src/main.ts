@@ -120,6 +120,9 @@ import {
   type GraphDashboard, type GraphBubble,
 } from "./graphDash";
 import {
+  loadExInfoBubble, patchExInfoBubble, cycleExInfoBubbleType,
+} from "./exInfoGraph";
+import {
   loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
   activeHistoryTab, addHistoryTab, removeHistoryTab,
   renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
@@ -376,13 +379,6 @@ let data: LoadedData;
 let calcCurveSvg: SvgChart | null = null; // Test-tab weight-vs-reps diagram (SVG engine)
 let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SVG engine)
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
-let cardNuzzoSvg: SvgChart | null = null; // Exercise-card 1RM-fit (Nuzzo) graph (SVG engine)
-let cardNuzzoRaf = false; // rAF coalescer so a slider drag re-plots at most once/frame
-// Card graph X-axis unit (owner toggle): kg (added weight) · % of 1RM · × bodyweight.
-type CardNuzzoXUnit = "kg" | "pct" | "bw";
-let cardNuzzoXUnit: CardNuzzoXUnit = (() => {
-  try { const v = localStorage.getItem("colosseum.cardNuzzoXUnit"); return v === "pct" || v === "bw" ? v : "kg"; } catch { return "kg"; }
-})();
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
 let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
@@ -4197,7 +4193,7 @@ let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
 let cardOrm: number | null = null;
 /** Which sub-tab is active in the exercise info card — "curve" (default, the Nuzzo
  *  fit graph + training brief) or "volume" (the 3D rotatable volume "city"). */
-let exInfoTab: "curve" | "volume" | "map" = "curve";
+let exInfoTab: "curve" | "volume" = "curve";
 /** Camera angles (radians) for the rotatable 3D Volume chart — yaw spins around the
  *  vertical axis, pitch tilts the view down from above. Persist across re-renders so a
  *  re-paint keeps the angle the owner dragged to. */
@@ -4274,6 +4270,7 @@ function openExerciseInfo(name: string, fromPlan = false): void {
   if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
   cardCalc = { weight: "", reps: "" }; // fresh manual-1RM input per lift
   cardOrm = null; // fresh 1RM-fit slider per lift (defaults to the logged best)
+  exInfoGraphStageKey = null;
   exInfoTab = "curve"; // always start on the curve tab for a fresh open
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
@@ -13313,130 +13310,9 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
   return series.length ? series[series.length - 1]!.y : Math.max(...pts.map((p) => p.y));
 }
 
-/** The card's reps→%1RM (Nuzzo) curve as an svgChart config — the SAME engine as the
- *  Analysis / compare / calculator graphs (the app's one chart tech). Reps on x, %1RM
- *  on y; the best-fit curve as a line, the study point-estimates as dots, and the
- *  suggested working set as a gold dot. Bench-derived but the closest data-grounded
- *  rep curve we have, so shown for any lift. */
 /** One logged set in the card graph's ADDED-weight space: x = the plate you added
  *  (negative = assisted), y = reps; date + setNumber drive the same-day connector. */
 type CardNuzzoSet = { date: string; setNumber: number; added: number; reps: number };
-
-function cardNuzzoConfig(
-  addedOneRM: number | null,
-  bodyShare: number,
-  planned: { reps: number; added: number; warm: boolean }[] | null,
-  realSets: CardNuzzoSet[] = [],
-  xUnit: CardNuzzoXUnit = "kg",
-  bodyweight: number | null = null,
-): SvgChartConfig {
-  // Owner orientation: ADDED WEIGHT (the plate / −assistance) on the X axis, REPS on Y.
-  // The Nuzzo % applies to the EFFECTIVE load (added + bodyweight share), so the curve
-  // both SCALES with the 1RM and TRANSLATES left by the bodyweight share — for a
-  // bodyweight lift it crosses into NEGATIVE kg in the high-rep (assisted) range. For a
-  // bar-only lift (bodyShare 0) it's the plain curve. Dragging the 1RM moves the curve.
-  const minPct = 15; // extend the curve down to 15% of 1RM
-  const repCap = 60; // safety stop for the iteration
-  const b = Number.isFinite(bodyShare) ? bodyShare : 0;
-  // Fall back to an effective-100 scale when there's no 1RM yet (added = 100 − share).
-  const A = addedOneRM != null && addedOneRM + b > 0 ? addedOneRM : 100 - b;
-  const addedAt = (reps: number) => Math.round((nuzzoAddedWeightForReps(A, b, reps) ?? 0) * 10) / 10;
-  // X-UNIT toggle (owner): show the X axis as kg (added weight), % of 1RM, or × bodyweight.
-  // Everything is computed in added-kg space, then `tx()` maps it to the chosen unit.
-  const BW = bodyweight && bodyweight > 0 ? bodyweight : null;
-  const effOneRM = A + b; // effective (added + bodyweight share) 1RM
-  const unitOn: CardNuzzoXUnit = (xUnit === "pct" && effOneRM > 0) || (xUnit === "bw" && BW) ? xUnit : "kg";
-  const tx = (added: number): number => {
-    if (unitOn === "pct") return Math.round(((added + b) / effOneRM) * 1000) / 10;
-    if (unitOn === "bw") return Math.round(((added + b) / BW!) * 100) / 100;
-    return Math.round(added * 10) / 10;
-  };
-  const atx = (reps: number) => tx(addedAt(reps)); // curve x at N reps, in the chosen unit
-  const fitPts: SvgPoint[] = [];
-  for (let r = 1; r <= repCap; r++) {
-    fitPts.push({ x: atx(r), y: r });
-    if (benchPctForReps(r) <= minPct) break;
-  }
-  // EFFORT (RIR) zones: ribbons stepping DOWN from the failure curve (RIR = reps short of
-  // failure). The offset is in REPS (y), so it rides the translated curve unchanged.
-  const effortBand = (top: number, bot: number, fill: string, label: string) => ({
-    points: fitPts.map((p) => ({ x: p.x, yTop: Math.max(0, (p.y as number) - top), yBot: Math.max(0, (p.y as number) - bot) })),
-    fill, label, labelColor: "#2f8f88",
-  });
-  const effortBands = [
-    effortBand(0, 3, "rgba(47,143,136,0.15)", "hard sets (≤3 RIR)"),
-    effortBand(3, 6, "rgba(47,143,136,0.09)", "3–6 RIR"),
-    effortBand(6, 12, "rgba(47,143,136,0.045)", "6–12 RIR"),
-  ];
-  // Load zones by rep-max, now in ADDED-weight space too (added weight at the 3/6/12 RM).
-  const rmZones = [
-    { from: atx(6), to: atx(3), fill: "rgba(184,144,47,0.10)", label: "3–6RM", labelColor: "#b8902f" },
-    { from: atx(12), to: atx(6), fill: "rgba(91,79,150,0.10)", label: "6–12RM", labelColor: "#5b4f96" },
-  ];
-  const series: SvgSeries[] = [
-    // Dashed (dot-less) reference curve.
-    { name: "Nuzzo curve", color: "#284e86", type: "line", points: fitPts, dashed: true },
-  ];
-  // Same-day SESSION connectors: join the sets logged on one day (in set order) with a
-  // thin light line so a session's path (warm-up ramp → work sets) reads at a glance.
-  // One light, dot-less, legend-less line per day; the scatter below owns the dots.
-  const byDay = new Map<string, CardNuzzoSet[]>();
-  for (const s of realSets) { const a = byDay.get(s.date) ?? []; a.push(s); byDay.set(s.date, a); }
-  for (const [, daySets] of byDay) {
-    if (daySets.length < 2) continue;
-    const pts = [...daySets].sort((p, q) => p.setNumber - q.setNumber).map((s) => ({ x: tx(s.added), y: s.reps }));
-    series.push({ name: "session", color: "#8fc4be", type: "line", points: pts, noLegend: true, noDots: true });
-  }
-  // EVERY logged set (not just rep-maxes) — the full cloud, so submaximal sets land in
-  // the lower RIR bands and the session lines connect them (owner request).
-  const unit = b > 0 ? "kg added" : "kg"; // "added" only matters for bodyweight lifts
-  if (realSets.length) {
-    const eff = (s: CardNuzzoSet) => s.added + b;
-    series.push({
-      name: "Your lifts", color: "#2f8f88", type: "scatter",
-      points: realSets.map((s) => ({
-        x: tx(s.added), y: s.reps,
-        meta: addedOneRM != null && addedOneRM + b > 0
-          ? `${s.reps} reps @ ${s.added}${unit} (${Math.round((eff(s) / (addedOneRM + b)) * 100)}% of 1RM)`
-          : `${s.reps} reps @ ${s.added}${unit}`,
-      })),
-    });
-  }
-  // PLANNED sets (owner: "suggested points based on the warm-ups and hard sets I choose"):
-  // the actual warm-up ramp + work sets as dots, so the plan you picked below shows ON the
-  // curve. Warm-ups lighter, the work sets the solid gold — replacing the lone suggested dot.
-  const warms = (planned ?? []).filter((p) => p.warm);
-  const works = (planned ?? []).filter((p) => !p.warm);
-  if (warms.length) {
-    series.push({ name: "Warm-up", color: "#d8b25a", type: "scatter", points: warms.map((p) => ({ x: tx(p.added), y: p.reps, meta: `Warm-up — ${p.reps} reps @ ${Math.round(p.added * 10) / 10}${unit}` })) });
-  }
-  if (works.length) {
-    series.push({ name: "Work sets", color: "#b8902f", type: "scatter", points: works.map((p) => ({ x: tx(p.added), y: p.reps, meta: `Work — ${p.reps} reps @ ${Math.round(p.added * 10) / 10}${unit}` })) });
-  }
-  const xTitle = unitOn === "pct" ? "% of 1RM" : unitOn === "bw" ? "× bodyweight" : (b > 0 ? "added weight (kg)" : "weight (kg)");
-  const fmtX = unitOn === "pct" ? (x: number) => `${Math.round(x)}%`
-    : unitOn === "bw" ? (x: number) => `${Math.round(x * 100) / 100}×`
-    : (x: number) => `${Math.round(x)}`;
-  // DRAGGABLE 1RM (owner: "make the nuzzo graph adjustable with the dashed line inside the
-  // graph"): a green vertical marker at the curve's 1RM (where reps→1, x = added 1RM),
-  // reusing the same xMarkers/onMarkerDrag mechanism as the projection + reps×kg fit
-  // (CHART-143). Dragging it sets cardOrm, so the curve, working weights AND warm-ups all
-  // re-derive (the warm-up already reads cardOrm). Only in kg mode, where x = added kg
-  // directly (so the released x maps straight back to the 1RM); pct/×BW keep the slider.
-  const markers = unitOn === "kg" && addedOneRM != null
-    ? [{ id: "card1rm", x: Math.round(A * 10) / 10, color: "#2f8f88", label: "1RM" }]
-    : undefined;
-  return {
-    series, xKind: "linear", height: 300, areaBands: effortBands, xBands: rmZones, leftMargin: 30,
-    xTitle, yTitle: "reps",
-    formatX: fmtX, formatTipX: fmtX,
-    ...(markers ? { xMarkers: markers, onMarkerDrag: (_id: string, newX: number) => {
-      cardOrm = Math.round(newX * 10) / 10;
-      // Persist the dragged 1RM as this lift's custom set strength (rule 55) — shared SSOT.
-      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); }
-    } } : {}),
-  };
-}
 
 /** The current athlete's computed records that belong to this lift's card — matched by
  * exerciseName OR originalExerciseName, so it covers a plain lift, a synthetic combine/
@@ -13463,278 +13339,6 @@ function cardNuzzoRealSets(name: string): CardNuzzoSet[] {
     out.push({ date: s.date, setNumber: s.setNumber, added: Math.round(added * 10) / 10, reps });
   }
   return out;
-}
-/** Build the card's Nuzzo chart config from the live `.lt-nuzzo` box. The dataset carries
- *  the ADDED-weight 1RM (nzorm), the bodyweight share (nzbody), and the suggested set's
- *  reps + added weight (nzsugreps / nzsugadded). Shared by the full mount and the live
- *  slider re-plot so they never drift. */
-function cardNuzzoConfigFromBox(box: HTMLElement): SvgChartConfig {
-  const orm = Number(box.dataset.nzorm); // added-weight 1RM
-  const body = Number(box.dataset.nzbody);
-  const sugReps = Number(box.dataset.nzsugreps), sugAdded = Number(box.dataset.nzsugadded);
-  const addedOneRM = Number.isFinite(orm) ? orm : null;
-  const bodyShare = Number.isFinite(body) ? body : 0;
-  // The PLANNED points = the SAME warm-up ramp + work sets the table below shows, in the
-  // graph's added-weight space, so picking a warm-up/hard-set plan re-plots the dots. Uses
-  // the card's bar-only warm-up frame (bwl 0, matching the table), then peels the body share
-  // for added-x. Falls back to the single suggested set's reps/added when there's no plan.
-  const formula = currentFormula();
-  const effOrm = (addedOneRM ?? 0) + bodyShare;
-  let planned: { reps: number; added: number; warm: boolean }[] | null = null;
-  if (effOrm > 0) {
-    const hs = hardSetWeight(effOrm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
-    if (hs) {
-      planned = [];
-      for (const s of warmupRamp({ oneRepMax: effOrm, workingWeightKg: hs.weightKg, formula, increment: 2.5, plan: getWarmupPlan() }))
-        planned.push({ reps: s.reps, added: Math.round((s.weightKg - bodyShare) * 10) / 10, warm: true });
-      for (const s of worksetRows(getWorksetPlan(), effOrm, hs.weightKg, hs.reps, formula, 2.5))
-        planned.push({ reps: s.reps, added: Math.round((s.weightKg - bodyShare) * 10) / 10, warm: false });
-    }
-  }
-  if (!planned && Number.isFinite(sugReps) && sugReps > 0 && Number.isFinite(sugAdded))
-    planned = [{ reps: sugReps, added: sugAdded, warm: false }];
-  const realSets = currentExInfo ? cardNuzzoRealSets(currentExInfo) : [];
-  const bw = athProfile(els.athlete.value)?.weight ?? null;
-  return cardNuzzoConfig(addedOneRM, bodyShare, planned, realSets, cardNuzzoXUnit, bw);
-}
-/** Mount the engine-driven charts embedded in the exercise-info card (the reps→%1RM
- *  Nuzzo curve). Called from the ONE paint chokepoint after the card HTML is (re)built,
- *  so every re-render path gets the live chart — not just the first open. Keeps the chart
- *  INSTANCE so a slider drag can .update() it instead of re-mounting (the SAME shared
- *  svgChart engine as the Analysis / compare / calculator graphs). */
-function mountExInfoCharts(): void {
-  const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
-  if (!box) { cardNuzzoSvg = null; return; }
-  cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
-}
-/** LIVE re-plot during a 1RM-slider drag. Re-mounting the whole chart every input tick
- *  rebuilt the full 300px SVG AND spun up a new ResizeObserver each time — heavy enough
- *  to stutter the drag and drop the pointer ("the knob is hard to move / loses control").
- *  Instead reuse the mounted instance and just `.update()` its series, coalesced to one
- *  redraw per animation frame (rule 17 snappy-render). */
-function updateCardNuzzoLive(): void {
-  if (cardNuzzoRaf) return;
-  cardNuzzoRaf = true;
-  requestAnimationFrame(() => {
-    cardNuzzoRaf = false;
-    const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
-    if (!box) return;
-    if (cardNuzzoSvg) cardNuzzoSvg.update(cardNuzzoConfigFromBox(box));
-    else cardNuzzoSvg = mountSvgChart(box, cardNuzzoConfigFromBox(box));
-  });
-}
-// ── 3D Volume "city" ────────────────────────────────────────────────────────
-// A rotatable grid of bars: X = weight range, Z = rep range, height = #sets.
-// Pure SVG (no Three.js — rule 9): each bar is a box whose 8 corners are rotated
-// by yaw+pitch, orthographically projected, backface-culled, then every visible
-// face is depth-sorted (painter's algorithm) and drawn as a shaded polygon.
-
-interface VolGrid {
-  wBins: { from: number; to: number; mid: number }[]; // X axis (weight)
-  rLabels: string[];                                   // Z axis (rep ranges)
-  grid: number[][];                                    // grid[wi][ri] = set count
-  maxCount: number;
-  loW: number; hiW: number;
-}
-
-const VOL_REP_RANGES: { label: string; min: number; max: number }[] = [
-  { label: "1–3",   min: 1,  max: 3 },
-  { label: "4–6",   min: 4,  max: 6 },
-  { label: "7–9",   min: 7,  max: 9 },
-  { label: "10–12", min: 10, max: 12 },
-  { label: "13+",   min: 13, max: Infinity },
-];
-
-/** Bucket a lift's logged sets into the weight × rep-range grid, dropping empty
- *  rows/cols so the city is only as big as the real data. null = nothing to show. */
-function cardVolDistData(name: string): VolGrid | null {
-  const sets = cardNuzzoRealSets(name);
-  if (sets.length === 0) return null;
-
-  const minA = sets.reduce((m, s) => Math.min(m, s.added), Infinity);
-  const maxA = sets.reduce((m, s) => Math.max(m, s.added), -Infinity);
-  const loW = Math.floor(minA / 5) * 5;
-  const hiW = Math.max(loW + 5, Math.ceil(maxA / 5) * 5);
-  const binSize = Math.max(5, Math.ceil((hiW - loW) / 10 / 5) * 5);
-
-  const allBins: { from: number; to: number; mid: number }[] = [];
-  for (let w = loW; w < hiW; w += binSize) allBins.push({ from: w, to: w + binSize, mid: w + binSize / 2 });
-
-  // Full grid first, then drop empty weight bins + empty rep ranges.
-  const full: number[][] = allBins.map(() => new Array(VOL_REP_RANGES.length).fill(0));
-  for (const s of sets) {
-    const wi = allBins.findIndex(b => s.added >= b.from && s.added < b.to);
-    if (wi < 0) continue;
-    const ri = VOL_REP_RANGES.findIndex(r => s.reps >= r.min && s.reps <= r.max);
-    if (ri >= 0) full[wi]![ri]!++;
-  }
-
-  const keepW = allBins.map((_, wi) => full[wi]!.some(c => c > 0));
-  const keepR = VOL_REP_RANGES.map((_, ri) => full.some(row => row[ri]! > 0));
-  const wBins = allBins.filter((_, wi) => keepW[wi]);
-  const rIdx = VOL_REP_RANGES.map((_, ri) => ri).filter(ri => keepR[ri]);
-  if (wBins.length === 0 || rIdx.length === 0) return null;
-
-  const grid = allBins
-    .map((_, wi) => wi)
-    .filter(wi => keepW[wi])
-    .map(wi => rIdx.map(ri => full[wi]![ri]!));
-  const maxCount = Math.max(...grid.flat());
-
-  return { wBins, rLabels: rIdx.map(ri => VOL_REP_RANGES[ri]!.label), grid, maxCount, loW, hiW };
-}
-
-/** Linear-interpolate a blue ramp by weight fraction (0 light → 1 dark). Returns [r,g,b]. */
-function volWeightRgb(f: number): [number, number, number] {
-  const a: [number, number, number] = [196, 222, 245]; // light  #c4def5
-  const b: [number, number, number] = [20, 56, 95];    // dark   #14385f
-  const t = Math.max(0, Math.min(1, f));
-  return [
-    Math.round(a[0] + (b[0] - a[0]) * t),
-    Math.round(a[1] + (b[1] - a[1]) * t),
-    Math.round(a[2] + (b[2] - a[2]) * t),
-  ];
-}
-
-/** Render the 3D city as an SVG string at the given camera angles. Bars are SOLID
- *  Lambert-shaded blocks (no wireframe look); axis lines + labels show what's what. */
-function renderVol3d(d: VolGrid, yaw: number, pitch: number): string {
-  const svgW = 400, svgH = 240, margin = 22;
-  const nW = d.wBins.length, nR = d.rLabels.length;
-
-  // World layout (centred on the origin so rotation pivots about the middle).
-  const cellX = 1.4, barW = 1.05;  // along X (weight)
-  const cellZ = 1.0, barD = 0.7;   // along Z (rep range)
-  const maxBarH = 3.4;             // tallest bar in world units
-  const totalX = nW * cellX, totalZ = nR * cellZ;
-  const cx0 = -totalX / 2, cz0 = -totalZ / 2, cy0 = -maxBarH / 2;
-
-  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
-  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
-  // Rotate a world point/vector → screen-space {X, Y up, Z depth (bigger = nearer)}.
-  const rot = (x: number, y: number, z: number) => {
-    const x1 = x * cosY + z * sinY;
-    const z1 = -x * sinY + z * cosY;
-    const y2 = y * cosP - z1 * sinP;
-    const z2 = y * sinP + z1 * cosP;
-    return { X: x1, Y: y2, Z: z2 };
-  };
-
-  // Fixed light (screen space): top-front, slightly left. Lambert: ambient + diffuse·max(0,N·L).
-  const ll = Math.hypot(-0.35, 0.85, 0.45);
-  const L = { x: -0.35 / ll, y: 0.85 / ll, z: 0.45 / ll };
-
-  type Face = { pts: { X: number; Y: number }[]; depth: number; fill: [number, number, number]; ground?: boolean };
-  const faces: Face[] = [];
-  // Ground tile (faint) so the bars read as a city on a floor.
-  {
-    const g = [
-      rot(cx0, cy0, cz0), rot(cx0 + totalX, cy0, cz0),
-      rot(cx0 + totalX, cy0, cz0 + totalZ), rot(cx0, cy0, cz0 + totalZ),
-    ];
-    faces.push({ pts: g, depth: (g[0]!.Z + g[2]!.Z) / 2 - 0.02, fill: [0, 0, 0], ground: true });
-  }
-
-  // Box faces (top + 4 sides; bottom is never seen from above) with outward normals.
-  const FACES: { idx: [number, number, number, number]; n: [number, number, number] }[] = [
-    { idx: [4, 5, 6, 7], n: [0, 1, 0] },   // top  +Y
-    { idx: [0, 1, 5, 4], n: [0, 0, -1] },  // front -Z
-    { idx: [3, 7, 6, 2], n: [0, 0, 1] },   // back  +Z
-    { idx: [0, 4, 7, 3], n: [-1, 0, 0] },  // left  -X
-    { idx: [1, 2, 6, 5], n: [1, 0, 0] },   // right +X
-  ];
-
-  for (let wi = 0; wi < nW; wi++) {
-    const f = nW > 1 ? wi / (nW - 1) : 0; // weight fraction for colour (left→right = light→heavy)
-    const base = volWeightRgb(f);
-    const x0 = cx0 + wi * cellX + (cellX - barW) / 2, x1 = x0 + barW;
-    for (let ri = 0; ri < nR; ri++) {
-      const count = d.grid[wi]![ri]!;
-      if (count === 0) continue;
-      const h = (count / d.maxCount) * maxBarH;
-      const z0 = cz0 + ri * cellZ + (cellZ - barD) / 2, z1 = z0 + barD;
-      const y0 = cy0, y1 = cy0 + h;
-      const C = [
-        rot(x0, y0, z0), rot(x1, y0, z0), rot(x1, y0, z1), rot(x0, y0, z1),
-        rot(x0, y1, z0), rot(x1, y1, z0), rot(x1, y1, z1), rot(x0, y1, z1),
-      ];
-      for (const { idx, n } of FACES) {
-        const p = [C[idx[0]]!, C[idx[1]]!, C[idx[2]]!, C[idx[3]]!];
-        // Backface cull via projected signed area (screen Y is down).
-        const area = (p[1]!.X - p[0]!.X) * (p[2]!.Y - p[0]!.Y) - (p[1]!.Y - p[0]!.Y) * (p[2]!.X - p[0]!.X);
-        if (area <= 0) continue; // facing away
-        const depth = (p[0]!.Z + p[1]!.Z + p[2]!.Z + p[3]!.Z) / 4;
-        // Lambert: rotate the face normal into screen space, light it.
-        const rn = rot(n[0], n[1], n[2]);
-        const lambert = 0.5 + 0.5 * Math.max(0, rn.X * L.x + rn.Y * L.y + rn.Z * L.z);
-        faces.push({
-          pts: p, depth,
-          fill: [Math.round(base[0] * lambert), Math.round(base[1] * lambert), Math.round(base[2] * lambert)],
-        });
-      }
-    }
-  }
-
-  // Axis anchors (kept in world space; projected after the fit so labels sit right).
-  const axO: [number, number, number] = [cx0, cy0, cz0];
-  const axW: [number, number, number] = [cx0 + totalX, cy0, cz0];               // weight axis end (+X)
-  const axR: [number, number, number] = [cx0, cy0, cz0 + totalZ];               // reps axis end (+Z)
-  const axS: [number, number, number] = [cx0, cy0 + maxBarH, cz0];              // sets axis end (+Y)
-  const axPts = [axO, axW, axR, axS].map(([x, y, z]) => rot(x, y, z));
-
-  // Fit: include bar faces + axis anchors so nothing clips at any angle.
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  const see = (q: { X: number; Y: number }) => {
-    if (q.X < minX) minX = q.X; if (q.X > maxX) maxX = q.X;
-    if (q.Y < minY) minY = q.Y; if (q.Y > maxY) maxY = q.Y;
-  };
-  for (const fc of faces) for (const p of fc.pts) see(p);
-  for (const q of axPts) see(q);
-  const spanX = Math.max(0.001, maxX - minX), spanY = Math.max(0.001, maxY - minY);
-  const scale = Math.min((svgW - 2 * margin) / spanX, (svgH - 2 * margin) / spanY);
-  const offX = (svgW - spanX * scale) / 2 - minX * scale;
-  const offY = (svgH - spanY * scale) / 2 + maxY * scale; // +Y up → flip
-  const sx = (X: number) => X * scale + offX;
-  const sy = (Y: number) => -Y * scale + offY;
-  const pt = (q: { X: number; Y: number }) => `${sx(q.X).toFixed(1)},${sy(q.Y).toFixed(1)}`;
-
-  // Painter's algorithm: far (small depth) first.
-  faces.sort((p, q) => p.depth - q.depth);
-
-  let out = "";
-  for (const fc of faces) {
-    const poly = fc.pts.map(pt).join(" ");
-    if (fc.ground) { out += `<polygon points="${poly}" fill="var(--line)" opacity="0.3"/>`; continue; }
-    const [r, g, b] = fc.fill;
-    // Solid block: fill only, with a thin SAME-hue darker edge for definition (no white wireframe).
-    out += `<polygon points="${poly}" fill="rgb(${r},${g},${b})" stroke="rgb(${Math.round(r * 0.7)},${Math.round(g * 0.7)},${Math.round(b * 0.7)})" stroke-width="0.4" stroke-linejoin="round"/>`;
-  }
-
-  // Axis lines + labels on top (so they're always legible). Halo via paint-order stroke.
-  const O = axPts[0]!;
-  const axLine = (to: { X: number; Y: number }) => `<line x1="${sx(O.X).toFixed(1)}" y1="${sy(O.Y).toFixed(1)}" x2="${sx(to.X).toFixed(1)}" y2="${sy(to.Y).toFixed(1)}" stroke="var(--muted)" stroke-width="1" opacity="0.7"/>`;
-  const lbl = (anchor: { X: number; Y: number }, dx: number, dy: number, text: string) =>
-    `<text x="${(sx(anchor.X) + dx).toFixed(1)}" y="${(sy(anchor.Y) + dy).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#46647f" paint-order="stroke" stroke="#fff" stroke-width="2.5" stroke-linejoin="round">${text}</text>`;
-  out += axLine(axPts[1]!) + axLine(axPts[2]!) + axLine(axPts[3]!);
-  // Tick values for scale + axis titles.
-  out += lbl(axPts[1]!, 0, 13, `${d.hiW}kg`);
-  out += lbl(axPts[2]!, 0, 13, `${d.rLabels[d.rLabels.length - 1]} reps`);
-  out += lbl(axPts[3]!, 0, -5, `${d.maxCount} sets`);
-  out += lbl(axPts[0]!, 0, 13, `${d.loW}kg`);
-
-  return out;
-}
-
-/** Volume tab body: a rotatable 3D "city" of bars (X weight · Z reps · height sets). */
-function cardVolDistHtml(name: string): string {
-  const d = cardVolDistData(name);
-  if (!d) return `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
-  return `<div class="lt-vol-wrap">` +
-    `<svg class="lt-vol-svg lt-vol3d" data-vol3d viewBox="0 0 400 240" xmlns="http://www.w3.org/2000/svg">` +
-    renderVol3d(d, vol3dYaw, vol3dPitch) +
-    `</svg>` +
-    `<div class="lt-vol-note muted">Drag to rotate · ↔ weight · ↕ reps · height = sets · darker = heavier</div>` +
-    `</div>`;
 }
 
 // ── Sets-map "table" ─────────────────────────────────────────────────────────
@@ -14102,12 +13706,6 @@ function mount3dDrag(svg: SVGSVGElement, render: () => string): void {
   svg.addEventListener("pointercancel", end);
 }
 
-function mountVolChart(name: string): void {
-  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-vol3d]");
-  const d = cardVolDistData(name);
-  if (svg && d) mount3dDrag(svg, () => renderVol3d(d, vol3dYaw, vol3dPitch));
-}
-
 function mountSetsMap(name: string): void {
   const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-map3d]");
   const d = cardSetsMapData(name);
@@ -14119,16 +13717,13 @@ function mountSetsMap(name: string): void {
 function paintExInfo(name: string): void {
   const tab = (id: string, label: string) =>
     `<button class="lt-tab${exInfoTab === id ? " is-on" : ""}" data-exitab="${id}">${label}</button>`;
-  const tabs = `<div class="lt-tabs">${tab("curve", "Curve")}${tab("volume", "Volume")}${tab("map", "Map")}</div>`;
+  const tabs = `<div class="lt-tabs">${tab("curve", "Curve")}${tab("volume", "Volume")}</div>`;
   if (exInfoTab === "volume") {
-    els.exInfoBody.innerHTML = tabs + cardVolDistHtml(name);
-    mountVolChart(name);
-  } else if (exInfoTab === "map") {
     els.exInfoBody.innerHTML = tabs + cardSetsMapHtml(name);
     mountSetsMap(name);
   } else {
     els.exInfoBody.innerHTML = tabs + exerciseInfoHtml(name);
-    mountExInfoCharts();
+    renderExInfoGraph(name);
   }
 }
 
@@ -14184,7 +13779,7 @@ function liftTrainingHtml(name: string): string {
   const customEff = rvwFitOf(name);
   const persistedAdded = customEff != null ? customEff - bodyShare : null;
   const addedBase = hasLogged
-    ? (cardOrm ?? persistedAdded ?? loggedAdded ?? bestFitAdded)
+    ? (cardOrm ?? persistedAdded ?? bestFitAdded ?? loggedAdded)
     : (manualOrm != null ? manualOrm - bodyShare : null);
   // Effective 1RM drives the working weights / warm-up / suggested set (same load space
   // as the logged sets). = added 1RM + the body share.
@@ -14217,20 +13812,6 @@ function liftTrainingHtml(name: string): string {
 
   // Suggested hard set: 5 reps @ RIR 2 (a sensible default working set).
   const hs = hardSetWeight(e1rm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
-  // The interactive 1RM-FIT control (logged lifts): a slider + number for the assumed
-  // 1RM, an optional snap-to-best-fit chip, and the Nuzzo curve with the real rep-max
-  // dots — drag the 1RM and the dots slide until they sit ON the curve (the owner's ask:
-  // "show the nuzzo graph with points of real lifts and adjust the 1RM to see the fit").
-  // The graph's data lives in ADDED-weight space. The box carries the added 1RM, the
-  // bodyweight share, and the suggested set (reps + its added weight) — read back by
-  // cardNuzzoConfigFromBox for the full mount AND the live slider re-plot.
-  const sugAdded = hs ? hs.weightKg - bodyShare : null;
-  const nuzzoBox = (added: number | null) =>
-    `<div class="lt-nuzzo" data-nzorm="${added != null ? fmt(added) : ""}" data-nzbody="${fmt(bodyShare)}" data-nzsugreps="${hs?.reps ?? ""}" data-nzsugadded="${sugAdded != null ? fmt(sugAdded) : ""}"></div>`;
-  const maxW = repMaxes.reduce((m, rm) => Math.max(m, rm.weight), 0); // heaviest EFFECTIVE
-  const maxAdded = Math.round((maxW - bodyShare) * 10) / 10;          // heaviest ADDED
-  const aBase = addedBase ?? maxAdded;       // current 1RM-fit value (added 1RM, may be negative)
-  const sMin = Math.floor(maxAdded);          // 1RM ≥ heaviest added single; negative when assisted
   const unit = bodyShare > 0 ? "kg added" : "kg";
   // The dots' source data — EVERY logged set now (owner: "all points, not just top 10"),
   // heaviest-added first, in a collapsed list so the cloud behind the teal dots is legible.
@@ -14245,21 +13826,8 @@ function liftTrainingHtml(name: string): string {
         }).join("") +
         `</div></details>`
     : "";
-  const ormFit =
-    `<div class="lt-ormfit">` +
-      // No slider here (owner: redundant) — drag the "1RM" line ON the graph below, or type
-      // the exact value. Either way it persists as this lift's custom set strength (rule 55).
-      `<div class="lt-ormfit-row">` +
-        `<input type="number" class="lt-ormfit-num" inputmode="decimal" step="0.5" min="${sMin}" value="${fmt(aBase)}" data-cardorm="num" aria-label="1RM in kilograms">` +
-        `<span class="lt-ormfit-unit">${unit === "kg" ? "kg 1RM" : "kg added 1RM"}</span>` +
-        (bestFitAdded != null && Math.abs(bestFitAdded - aBase) > 0.5
-          ? `<button type="button" class="lt-ormfit-best" data-cardorm="best" data-best="${fmt(bestFitAdded)}" title="Snap the 1RM to the value that best fits your logged sets to the curve">fit ${fmt(bestFitAdded)}</button>`
-          : "") +
-        `<button type="button" class="lt-ormfit-best lt-xunit" data-cardxunit title="Graph X-axis unit — tap to cycle kg → %1RM → ×BW">${cardNuzzoXUnit === "pct" ? "%1RM" : cardNuzzoXUnit === "bw" ? "×BW" : "kg"}</button>` +
-      `</div>` +
-      nuzzoBox(aBase) +
-      realSrc +
-    `</div>`;
+  const graphHost = `<div class="exinfo-graph-host" data-exinfograph="${escapeHtml(name)}"></div>`;
+  const graphBlock = graphHost + realSrc;
   // Working weights: true rep-maxes for common targets (load to FAILURE at N reps). Computed
   // on the EFFECTIVE 1RM, shown as ADDED weight (rule 49) — bodyShare 0 leaves bar lifts as-is.
   const repTargets = [3, 5, 8, 12];
@@ -14348,12 +13916,10 @@ function liftTrainingHtml(name: string): string {
     `</details>`;
 
   return `<div class="lt-wrap">` +
-    focusHtml +
-    // Logged lift → the 1RM-fit graph IS the calculator (slider + real points on the
-    // Nuzzo curve). Never-logged-but-typed → the kg×reps mini-calc + the plain curve.
     (hasLogged
-      ? sec("1RM — fit to your lifts", ormFit)
-      : sec("Calculate", calcRow) + sec("%1RM → reps (Nuzzo)", nuzzoBox(null))) +
+      ? sec("Graph", graphBlock)
+      : sec("Calculate", calcRow) + sec("Graph", graphHost)) +
+    focusHtml +
     sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
     (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
     sec("Warmup", warmRows) +
@@ -15819,13 +15385,6 @@ function debounceWaRender(): void {
   if (waRenderTimer) clearTimeout(waRenderTimer);
   waRenderTimer = setTimeout(() => { waRenderTimer = null; renderWorkoutAnalysis(); }, 200);
 }
-// The 1RM-fit slider re-plots the chart live on every input but DEFERS the heavy
-// whole-card rebuild (working weights, warm-up table) until the drag pauses.
-let cardOrmTimer: ReturnType<typeof setTimeout> | null = null;
-function debounceCardOrmRender(): void {
-  if (cardOrmTimer) clearTimeout(cardOrmTimer);
-  cardOrmTimer = setTimeout(() => { cardOrmTimer = null; if (currentExInfo) paintExInfo(currentExInfo); }, 220);
-}
 /** The ONE place a lift leaves a selection (graph OR history — independent scopes).
  * Mutates the SSOT array, then INSTANTLY drops every on-screen projection of that
  * lift (its title chip + picked pill) so editing feels immediate, and DEBOUNCES the
@@ -16307,6 +15866,7 @@ async function init() {
   // / working sets that flow from it). On commit (blur/Enter) re-render the card; focus has
   // already left the input so nothing is stolen mid-type.
   els.exInfoBody.addEventListener("change", (e) => {
+    if (handleExInfoGraphConfigChange(e.target as HTMLElement)) return;
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-cardcalc]");
     if (!inp) return;
     const w = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="w"]')?.value ?? "";
@@ -16314,25 +15874,9 @@ async function init() {
     cardCalc = { weight: w.trim(), reps: r.trim() };
     if (currentExInfo) paintExInfo(currentExInfo);
   });
-  // 1RM-fit slider / number: dragging recomputes the card's 1RM. INSTANT feedback —
-  // update the sibling control + re-plot the real points live (re-mount the Nuzzo
-  // chart); DEFER the heavy whole-card re-render (working weights, warm-up table) to a
-  // debounce so the drag stays smooth (snappy-render recipe).
-  els.exInfoBody.addEventListener("input", (e) => {
-    const inp = (e.target as HTMLElement).closest<HTMLInputElement>('[data-cardorm="num"]');
-    if (!inp) return;
-    const v = parseFloat(inp.value);
-    // cardOrm is the ADDED-weight 1RM now — it CAN be ≤ 0 for an assisted-only lift, so
-    // only reject a non-finite value, not a negative one.
-    if (!Number.isFinite(v)) return;
-    cardOrm = v;
-    if (currentExInfo) setCustomStrengthAdded(currentExInfo, v); // persist (rule 55)
-    const box = els.exInfoBody.querySelector<HTMLElement>(".lt-nuzzo");
-    if (box) { box.dataset.nzorm = String(Math.round(v * 10) / 10); updateCardNuzzoLive(); }
-    debounceCardOrmRender();
-  });
   els.exInfoBody.addEventListener("click", (e) => {
-    // Map-tab merge/range/height pills (cycle the value, persist, re-render the map).
+    if (handleExInfoGraphControl(e.target as HTMLElement)) return;
+    // Volume-tab merge/range/height pills (cycle the value, persist, re-render the map).
     const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange]");
     if (mapCtl) {
       e.preventDefault(); e.stopPropagation();
@@ -16347,7 +15891,7 @@ async function init() {
     if (tabBtn?.dataset.exitab) {
       e.preventDefault(); e.stopPropagation();
       const tab = tabBtn.dataset.exitab;
-      if ((tab === "curve" || tab === "volume" || tab === "map") && tab !== exInfoTab) {
+      if ((tab === "curve" || tab === "volume") && tab !== exInfoTab) {
         exInfoTab = tab;
         if (currentExInfo) paintExInfo(currentExInfo);
       }
@@ -16379,22 +15923,6 @@ async function init() {
       const fidx = rest.lastIndexOf("|");
       const field = rest.slice(fidx + 1) as "dw" | "dr";
       bumpWarmupAdj(rest.slice(0, fidx), field, delta);
-      if (currentExInfo) paintExInfo(currentExInfo);
-      return;
-    }
-    // "fit" chip: snap the 1RM to the value that best fits the logged sets to the curve.
-    const fitBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-cardorm="best"]');
-    if (fitBtn?.dataset.best) {
-      e.preventDefault(); e.stopPropagation();
-      cardOrm = parseFloat(fitBtn.dataset.best);
-      if (currentExInfo) { setCustomStrengthAdded(currentExInfo, cardOrm); paintExInfo(currentExInfo); } // persist (rule 55)
-      return;
-    }
-    // X-axis unit toggle: cycle kg → %1RM → ×BW, persist, re-plot the card graph.
-    if ((e.target as HTMLElement).closest<HTMLElement>("[data-cardxunit]")) {
-      e.preventDefault(); e.stopPropagation();
-      cardNuzzoXUnit = cardNuzzoXUnit === "kg" ? "pct" : cardNuzzoXUnit === "pct" ? "bw" : "kg";
-      try { localStorage.setItem("colosseum.cardNuzzoXUnit", cardNuzzoXUnit); } catch { /* ignore */ }
       if (currentExInfo) paintExInfo(currentExInfo);
       return;
     }
@@ -22317,16 +21845,10 @@ function setCustomStrength(exercise: string, effOneRm: number): void {
   rvwFitOverrides[rvwFitKey(exercise)] = Math.round(effOneRm * 10) / 10;
   saveRvwFit();
 }
-/** Persist the custom set strength from an ADDED-weight 1RM (the card's Curve fit path,
- * which works in added-weight space). Folds the bodyweight share back in to store the
- * EFFECTIVE 1RM, so the card fit and the analysis fit stay ONE value. */
-function setCustomStrengthAdded(exercise: string, addedOrm: number): void {
-  const share = Math.max(0, coeffFor(exercise) * (athProfile(els.athlete.value)?.weight ?? 0));
-  setCustomStrength(exercise, addedOrm + share);
-}
 function onRvwFitDrag(exercise: string, effOneRm: number): void {
   setCustomStrength(exercise, effOneRm);
   scheduleWaGraph();
+  scheduleExInfoGraph();
 }
 // Reps×weight time WINDOW (owner: two toggles in the Options menu, not a pager). The MODE
 // picks the window family: "inc" = increasing windows anchored to now (last day → … → all);
@@ -23981,7 +23503,10 @@ function renderGraphMini(): void {
 /** Assemble the pure analyticsGraph input for ONE bubble from its OWN config — the reuse seam
  * that lets every bubble render through the SAME proven engine (renderGraphSlideChart's input,
  * parameterised on the bubble instead of globals). single → first lift only; multi → all. */
-function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalyticsGraph>[1] {
+function buildBubbleInput(
+  bubble: GraphBubble,
+  viewPersist?: { getSavedView: () => GraphBubble["savedView"]; setSavedView: (v: GraphBubble["savedView"]) => void },
+): Parameters<typeof renderAnalyticsGraph>[1] {
   const formula = currentFormula();
   const user = els.athlete.value;
   const isRvw = bubble.type === "rvw";
@@ -24038,7 +23563,8 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
   let dataSum = plotted.length;
   for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
   const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes, dataSum, dataMax]);
-  const initialView = bubble.savedView && bubble.savedView.sig === sig ? bubble.savedView.box : null;
+  const savedViewSource = viewPersist?.getSavedView() ?? bubble.savedView;
+  const initialView = savedViewSource && savedViewSource.sig === sig ? savedViewSource.box : null;
   // PHASES (decay level 4): mark where the beginner / intermediate phases end, placed by
   // cumulative set count (first phase1End sets = beginner, up to phase2End = intermediate).
   // Auto-placed for now; dragging them is the next increment. Only on the time chart, when
@@ -24084,7 +23610,9 @@ function buildBubbleInput(bubble: GraphBubble): Parameters<typeof renderAnalytic
     xRefLines: isRvw ? undefined : [{ x: Date.parse(todayIso()), color: "#cf5a4a", label: "today" }, ...phaseLines],
     onViewChange: (box) => {
       // Persist only — never re-render here (that would destroy the chart mid-gesture).
-      graphDash = setBubbleView(graphDash, tabId, bubble.id, box ? { sig, box } : null);
+      const next = box ? { sig, box } : null;
+      if (viewPersist) { viewPersist.setSavedView(next); return; }
+      graphDash = setBubbleView(graphDash, tabId, bubble.id, next);
       persistDash();
     },
     onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
@@ -24625,6 +24153,273 @@ function renderGraphDashboard(): void {
         overlay.insertBefore(legend, overlay.firstChild); // Legend + Fit first, then kg/×BW + ℹ
       }
     }
+  }
+}
+
+// ── Exercise-info Curve tab: same analytics engine + Options as the main graph ─────────────
+let exInfoGraphStageKey: string | null = null;
+let exInfoGraphRaf = 0;
+
+function exInfoGraphActive(): boolean {
+  return currentExInfo !== null && !els.exInfoPage.hidden && exInfoTab === "curve";
+}
+
+function exInfoWriteMetrics(name: string): void {
+  patchExInfoBubble(name, { metrics: [...waMetrics] });
+}
+
+function scheduleExInfoGraph(): void {
+  if (!exInfoGraphActive() || !currentExInfo) return;
+  if (exInfoGraphRaf) return;
+  exInfoGraphRaf = requestAnimationFrame(() => {
+    exInfoGraphRaf = 0;
+    renderExInfoGraph(currentExInfo!);
+  });
+}
+
+/** Graph Options / overlay controls inside the exercise-info Curve graph (same data-* as Analysis). */
+function handleExInfoGraphControl(t: HTMLElement): boolean {
+  const name = currentExInfo;
+  if (!name || !t.closest("[data-exinfograph]")) return false;
+  const met = t.closest<HTMLElement>(".wa-metric");
+  if (met?.dataset.wametric) {
+    const id = met.dataset.wametric;
+    const WEIGHT_EXCLUSIVE = ["e1rm", "weightRange"];
+    if (waMetrics.has(id)) { waMetrics.delete(id); met.classList.remove("is-on"); }
+    else {
+      waMetrics.add(id); met.classList.add("is-on");
+      if (WEIGHT_EXCLUSIVE.includes(id)) {
+        for (const other of WEIGHT_EXCLUSIVE) {
+          if (other !== id && waMetrics.delete(other)) {
+            met.closest(".wa-metric-chips")?.querySelector(`[data-wametric="${other}"]`)?.classList.remove("is-on");
+          }
+        }
+      }
+    }
+    exInfoWriteMetrics(name);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-dashtype]")) {
+    cycleExInfoBubbleType(name);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-dashbw]")) {
+    const b = loadExInfoBubble(name);
+    patchExInfoBubble(name, { perBodyweight: !b.perBodyweight });
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wacompare]")) {
+    waCompareOpen = !waCompareOpen;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wasmooth]")) {
+    const steps = [0, 1, 2, 5, 10, 20, 50];
+    const i = steps.indexOf(waGraphConfig.smoothing);
+    waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wastrwin]")) {
+    cycleStrengthWindow();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wadecaylevel]")) {
+    const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+    dpc.level = ((dpc.level % 4) + 1) as DecayLevel;
+    waGraphConfig.decayParams = dpc;
+    saveDecayParams();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wadecayofficial]")) {
+    makeDecayOfficial();
+    strengthByExCache = null;
+    rerenderSetsTables();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojdays]")) {
+    const steps = [30, 90, 180, 365, 730, 1825, 3650, 5475];
+    const i = steps.indexOf(waGraphConfig.predictionDays);
+    waGraphConfig.predictionDays = steps[(i + 1) % steps.length] ?? 90;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojbasis]")) {
+    const steps = ["records", "hard", "all"] as const;
+    const i = steps.indexOf(waGraphConfig.projectionBasis ?? "records");
+    waGraphConfig.projectionBasis = steps[(i + 1) % steps.length]!;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojwinreset]")) {
+    projFitFrom = null; projFitTo = null;
+    scheduleExInfoGraph();
+    return true;
+  }
+  const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
+  if (cfgTog?.dataset.wacfgtoggle) {
+    const key = cfgTog.dataset.wacfgtoggle as "decay" | "potentialLog" | "potentialNativeLog";
+    waGraphConfig[key] = !waGraphConfig[key];
+    if (key === "potentialLog" && waGraphConfig.potentialLog) { waGraphConfig.potentialNativeLog = false; S.waPerBodyweight = false; }
+    if (key === "potentialNativeLog" && waGraphConfig.potentialNativeLog) { waGraphConfig.potentialLog = false; S.waPerBodyweight = false; }
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-warvw]")) {
+    patchExInfoBubble(name, { type: S.waRepsVsWeight ? "time" : "rvw" });
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-warvwfit]")) {
+    S.waRepsVsWeightFit = !S.waRepsVsWeightFit;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-rvwmode]")) {
+    rvwWindowMode = rvwWindowMode === "2w" ? "inc" : "2w";
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-rvwcycle]")) {
+    if (rvwWindowMode === "2w") rvw2wIdx = (rvw2wIdx + 1) % (rvw2wMaxIdx + 1);
+    else rvwIncIdx = (rvwIncIdx + 1) % RVW_INC_WINDOWS.length;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-watime]")) {
+    setTimeCompact(!getTimeCompact());
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wahardonly]")) {
+    waHardOnly = !waHardOnly;
+    saveHardOnly();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wagmenuclose]")) {
+    const fold = t.closest<HTMLDetailsElement>(".wa-graph-fold");
+    if (fold) { fold.open = false; S.waGraphFoldOpen = false; }
+    return true;
+  }
+  return false;
+}
+
+function handleExInfoGraphConfigChange(target: HTMLElement): boolean {
+  const name = currentExInfo;
+  if (!name || !target.closest("[data-exinfograph]")) return false;
+  const cfg = target.closest<HTMLElement>(".wa-cfg");
+  if (cfg?.dataset.wacfg) {
+    const key = cfg.dataset.wacfg;
+    const el = cfg as HTMLInputElement | HTMLSelectElement;
+    if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
+    else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+    else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
+    else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
+    else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
+    else if (key === "spread") waGraphConfig.spread = Math.min(9.8, Math.max(0, Number((el as HTMLInputElement).value)));
+    else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
+    else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
+    else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (cfg?.dataset.wadecay) {
+    const field = cfg.dataset.wadecay;
+    const raw = Number((cfg as HTMLInputElement).value);
+    if (Number.isFinite(raw)) {
+      const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+      const isPct = field === "floor" || field === "linearLossPerDay" || field === "maxGrowthFraction" || field === "calibrationThreshold";
+      let v = isPct ? raw / 100 : raw;
+      const clamp = (lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+      if (field === "graceDays") v = clamp(0, 365);
+      else if (field === "floor") v = clamp(0, 1);
+      else if (field === "linearLossPerDay") v = clamp(0, 1);
+      else if (field === "lossPerLog") v = clamp(0, 2);
+      else if (field === "stabilityDays") v = clamp(1, 1000);
+      else if (field === "stabilityGrowth") v = clamp(1, 5);
+      else if (field === "maxStability") v = clamp(1, 2000);
+      else if (field === "maxGrowthFraction") v = clamp(0, 2);
+      else if (field === "calibrationThreshold") v = clamp(0, 1);
+      else if (field === "phase1EndSets") v = Math.round(clamp(1, 100000));
+      else if (field === "phase2EndSets") v = Math.round(clamp(1, 100000));
+      else if (field === "phase1Pace" || field === "phase2Pace" || field === "phase3Pace") v = clamp(0, 1);
+      else if (field === "phase1RirUpper" || field === "phase1RirLower") v = clamp(0, 10);
+      (dpc as unknown as Record<string, number>)[field] = v;
+      waGraphConfig.decayParams = dpc;
+      saveDecayParams();
+    }
+    scheduleExInfoGraph();
+    return true;
+  }
+  return false;
+}
+
+/** Render the exercise-info Curve graph through renderAnalyticsGraph + the shared Options menu. */
+function renderExInfoGraph(name: string): void {
+  const host = els.exInfoBody.querySelector<HTMLElement>("[data-exinfograph]");
+  if (!host) return;
+  const bubble = loadExInfoBubble(name);
+  // Project this lift's stored bubble onto the shared graph globals the Options menu reads.
+  waMetrics.clear();
+  for (const m of bubble.metrics) waMetrics.add(m);
+  S.waRepsVsWeight = bubble.type === "rvw";
+  S.waPerBodyweight = bubble.perBodyweight;
+  if (bubble.type === "rvw") S.waRepsVsWeightFit = true;
+
+  const stageKey = `${name}::${bubble.type}::${bubble.perBodyweight}::${[...waMetrics].sort().join(",")}`;
+  let keepStage = host.querySelector<HTMLElement>("#exInfoGraphStage");
+  if (keepStage) keepStage.remove();
+  if (exInfoGraphStageKey !== stageKey) keepStage = null;
+
+  const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [name]), host, { skipRvw: true, dashType: bubble.type });
+  const compareBtn = canCompare
+    ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on this graph"}">Compare</button>`
+    : "";
+  const comparePills = waCompareOpen && canCompare ? graphAthletesPillsHtml() : "";
+
+  host.innerHTML =
+    `<div class="gdash-stagewrap exinfo-graph-stage">` +
+      `<div id="exInfoGraphStageSlot"></div>` +
+      `<div class="gdash-overlay exinfo-graph-overlay">` +
+        `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+      `</div>` +
+    `</div>` +
+    comparePills +
+    `<div class="gdash-foot exinfo-graph-foot">${compareBtn}${optionsFold}</div>`;
+
+  const slot = host.querySelector("#exInfoGraphStageSlot");
+  const stage = keepStage ?? (() => {
+    const d = document.createElement("div");
+    d.id = "exInfoGraphStage";
+    d.className = "gdash-stage wa-graph-chart";
+    return d;
+  })();
+  slot?.replaceWith(stage);
+
+  const viewPersist = {
+    getSavedView: () => loadExInfoBubble(name).savedView,
+    setSavedView: (v: GraphBubble["savedView"]) => { patchExInfoBubble(name, { savedView: v ?? null }); },
+  };
+  renderAnalyticsGraph(stage, buildBubbleInput(bubble, viewPersist));
+  exInfoGraphStageKey = stageKey;
+
+  // Relocate ONLY the ⤢ Fit control into the top-right overlay (same as the main graph);
+  // drop the legend — the plot is self-explanatory on a single lift (owner).
+  const overlay = host.querySelector<HTMLElement>(".exinfo-graph-overlay");
+  const fitBtn = stage.querySelector<HTMLElement>(".svgc-center");
+  stage.querySelector<HTMLElement>(".svgc-legend")?.remove();
+  if (overlay && fitBtn) {
+    if (fitBtn.parentElement && fitBtn.parentElement !== overlay) fitBtn.remove();
+    overlay.querySelector(".svgc-center")?.remove();
+    overlay.appendChild(fitBtn);
   }
 }
 
