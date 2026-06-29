@@ -3153,6 +3153,15 @@ sup.wr-bw { font-size: 0.85em; }
 .taginfo-newopt, .taginfo-newtag-name, .taginfo-newtag-opt { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 0.74rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); }
 .taginfo-addbtn { flex: 0 0 auto; font: inherit; font-size: 0.6rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); white-space: nowrap; border: 1px dashed var(--accent); border-radius: var(--r-xs); background: none; color: var(--accent); padding: 0 6px; }
 .taginfo-addbtn:hover { background: var(--accent); color: #fff; }
+/* Curve-based cm tag editor (ROM / shoulder gap / …) — anchors + named units. */
+.taginfo-pop { max-width: min(22rem, calc(100vw - 1.5rem)); }
+.taginfo-curve-wrap { margin: 0.15rem 0; overflow-x: auto; }
+.taginfo-curve-wrap .hs-svg { display: block; width: 100%; max-width: 20rem; height: auto; }
+.taginfo-anchor .taginfo-cm-lbl { flex: 1 1 auto; min-width: 0; font-size: 0.74rem; font-weight: 600; }
+.taginfo-namedcm, .taginfo-yogacm { flex: 0 0 2.8rem; font: inherit; font-size: 0.74rem; padding: 2px 4px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--accent); field-sizing: content; }
+.taginfo-curve-at { flex: 0 0 auto; font-size: 0.66rem; white-space: nowrap; }
+.taginfo-addanchor { display: flex; align-items: center; gap: 0.3rem; }
+.taginfo-newcm { flex: 0 0 4rem; font: inherit; font-size: 0.74rem; padding: 2px 6px; border: 1px solid var(--line); border-radius: var(--r-xs); background: var(--panel); color: var(--text); }
 /* 🗑 delete tag — destructive, only on user-created tags; uses the shared --remove colour (rule 28). */
 .taginfo-del { font: inherit; font-size: 0.66rem; font-weight: 700; cursor: pointer; min-height: var(--tap-min); margin-top: 0.2rem; border: 1px solid var(--remove); border-radius: var(--r-xs); background: none; color: var(--remove); padding: 0 0.6rem; }
 .taginfo-del:hover { background: var(--remove); color: #fff; }

@@ -89,6 +89,10 @@ import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact
   leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
   cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
+import {
+  dimUsesCmCurve, splitCmDimLevels, sortedCmAnchors, inferCmKeyStyle, formatCmLevelKey,
+  factorForCmDimLevel, namedUnitCm as defaultNamedUnitCm, parseCmLevel,
+} from "./cmDimEdit";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
 import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
@@ -1756,6 +1760,52 @@ function setFamFactor(family: string, dim: string, level: string, value: number)
   saveFamFactors();
 }
 
+// ---- Per-dim named-unit cm (blue block, wall…) + yoga-block side heights ----.
+// Named units are UNPREDICTABLE fixed references (owner: "blue", "yoga small") — each
+// maps to one cm height; the ×difficulty comes from the cm→× curve at that height.
+// Yoga-block S/M/L are PREDICTABLE unit types (editable cm per side, shared by ROM/lean pickers).
+const FAM_NAMED_CM_KEY = "colosseum.famNamedCm.v1";
+const famNamedCmOverrides = loadJsonObject<Record<string, Record<string, Record<string, number>>>>(FAM_NAMED_CM_KEY);
+function saveFamNamedCm(): void { saveJson(FAM_NAMED_CM_KEY, famNamedCmOverrides); }
+function getNamedUnitCm(family: string, dim: string, key: string): number | undefined {
+  const ov = famNamedCmOverrides[family]?.[dim]?.[key];
+  if (ov !== undefined) return ov;
+  return defaultNamedUnitCm(key);
+}
+function setNamedUnitCm(family: string, dim: string, key: string, cm: number): void {
+  const fam = (famNamedCmOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  const def = defaultNamedUnitCm(key);
+  if (def !== undefined && Math.abs(cm - def) < 1e-6) delete d[key];
+  else d[key] = cm;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famNamedCmOverrides[family];
+  saveFamNamedCm();
+}
+const YOGA_BLOCK_CM_KEY = "colosseum.yogaBlockCm.v1";
+const yogaBlockCmOverrides = loadJsonObject<Partial<Record<YogaBlockSide, number>>>(YOGA_BLOCK_CM_KEY);
+function saveYogaBlockCm(): void { saveJson(YOGA_BLOCK_CM_KEY, yogaBlockCmOverrides); }
+function yogaBlockCm(side: YogaBlockSide): number {
+  return yogaBlockCmOverrides[side] ?? YOGA_BLOCK_CM[side];
+}
+function setYogaBlockCm(side: YogaBlockSide, cm: number): void {
+  if (Math.abs(cm - YOGA_BLOCK_CM[side]) < 1e-6) delete yogaBlockCmOverrides[side];
+  else yogaBlockCmOverrides[side] = cm;
+  saveYogaBlockCm();
+}
+/** Add a new cm anchor to a curve dim (interpolated × from existing anchors). */
+function addCmAnchor(family: string, dim: string, cm: number): string | null {
+  if (!Number.isFinite(cm)) return null;
+  const levels = famLevels(family, dim);
+  const style = inferCmKeyStyle(Object.keys(levels));
+  const key = formatCmLevelKey(cm, style);
+  if (levels[key] !== undefined) return key;
+  const { anchors } = splitCmDimLevels(levels);
+  const f = factorForCmDimLevel(anchors, key, cm);
+  setFamFactor(family, dim, key, f);
+  return key;
+}
+
 // ---- Per-family DEFAULT level + LEVEL LABEL overrides (the tag editor) ----.
 // The owner sets which tag is the DEFAULT for an exercise (e.g. handstand push-up →
 // "back to wall"), and can RENAME a tag — both per family, saved on device + backup.
@@ -1849,8 +1899,14 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     }
     const levels = famLevels(family, dim);
     const lv = vec[dim] ?? "";
-    // Exact preset, else interpolate a cm dim (rom) for an off-table value like "+32cm".
-    const f = levels[lv] ?? interpCmFactor(levels, lv);
+    let f: number;
+    if (dimUsesCmCurve(levels)) {
+      const { anchors } = splitCmDimLevels(levels);
+      const ncm = lv in anchors || parseCmLevel(lv) !== undefined ? undefined : getNamedUnitCm(family, dim, lv);
+      f = factorForCmDimLevel(anchors, lv, ncm);
+    } else {
+      f = levels[lv] ?? interpCmFactor(levels, lv) ?? 1;
+    }
     if (typeof f === "number") s *= f;
   }
   return Math.round(s * 1e6) / 1e6;
@@ -19006,8 +19062,8 @@ function openRomDimPicker(pill: HTMLElement): void {
   let reading = initCm; // cm typed/stepped (kept in sync with block picks)
   let block: YogaBlockSide = nearestYogaBlockSide(initCm);
   const syncBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
-  const syncReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
-  const cm = (): number => (unit === "cm" ? reading : YOGA_BLOCK_CM[block]); // a block raises the hands → +cm
+  const syncReadingFromBlock = () => { reading = yogaBlockCm(block); };
+  const cm = (): number => (unit === "cm" ? reading : yogaBlockCm(block)); // a block raises the hands → +cm
   const setLevel = (lvl: string) => {
     // ROM is CONTINUOUS (owner: tag must show "exactly what i set", not a snapped preset):
     // store the exact cm as the level key. The hidden <select> SSOT only holds values it
@@ -19030,7 +19086,7 @@ function openRomDimPicker(pill: HTMLElement): void {
       ? `<div class="inc-valrow"><button type="button" class="inc-step" data-romdimstep="-1" aria-label="Lower">−</button>` +
         `<input type="number" class="inc-val romdim-val" step="1" value="${reading}" inputmode="decimal" aria-label="Hand height (cm)" />` +
         `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-romdimstep="1" aria-label="Higher">+</button></div>`
-      : `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-romdimblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`) +
+      : `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-romdimblock="${b}">${b} ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`) +
     `<div class="inc-eq muted">${eqText()}</div>` +
     `<button type="button" class="inc-floor" data-romdimdefaultbtn>default (${escapeHtml(afLevelText("rom", dflt, fam))})</button>`;
   openFloatingPicker(pill, {
@@ -19529,7 +19585,7 @@ function openRomPicker(pill: HTMLElement): void {
     `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
     `</div>` +
     (mode === "block"
-      ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === YOGA_BLOCK_CM[b] ? " is-on" : ""}" data-romblock="${b}">${b} · ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
+      ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === yogaBlockCm(b) ? " is-on" : ""}" data-romblock="${b}">${b} · ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`
       : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
         `<input type="number" class="inc-val rom-val" step="${mode === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
         `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
@@ -19545,9 +19601,9 @@ function openRomPicker(pill: HTMLElement): void {
     renderHtml,
     onClick: (t, rerender) => {
       const m = t.closest<HTMLElement>("[data-rommode]");
-      if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = YOGA_BLOCK_CM.medium; rerender(); commit(); return; }
+      if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = yogaBlockCm("medium"); rerender(); commit(); return; }
       const bl = t.closest<HTMLElement>("[data-romblock]");
-      if (bl?.dataset.romblock) { val = YOGA_BLOCK_CM[bl.dataset.romblock as YogaBlockSide]; rerender(); commit(); return; }
+      if (bl?.dataset.romblock) { val = yogaBlockCm(bl.dataset.romblock as YogaBlockSide); rerender(); commit(); return; }
       const s = t.closest<HTMLElement>("[data-romstep]");
       if (s?.dataset.romstep) { const d = mode === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); rerender(); commit(); return; }
       const rc = t.closest<HTMLElement>(".rom-ref-chip");
@@ -19681,7 +19737,7 @@ function openLeanPicker(pill: HTMLElement): void {
   let reading = Math.max(0, canonFromLevel - handPointOffsetCm(point, hand)); // cm read at `point`
   let block: YogaBlockSide = nearestYogaBlockSide(reading);
   const syncLeanBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
-  const syncLeanReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
+  const syncLeanReadingFromBlock = () => { reading = yogaBlockCm(block); };
   const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
   const eqText = () => `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`;
   const commit = () => {
@@ -19701,7 +19757,7 @@ function openLeanPicker(pill: HTMLElement): void {
         ? `<div class="inc-valrow"><button type="button" class="inc-step" data-leanstep="-1" aria-label="Lower">−</button>` +
           `<input type="number" class="inc-val lean-val" step="1" value="${reading}" inputmode="decimal" aria-label="Distance to the wall" />` +
           `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-leanstep="1" aria-label="Higher">+</button></div>`
-        : `<div class="rom-ref-chips lean-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-leanblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`) +
+        : `<div class="rom-ref-chips lean-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-leanblock="${b}">${b} ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`) +
       `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span><div class="rom-ref-chips">` +
       LEAN_POINTS.map((p) => `<button type="button" class="rom-ref-chip${p === point ? " is-on" : ""}" data-leanpoint="${p}">${escapeHtml(LEAN_POINT_LBL[p])}</button>`).join("") + `</div></div>` +
       `<div class="rom-ref lean-hand"><span class="rom-ref-lbl muted">your hand (tips→palm)</span>` +
@@ -19862,16 +19918,64 @@ function openNewTagCreator(anchor: HTMLElement, ex: string): void {
     },
   });
 }
+/** Curve-based tag settings (owner): cm anchors + named units + yoga-block heights —
+ * NOT a flat list of every cm step. Reuses the incline-editor pattern. */
+function tagCmCurveEditorHtml(fam: string, dim: string): string {
+  const levels = famLevels(fam, dim);
+  const { anchors, named } = splitCmDimLevels(levels);
+  const def = famDefaultLevel(fam, dim);
+  const vec: Record<string, string> = { [dim]: def };
+  const svg = hsSpectrumSvg(fam, dim, vec);
+  const anchorRows = sortedCmAnchors(anchors)
+    .map(({ key, cm, factor }) => {
+      const ov = famFactorOverrides[fam]?.[dim]?.[key] !== undefined;
+      const isDef = def === key;
+      return `<div class="taginfo-lvl taginfo-anchor${ov ? " is-ov" : ""}">` +
+        `<span class="taginfo-cm-lbl">${escapeHtml(String(cm))}cm</span>` +
+        `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${factor}" data-tlvl="${escapeHtml(key)}" aria-label="${cm}cm multiplier" />` +
+        `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(key)}" title="${isDef ? "Default on new sets." : "Make default."}">${isDef ? "★ default" : "default?"}</button>` +
+        `</div>`;
+    })
+    .join("");
+  const namedRows = Object.keys(named).length
+    ? Object.keys(named).map((lvl) => {
+        const ncm = getNamedUnitCm(fam, dim, lvl) ?? 0;
+        const curveF = factorForCmDimLevel(anchors, lvl, ncm);
+        const isDef = def === lvl;
+        return `<div class="taginfo-lvl taginfo-named">` +
+          `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(dim, lvl, fam))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
+          `<input type="number" class="taginfo-namedcm" step="1" min="0" value="${ncm}" data-namedlvl="${escapeHtml(lvl)}" aria-label="cm height for ${escapeHtml(lvl)}" title="cm equivalent" />` +
+          `<span class="taginfo-curve-at muted" title="× from the curve at this cm">→ ×${curveF}</span>` +
+          `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "Default on new sets." : "Make default."}">${isDef ? "★ default" : "default?"}</button>` +
+          `</div>`;
+      }).join("")
+    : "";
+  const yogaRows = (dim === "rom" || dim === "lean")
+    ? (["small", "medium", "large"] as const).map((side) =>
+        `<label class="taginfo-lvl taginfo-yoga"><span class="taginfo-cm-lbl">yoga ${side}</span>` +
+        `<input type="number" class="taginfo-yogacm" step="1" min="1" max="80" value="${yogaBlockCm(side)}" data-yogaside="${side}" aria-label="yoga ${side} cm" /><span class="muted">cm</span></label>`,
+      ).join("")
+    : "";
+  return (
+    (svg ? `<div class="taginfo-curve-wrap">${svg}</div>` : "") +
+    `<div class="taginfo-h muted">formula · cm → × (anchor points — values between are interpolated)</div>` +
+    `<div class="taginfo-levels taginfo-anchors">${anchorRows}</div>` +
+    `<div class="taginfo-addanchor"><input type="number" class="taginfo-newcm" step="1" placeholder="cm" aria-label="New anchor cm" /><button type="button" class="taginfo-addbtn" data-addanchor title="Add anchor on the curve">＋ anchor</button></div>` +
+    (namedRows ? `<div class="taginfo-h muted">named units · fixed cm (unpredictable references — blue, wall…)</div><div class="taginfo-levels taginfo-nameds">${namedRows}</div>` : "") +
+    (yogaRows ? `<div class="taginfo-h muted">predictable units · yoga-block side heights (used by the cm/block picker)</div><div class="taginfo-levels taginfo-yogas">${yogaRows}</div>` : "") +
+    `<div class="taginfo-h muted">push-up SQ / Smith steps are under Settings → incline (predictable cm intervals)</div>`
+  );
+}
 /** What KIND of tag a dimension is, in one plain phrase (owner: "what kind of tag is it"). */
 function tagKindText(fam: string | null, id: string): string {
   if (id === "band") return "assistance band — subtracts kilograms from the load";
-  if (id === "rom") return "range of motion — how much of the movement you do";
+  if (id === "rom") return "range of motion — cm curve (interpolated); tune anchors + named units";
+  if (id === "lean") return "forward lean — cm curve (interpolated); tune anchors + yoga-block heights";
   if (fam && isUserDim(fam, id)) return `your own tag — ${Object.keys(famLevels(fam, id)).length} option(s), tune each ×difficulty`;
   const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
+  if (levels && dimUsesCmCurve(levels)) return "cm scale — anchor curve + named units (not one row per cm)";
   if (levels) {
     const keys = Object.keys(levels);
-    const cm = keys.filter((k) => /-?\d+\s*cm/.test(k)).length;
-    if (cm >= keys.length - 1 && cm >= 2) return "measured in centimetres — each cm changes the difficulty";
     return `pick one of ${keys.length} options — each has its own ×difficulty`;
   }
   return "a per-set attribute";
@@ -19907,6 +20011,7 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
   const label = dimLabel(id, fam);
   const userDim = !!fam && isUserDim(fam, id);
   const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
+  const useCurve = !!levels && id !== "band" && (id === "rom" || id === "lean" || dimUsesCmCurve(levels));
   // Which other exercises carry this tag — the logged lifts whose family has this dimension.
   const usingFams = familiesUsingDim(FAMILIES, id);
   const others = Array.from(new Set(computedRecords().map((r) => r.exerciseName)))
@@ -19915,27 +20020,35 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
   const renderHtml = (): string => {
     const on = tagActive(ex, fam, id);
     const locked = on && !tagDeselectable(fam, id);
-    const factorRange = levels ? (() => { const vs = Object.values(levels); return `${Math.min(...vs)}× – ${Math.max(...vs)}×`; })() : "";
-    // Editable rows: rename + ×factor per level (band is kg-derived → ×factor not used for scaling).
-    const levelRows = levels
-      ? `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
-          const ov = famFactorOverrides[fam!]?.[id]?.[lvl] !== undefined;
-          const isDef = famDefaultLevel(fam!, id) === lvl;
-          return `<div class="taginfo-lvl${ov ? " is-ov" : ""}">` +
-            `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(id, lvl, fam!))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
-            (id === "band" ? `<span class="taginfo-mult muted">kg</span>` : `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${levels[lvl]}" data-tlvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(lvl)} multiplier" />`) +
-            `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "This is the default level on new sets." : "Make this the default level on new sets."}">${isDef ? "★ default" : "default?"}</button>` +
-            `</div>`;
-        }).join("") + `</div>`
-      : `<div class="taginfo-sub muted">This tag has no fixed options to tune here.</div>`;
+    const factorRange = levels ? (() => {
+      if (useCurve) {
+        const { anchors } = splitCmDimLevels(levels);
+        const vs = Object.values(anchors);
+        return vs.length ? `${Math.min(...vs)}× – ${Math.max(...vs)}×` : "";
+      }
+      const vs = Object.values(levels);
+      return `${Math.min(...vs)}× – ${Math.max(...vs)}×`;
+    })() : "";
+    const levelRows = !levels
+      ? `<div class="taginfo-sub muted">This tag has no fixed options to tune here.</div>`
+      : useCurve
+        ? tagCmCurveEditorHtml(fam!, id)
+        : `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
+            const ov = famFactorOverrides[fam!]?.[id]?.[lvl] !== undefined;
+            const isDef = famDefaultLevel(fam!, id) === lvl;
+            return `<div class="taginfo-lvl${ov ? " is-ov" : ""}">` +
+              `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(id, lvl, fam!))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
+              (id === "band" ? `<span class="taginfo-mult muted">kg</span>` : `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${levels[lvl]}" data-tlvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(lvl)} multiplier" />`) +
+              `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "This is the default level on new sets." : "Make this the default level on new sets."}">${isDef ? "★ default" : "default?"}</button>` +
+              `</div>`;
+          }).join("") + `</div>`;
     return (
       `<div class="taginfo-hd">${escapeHtml(label)}</div>` +
       `<div class="taginfo-sub muted">${escapeHtml(tagKindText(fam, id))}${factorRange ? ` · ${escapeHtml(factorRange)}` : ""}</div>` +
       `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle${locked ? " disabled" : ""}>${on ? (locked ? "always on" : "✓ on sets — tap to remove") : "＋ add to sets"}</button>` +
-      (levels ? `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` : "") +
+      (levels && !useCurve ? `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` : "") +
       levelRows +
-      // Add a brand-new OPTION to this tag (band/ROM excepted — band is kg-based, ROM is free cm/%).
-      (levels && id !== "band" && id !== "rom"
+      (levels && !useCurve && id !== "band"
         ? `<div class="taginfo-addopt"><input type="text" class="taginfo-newopt" placeholder="add an option…" aria-label="New option name" /><button type="button" class="taginfo-addbtn" data-addopt title="Add this option">＋ option</button></div>`
         : "") +
       `<div class="taginfo-h muted">used by</div>` +
@@ -19958,6 +20071,14 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
       }
       const def = t.closest<HTMLElement>(".taginfo-def");
       if (def?.dataset.tdef && fam) { setFamDefaultLevel(fam, id, def.dataset.tdef); rerender(); return; }
+      // ＋ anchor — add a cm point on the curve (ROM / shoulder gap / …).
+      if (t.closest("[data-addanchor]") && fam) {
+        const pop = t.closest<HTMLElement>(".taginfo-pop");
+        const inp = pop?.querySelector<HTMLInputElement>(".taginfo-newcm");
+        const cm = parseFloat(inp?.value ?? "");
+        if (Number.isFinite(cm) && addCmAnchor(fam, id, cm)) { if (inp) inp.value = ""; rerender(); }
+        return;
+      }
       // ＋ option — add a new level to this tag, then re-render so it appears (and the palette below).
       if (t.closest("[data-addopt]") && fam) {
         const inp = t.closest<HTMLElement>(".taginfo-addopt")?.querySelector<HTMLInputElement>(".taginfo-newopt");
@@ -19972,12 +20093,16 @@ function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
         return;
       }
     },
-    onInput: (t) => {
+    onInput: (t, _pop, rerender) => {
       if (!fam) return;
       const nm = t.closest<HTMLInputElement>(".taginfo-name");
       if (nm?.dataset.tlvl) { setFamLabel(fam, id, nm.dataset.tlvl, nm.value); return; }
       const ml = t.closest<HTMLInputElement>(".taginfo-mult");
-      if (ml?.dataset.tlvl) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setFamFactor(fam, id, ml.dataset.tlvl, Math.round(v * 1000) / 1000); }
+      if (ml?.dataset.tlvl) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setFamFactor(fam, id, ml.dataset.tlvl, Math.round(v * 1000) / 1000); return; }
+      const ncm = t.closest<HTMLInputElement>(".taginfo-namedcm");
+      if (ncm?.dataset.namedlvl) { const v = parseFloat(ncm.value); if (Number.isFinite(v)) { setNamedUnitCm(fam, id, ncm.dataset.namedlvl, v); rerender(); } return; }
+      const ycm = t.closest<HTMLInputElement>(".taginfo-yogacm");
+      if (ycm?.dataset.yogaside) { const v = parseFloat(ycm.value); if (Number.isFinite(v)) setYogaBlockCm(ycm.dataset.yogaside as YogaBlockSide, v); }
     },
   });
 }
