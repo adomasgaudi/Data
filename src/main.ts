@@ -8264,6 +8264,29 @@ function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): st
   if (Object.keys(vec).length === 0) return "";
   return variationChipsFromVec(fam, vec, suppress, r.username);
 }
+/** Incline/height chip — push-up levels (SQ / Smith / cm / box) live on the set record,
+ * not in the family variation vec, but they're active tags the owner set. */
+function inclineTagChip(s: SetRecord): string {
+  if (!isInclineLevelExercise(s.exerciseName)) return "";
+  if (s.levelDim === undefined || s.levelValue === undefined) return "";
+  if (levelCm(s.levelDim, s.levelValue) === 0) return "";
+  const lbl = s.levelLabel ?? levelLabel(s.levelDim, s.levelValue);
+  return `<span class="wo-var-chip" title="Hand height / incline — ${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>`;
+}
+/** Variation + ROM + incline chips merged for one set line (collapsed or expanded). */
+function setTagChipsBlock(s: SetRecord, suppress?: Record<string, string>): string {
+  const romRes = romOfSet(setId(s), s.notes);
+  const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
+  const inc = inclineTagChip(s);
+  const vars = variationChipsHtml(s, suppress);
+  if (!vars && !romChip && !inc) return "";
+  if (vars) return (inc ? vars.replace(/<\/span>\s*$/, inc + "</span>") : vars) + romChip;
+  const inner = inc + romChip;
+  return inner ? `<span class="wo-var-chips">${inner}</span>` : "";
+}
+function setHasDescriptiveTags(s: SetRecord, suppress?: Record<string, string>): boolean {
+  return !!setTagChipsBlock(s, suppress);
+}
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
  * floating variant editor for a set — the SAME contract the expanded `.set-scale`
@@ -8296,8 +8319,6 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // ROM is a VARIATION chip shown with the tags — NEVER in the note (owner). romOfSet pulls it
   // from the per-set attribute (or strips a legacy "ROM…" token) and returns the USER note only.
   const romRes = romOfSet(setId(raw), s.notes);
-  // Suppress the ROM chip when this set's ROM is the hoisted common one (shown at the header).
-  const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const note = romRes.note;
   // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
   // you dialed (the editable part). Empty for normal lifts.
@@ -8321,7 +8342,7 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // its OWN tags into tight rows) and the weight^reps side-by-side, so the weight can never
   // drop onto a line of its own when the tags wrap.
   const core = (h: string): string => `<span class="wo-set-core">${h}</span>`;
-  const chips = variationChipsHtml(s, suppress) + romChip; // variation chips (minus hoisted) + ROM chip
+  const chips = setTagChipsBlock(s, suppress);
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
@@ -8358,7 +8379,8 @@ function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
     // pill forces every multiplier on — never as a fallback when chips are empty.
     const ovSc = setOverrides[setId(s)];
     const customScale = (ovSc?.scale ?? 1) !== 1 || ovSc?.scaleAbs != null;
-    const showScale = S.showAllScale || customScale;
+    const hasTags = setHasDescriptiveTags(s, suppress);
+    const showScale = customScale || (S.showAllScale && !hasTags);
     if (showScale) {
       // Colour ENCODES the direction (added info, not just a number): a HARDER variation
       // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
@@ -9589,9 +9611,6 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // ROM is a per-set VARIATION (chip), never a user note (owner). romOfSet reads the attribute
   // (or strips a legacy "ROM…" token) and gives back the USER note only.
   const romRes = romOfSet(setId(s), s.notes);
-  // Suppress the ROM chip when this set's ROM is the hoisted common one (shown at the exercise
-  // header) — owner: a tag shared by the whole exercise shouldn't repeat on every set.
-  const romTag = suppress && suppress["__rom"] === romRes.label ? "" : romRes.chip;
   const notesNoRom = romRes.note;
   const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
@@ -9618,10 +9637,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const rpeCell = canEditCurrentAthlete()
     ? rpeDropdownHtml(sid, rpeFor(s), rpeAssumed)
     : `<span class="rpe-ro${rpeFor(s) ? "" : " is-assumed"}">${escapeHtml(rirLabel(rpeFor(s) ?? rpeAssumed))}</span>`;
-  // A technique level (squat-rack hole / cm) logged in the note — show the tag.
-  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
-  // The variation difficulty multiplier applied to this set (note model × level ×
-  // per-set), shown when it isn't a plain ×1 so you can see it here too.
+  // A technique level (squat-rack hole / cm) — now a chip beside the weight (setTagChipsBlock).
+  // The variation difficulty multiplier: show ONLY for custom override / ×N-mode without tags.
   const scaleVal = scaleForRecord(s);
   const scaleNum = Math.round(scaleVal * 100) / 100;
   const scaleNote = (s.notes ?? "").trim();
@@ -9641,12 +9658,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The setId + the readable note ride along so the popover can show the ORIGINAL note
   // and edit THIS set's incline level (per-set override).
   const rawNote = (s.notes ?? "").trim();
-  // Tag-first display (owner): named variation CHIPS (B2W / band / lean …) ARE the tags.
-  // The ×N multiplier shows ONLY for a manual per-set custom scale, not-comparable, or
-  // when the ×N-mode pill is on — never as a fallback when chips are empty.
-  const namedChips = variationChipsHtml(s, suppress);
+  const tagBlock = setTagChipsBlock(s, suppress);
   const customScale = (setOverrides[sid]?.scale ?? 1) !== 1 || setOverrides[sid]?.scaleAbs != null;
-  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (S.showAllScale || customScale));
+  const hasTags = !!tagBlock;
+  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (customScale || (S.showAllScale && !hasTags)));
   const scaleTag = !showScaleNum
     ? ""
     : editNote
@@ -9685,11 +9700,11 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // Owner: the variation TAG sits BEFORE the weight/reps (matching the collapsed line), while
   // the auto machine / assisted / unilateral FLAGS trail after. leadTags = the styled tag
   // (or the ×N fallback when there's no tag); trailTags = the auto flags.
-  const leadTags = `${namedChips}${scaleTag}`;
+  const leadTags = `${tagBlock}${scaleTag}`;
   const trailTags = `${machineTag}${assistTag}${uniTag}`;
   // Variation INFO for the Vol cell: technique level (e.g. "Sq 3") · ROM · the note. Shown
   // when present, else the volume number, else "—".
-  const varInfo = `${lvlTag}${romTag}${note ? `<span class="set-varnote">${escapeHtml(note)}</span>` : ""}`.trim();
+  const varInfo = note ? `<span class="set-varnote">${escapeHtml(note)}</span>` : "";
   const cellFor = (id: string): string => {
     switch (id) {
       // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
