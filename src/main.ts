@@ -19209,6 +19209,7 @@ function afLine(ex: string): string {
     `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
     `<div class="addm-line-main">` +
     `<div class="addm-set-chip">` +
+    `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
     `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
     `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
@@ -19749,12 +19750,24 @@ function syncAddmReal(form: HTMLElement): void {
     const rlbl = ln.querySelector<HTMLElement>(".wo-af-sidelbl-r");
     if (lside) lside.toggleAttribute("hidden", !uni);
     if (rlbl) rlbl.toggleAttribute("hidden", !uni);
-    // Custom-multiplier pill: show the line's effective total ×multiplier live (tags, with any
-    // typed custom value applied), so the owner always sees the total and what they overrode.
+    // Gray read-only total ×multiplier (tag product, with any custom value applied) — not a tag.
+    const totalEl = ln.querySelector<HTMLElement>(".addm-tag-total");
     const mpill = ln.querySelector<HTMLElement>(".wo-af-multpill");
-    if (mpill && ex) {
-      const eff = multPillEffective(ex, ln, mpill);
-      mpill.textContent = `×${Math.round(eff * 100) / 100}`;
+    if (totalEl && ex) {
+      const tagScale = addLineTagScale(ex, ln);
+      const eff = mpill ? multPillEffective(ex, ln, mpill) : tagScale;
+      const rounded = Math.round(eff * 100) / 100;
+      if (rounded !== 1) {
+        totalEl.textContent = `×${rounded}`;
+        totalEl.removeAttribute("hidden");
+      } else {
+        totalEl.textContent = "";
+        totalEl.setAttribute("hidden", "");
+      }
+    }
+    // Custom-multiplier pill (only when promoted via the palette): label shows the owner's value.
+    if (mpill) {
+      mpill.textContent = customMultPillLabel(mpill);
       mpill.classList.toggle("is-set", !!mpill.dataset.multval);
     }
     const out = ln.querySelector<HTMLElement>(".addm-real");
@@ -19924,6 +19937,8 @@ function ghostSetsHtml(exerciseName: string, date: string): string {
 // default / ROM is passive). A tag with NO obvious/gray level can't be passive → always shown (you
 // can't deselect it). Migrated from the old promoted-list store (membership ⇒ shown:true).
 const ADDM_TAGSHOWN_KEY = "colosseum.addmTagShown.v1";
+/** Passive/active pseudo-tag for an owner-typed multiplier on top of (or replacing) the tag product. */
+const CUSTOM_MULT_ID = "customMult";
 const addmTagShown = loadJsonObject<Record<string, Record<string, boolean>>>(ADDM_TAGSHOWN_KEY);
 (function migrateOldPromotedList() {
   let old: Record<string, string[]> | null = null;
@@ -19939,9 +19954,9 @@ const addmTagShown = loadJsonObject<Record<string, Record<string, boolean>>>(ADD
 function famHasGrayLevel(fam: string, dim: string): boolean {
   return Object.keys(famLevels(fam, dim)).some((l) => isGray(fam, dim, l));
 }
-/** Can this tag be DESELECTED (made passive)? Only if it has an obvious baseline (ROM always can). */
+/** Can this tag be DESELECTED (made passive)? Only if it has an obvious baseline (ROM + custom mult always can). */
 function tagDeselectable(fam: string | null, id: string): boolean {
-  return id === "rom" || (!!fam && famHasGrayLevel(fam, id));
+  return id === "rom" || id === CUSTOM_MULT_ID || (!!fam && famHasGrayLevel(fam, id));
 }
 /** Set a tag's explicit SHOWN state for an exercise (persisted); clears the store when empty. */
 function setTagShown(ex: string, id: string, shown: boolean): void {
@@ -20092,8 +20107,18 @@ function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement): numb
   if (!(Number.isFinite(v) && v > 0)) return tags;
   return pill.dataset.multmode === "abs" ? v : Math.round(tags * v * 1e6) / 1e6;
 }
+/** Passive/active pseudo-tag for an owner-typed multiplier on top of (or replacing) the tag product. */
+function customMultPillLabel(pill: HTMLElement): string {
+  const v = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  if (!(Number.isFinite(v) && v > 0)) return "custom";
+  const r = Math.round(v * 100) / 100;
+  return pill.dataset.multmode === "abs" ? `=${r}` : `×${r}`;
+}
 function customMultPillHtml(): string {
-  return `<button type="button" class="wo-af-multpill" data-multval="" data-multmode="mult" title="The set's total ×multiplier (the product of its tags). Tap to add your OWN — multiply on top of the tags, or replace the total.">×1</button>`;
+  return `<button type="button" class="wo-af-multpill" data-multval="" data-multmode="mult" title="Your own multiplier — multiply on top of the tags, or replace the total. Tap to set.">custom</button>`;
+}
+function customMultVtagHtml(): string {
+  return `<span class="addm-vtag" data-dim="${CUSTOM_MULT_ID}"><span class="addm-vtag-cap">multiplier</span>${customMultPillHtml()}</span>`;
 }
 function openCustomMultPicker(pill: HTMLElement): void {
   const ln = pill.closest<HTMLElement>(".addm-line");
@@ -20259,12 +20284,11 @@ function addmVariantField(ex: string): string {
   const lean = hasLeanDim(ex) && tagActive(ex, rfam, "lean")
     ? leanPillHtml(ex, rfam ? frequentLevelFor(ex, rfam, "lean", famDefaultLevel(rfam, "lean")) : "0cm")
     : "";
-  // Custom MULTIPLIER pill (owner): shows the set's total ×multiplier from its tags and lets you
-  // add your own (multiply on top, or replace the total). Always shown so the total is glanceable.
-  const mult = ex ? cap("multiplier", customMultPillHtml()) : "";
+  // Custom MULTIPLIER tag — passive by default (palette ＋multiplier); only inline when active.
+  const customMult = ex && tagActive(ex, rfam, CUSTOM_MULT_ID) ? customMultVtagHtml() : "";
   // No inline "＋ tag" button — the passive-tag PALETTE above the sets is the one place to add a
   // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
-  return dims + incline + rom + lean + mult;
+  return dims + incline + rom + lean + customMult;
 }
 /** Is a tag ACTIVE (shown inline next to the weight) for this exercise? The SINGLE source of truth
  * for both the palette ✓/＋ and the inline pill's visibility, so they can't disagree.
@@ -20277,7 +20301,7 @@ function tagActive(ex: string, fam: string | null, id: string): boolean {
   if (!tagDeselectable(fam, id)) return true; // no obvious baseline → can't be passive → always on
   const ov = addmTagShown[ex]?.[id];
   if (ov !== undefined) return ov; // owner's explicit ✓/＋ choice
-  if (id === "rom") return false; // ROM has no "meaningful default" — passive until ＋added
+  if (id === "rom" || id === CUSTOM_MULT_ID) return false; // passive until ＋added
   return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
 }
 /** The tag palette shown ABOVE the set lines, in TWO STACKED rows (owner: "passive tags above,
@@ -20294,6 +20318,7 @@ function passivePaletteHtml(ex: string): string {
   // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
   // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
   if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
+  tags.push({ id: CUSTOM_MULT_ID, label: "multiplier" });
   // Each tag is ONE pill = [label button that toggles add/remove] + [ⓘ info/edit button], so a tap
   // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill
   // opens more info / edit"). A tag with no obvious baseline can't be deselected → ✓ LOCKED.
@@ -20375,6 +20400,28 @@ function tagKindText(fam: string | null, id: string): string {
  * inline dim pickers; the add/remove button reuses the palette pill's own click path. */
 function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
   const fam = familyOf(ex);
+  if (id === CUSTOM_MULT_ID) {
+    const renderHtml = (): string => {
+      const on = tagActive(ex, fam, id);
+      return (
+        `<div class="taginfo-hd">multiplier</div>` +
+        `<div class="taginfo-sub muted">Your own × on top of the tags, or replace the total — separate from the gray combined × shown by the weight.</div>` +
+        `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle>${on ? "✓ on sets — tap to remove" : "＋ add to sets"}</button>`
+      );
+    };
+    openFloatingPicker(anchor, {
+      className: "inc-pop taginfo-pop",
+      renderHtml,
+      onClick: (t) => {
+        if (t.closest("[data-tagtoggle]")) {
+          const btn = addModalEl?.querySelector<HTMLElement>(`.addm-passive-pill[data-passive="${CSS.escape(id)}"]`);
+          closeFloatingPicker();
+          btn?.click();
+        }
+      },
+    });
+    return;
+  }
   const label = dimLabel(id, fam);
   const userDim = !!fam && isUserDim(fam, id);
   const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
@@ -20714,12 +20761,21 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
       romPill.dataset.romref = rom.ref ?? "";
       romPill.textContent = romPillLabel(rom.unit, rom.val);
     }
-    // Custom ×multiplier pill ← the set's stored scaleAbs (replace) or scale (multiply on top).
+    // Custom ×multiplier — promote the tag when this set carries a stored override.
+    const ovMult = setOverrides[edit.sid];
+    if (ovMult?.scaleAbs != null || ovMult?.scale != null) {
+      setTagShown(ex, CUSTOM_MULT_ID, true);
+      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+      if (palette) palette.innerHTML = passivePaletteHtml(ex);
+      for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+        if (!slot.querySelector(`.addm-vtag[data-dim="${CUSTOM_MULT_ID}"]`))
+          slot.insertAdjacentHTML("beforeend", customMultVtagHtml());
+      }
+    }
     const multPill = wrap.querySelector<HTMLElement>(".wo-af-multpill");
     if (multPill) {
-      const ov = setOverrides[edit.sid];
-      if (ov?.scaleAbs != null) { multPill.dataset.multval = String(ov.scaleAbs); multPill.dataset.multmode = "abs"; }
-      else if (ov?.scale != null) { multPill.dataset.multval = String(ov.scale); multPill.dataset.multmode = "mult"; }
+      if (ovMult?.scaleAbs != null) { multPill.dataset.multval = String(ovMult.scaleAbs); multPill.dataset.multmode = "abs"; }
+      else if (ovMult?.scale != null) { multPill.dataset.multval = String(ovMult.scale); multPill.dataset.multmode = "mult"; }
     }
     // RIR pill ← the set's grade, if any.
     const grade = rpeGrades[edit.sid];
@@ -20961,6 +21017,12 @@ function onAddModalClick(e: MouseEvent): void {
           if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", leanPillHtml(ex, seeded));
           else if (!nowOn && existing) existing.remove();
         }
+      } else if (id === CUSTOM_MULT_ID) {
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CUSTOM_MULT_ID}"]`);
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", customMultVtagHtml());
+          else if (!nowOn && existing) existing.remove();
+        }
       } else if (fam) {
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
@@ -20975,6 +21037,7 @@ function onAddModalClick(e: MouseEvent): void {
       const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
       if (palette) palette.innerHTML = passivePaletteHtml(ex);
       syncAddmVtags(form);
+      syncAddmReal(form);
     }
     return;
   }

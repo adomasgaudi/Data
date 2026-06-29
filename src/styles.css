@@ -2982,8 +2982,14 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set, .addm-line-vars .wo-af-romdimpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* ROM cm-level popup (PB-55): same cm/block stepper as the lean picker; block chips stay compact. */
 .romdim-pop .rom-ref-chip { font-size: 0.7rem; }
-/* Custom ×multiplier pill — same compact pill look; shows the live total, accent when a custom
-   value is set. Tap → the value + mode (× on top / = total) picker (reuses .inc-pop). */
+/* Gray read-only combined ×multiplier (tag product ± custom) — sits by the weight, not a tag. */
+.addm-set-chip .addm-tag-total {
+  flex: 0 0 auto; align-self: center; margin-right: 2px;
+  font-size: 0.55rem; line-height: 1; color: var(--muted); font-weight: 600;
+  pointer-events: none; user-select: none;
+}
+/* Custom ×multiplier pill — same compact pill look; accent when a custom value is set.
+   Tap → the value + mode (× on top / = total) picker (reuses .inc-pop). */
 .addm-line-vars .wo-af-multpill {
   flex: 0 0 auto; min-height: 0; width: auto;
   padding: 1px 5px; font-size: 0.6rem; font-weight: 700; line-height: 1.5;
