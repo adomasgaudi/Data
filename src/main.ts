@@ -19458,7 +19458,7 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // b2w) — so a passive tag simply does NOT exist in the DOM and CAN'T appear by the weight.
   // The EDIT-arg path (the legacy per-set scaleEditPop) still renders EVERY dim so you can add any
   // variation there; the add-modal's own edit mode uses the no-edit call + inserts carried tags.
-  // In the ADD path `lean` is its own rich pill (leanPillHtml), so it's skipped from the selects.
+  // In the ADD path `lean` is its own rich pill (leanPillHtml), gated by tagActive in addmVariantField.
   const selects = famDimOrder(fam)
     .filter((d) => !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d)))
     .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
@@ -20153,9 +20153,15 @@ const leanPillLabel = (level: string, username: string = els.athlete.value): str
 };
 /** Whether a lift's family has a lean dim (→ show the lean pill instead of a plain select). */
 function hasLeanDim(ex: string): boolean { return leanLevelKeys(ex).length > 0; }
-function leanPillHtml(ex: string): string {
+function leanPillHtml(ex: string, level?: string): string {
   if (!hasLeanDim(ex)) return "";
-  return `<button type="button" class="wo-af-leanpill wo-af-dimpill" data-leanex="${escapeHtml(ex)}" data-leanlevel="0cm" data-leandefault="0cm" title="Forward lean — distance from your hands to the wall. Tap to enter it from any hand point, in cm or yoga blocks.">${escapeHtml(leanPillLabel("0cm"))}</button>`;
+  const fam = familyOf(ex);
+  const dflt = fam ? famDefaultLevel(fam, "lean") : "0cm";
+  const lvl = level ?? dflt;
+  const capLbl = fam ? dimLabel("lean", fam) : "fwd lean";
+  return `<span class="addm-vtag" data-dim="lean"><span class="addm-vtag-cap">${escapeHtml(capLbl)}</span>` +
+    `<button type="button" class="wo-af-leanpill wo-af-dimpill${lvl !== dflt ? " is-set" : ""}" data-leanex="${escapeHtml(ex)}" data-leanlevel="${escapeHtml(lvl)}" data-leandefault="${escapeHtml(dflt)}" title="${escapeHtml(capLbl)} — distance from your hands to the wall. Tap to enter it from any hand point, in cm or yoga blocks.">${escapeHtml(leanPillLabel(lvl))}</button>` +
+    `</span>`;
 }
 function openLeanPicker(pill: HTMLElement): void {
   const ex = pill.dataset.leanex ?? "";
@@ -20248,10 +20254,11 @@ function addmVariantField(ex: string): string {
   const incline = isInclineLevelExercise(ex)
     ? cap("height", `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`)
     : "";
-  // Forward-LEAN pill (handstand families) — its own rich hand-point/cm/block distance picker
-  // (handstandLean.ts), captioned like the others. Always shown (lean is the point of wall-taps);
-  // it replaces the plain lean select in the ADD path (variantSelectsHtml skips lean there).
-  const lean = hasLeanDim(ex) ? cap("fwd lean", leanPillHtml(ex)) : "";
+  // Forward-LEAN pill (handstand families) — passive/active like every other tag: only on the set
+  // line when tagActive; the palette row is the single place to ＋add / ✓remove it.
+  const lean = hasLeanDim(ex) && tagActive(ex, rfam, "lean")
+    ? leanPillHtml(ex, rfam ? frequentLevelFor(ex, rfam, "lean", famDefaultLevel(rfam, "lean")) : "0cm")
+    : "";
   // Custom MULTIPLIER pill (owner): shows the set's total ×multiplier from its tags and lets you
   // add your own (multiply on top, or replace the total). Always shown so the total is glanceable.
   const mult = ex ? cap("multiplier", customMultPillHtml()) : "";
@@ -20283,8 +20290,7 @@ function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
   const fam = familyOf(ex);
   const tags: { id: string; label: string }[] = [];
-  // lean is excluded — it has its own always-shown rich pill (leanPillHtml), not a palette toggle.
-  if (fam) for (const dim of famDimOrder(fam)) if (dim !== "rom" && dim !== "lean") tags.push({ id: dim, label: dimLabel(dim, fam) });
+  if (fam) for (const dim of famDimOrder(fam)) if (dim !== "rom") tags.push({ id: dim, label: dimLabel(dim, fam) });
   // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
   // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
   if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
@@ -20947,6 +20953,13 @@ function onAddModalClick(e: MouseEvent): void {
           const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
           if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
           else if (!nowOn && existing) existing.closest(".addm-vtag")?.remove();
+        }
+      } else if (id === "lean" && hasLeanDim(ex)) {
+        const seeded = fam ? frequentLevelFor(ex, fam, "lean", famDefaultLevel(fam, "lean")) : "0cm";
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>('.addm-vtag[data-dim="lean"]');
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", leanPillHtml(ex, seeded));
+          else if (!nowOn && existing) existing.remove();
         }
       } else if (fam) {
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
