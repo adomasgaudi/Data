@@ -20553,6 +20553,38 @@ function closeAddModal(): void {
   if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); restoreScrollY(y); } } // drop the ghost
 }
 /** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
+// #super-persistent DIAG (PB-53, TEMPORARY): outline + report every descendant of the add-set
+// card whose box exceeds the CARD or the VIEWPORT horizontally, so the exact off-bounds element
+// shows in one screenshot. Distinguishes overCard (a child sticks out of the card) from overVw
+// (the card itself is wider than the screen) — that tells us WHICH bug this actually is. Remove
+// once the root is confirmed fixed.
+function diagAddmOverflow(wrap: HTMLElement): void {
+  try {
+    const card = wrap.querySelector<HTMLElement>(".addm-card");
+    if (!card) return;
+    const cardR = card.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const hits: string[] = [];
+    wrap.querySelectorAll<HTMLElement>(".addm-card *").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) return;
+      const overCard = Math.round(r.right - cardR.right);
+      const overVw = Math.round(r.right - vw);
+      if (overCard > 1 || overVw > 1 || r.left < cardR.left - 1) {
+        el.style.outline = "2px solid red";
+        const cls = typeof el.className === "string" && el.className.trim() ? "." + el.className.trim().split(/\s+/).join(".") : el.tagName;
+        hits.push(`${cls.slice(0, 38)} w=${Math.round(r.width)} overCard=${overCard} overVw=${overVw}`);
+      }
+    });
+    const ver = (document.querySelector(".version")?.textContent || "").trim();
+    const banner = document.createElement("div");
+    banner.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:9999;background:#b00000;color:#fff;font:11px/1.35 monospace;padding:4px 6px;max-height:48vh;overflow:auto;white-space:pre-wrap;-webkit-overflow-scrolling:touch";
+    banner.textContent =
+      `OVERFLOW DIAG (PB-53) ${ver} · vw=${vw} card=${Math.round(cardR.width)} cardRight=${Math.round(cardR.right)}\n` +
+      (hits.length ? hits.slice(0, 16).join("\n") : "NO element exceeds the card/viewport horizontally — overflow is NOT a width-overflow here (look elsewhere: transform/scroll/position).");
+    wrap.appendChild(banner);
+  } catch { /* diag must never break the modal */ }
+}
 function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }, edit?: { sid: string; note: string; rawNote: string }): void {
   closeAddModal();
   const isEdit = !!edit;
@@ -20621,6 +20653,10 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     `</div>`;
   document.body.appendChild(wrap);
   addModalEl = wrap;
+  // #super-persistent PB-53 DIAG (TEMPORARY — remove once the root is confirmed): on the owner's
+  // own device, report the EXACT element(s) that overflow the add-set card horizontally, instead
+  // of guessing from CSS. Runs after layout + xdd enhancement settle.
+  setTimeout(() => diagAddmOverflow(wrap), 450);
   if (prefill) {
     const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
     setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
