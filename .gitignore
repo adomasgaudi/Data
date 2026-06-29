@@ -7,3 +7,4 @@ Colosseum-dashboard.html
 .DS_Store
 .userid-cache.json
 cost-report.html
+.claude/active-task.json
