@@ -19010,6 +19010,41 @@ function afLevelText(dim: string, level: string, family?: string): string {
 }
 /** Optional small-gray explanation for a level, shown only in the picker menu. */
 function afLevelHint(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.hint ?? ""; }
+/** Whether a dim applies to the current tag vector (mirrors scalarFromVec gating). */
+function dimAppliesInVec(_fam: string, dim: string, vec: Record<string, string>): boolean {
+  if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") return false;
+  if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
+  return true;
+}
+/** Wall-tap contact tag only applies to the wall-touch lift. */
+function isWallTouchExercise(exerciseName: string): boolean {
+  return /wall\s*touch/i.test(exerciseName);
+}
+/** Project the add-form's likely vec (defaults + your usual levels for active tags). */
+function projectedAddVec(ex: string, fam: string): Record<string, string> {
+  const vec: Record<string, string> = { ...(FAMILIES[fam]?.defaults ?? {}) };
+  for (const dim of famDimOrder(fam)) {
+    if (!tagActive(ex, fam, dim)) continue;
+    const dflt = famDefaultLevel(fam, dim);
+    const freq = frequentLevelFor(ex, fam, dim, dflt);
+    if (famLevels(fam, dim)[freq] != null) vec[dim] = freq;
+  }
+  return vec;
+}
+/** Read the current tag vector from one add/edit line's controls. */
+function readAddLineVec(ln: HTMLElement): Record<string, string> {
+  const vec: Record<string, string> = {};
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    if (s.dataset.dim) vec[s.dataset.dim] = s.value;
+  }
+  const lean = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (lean?.dataset.leanlevel) vec.lean = lean.dataset.leanlevel;
+  return vec;
+}
+/** Dims that use a floating chip picker (never the clipped inline xdd dropdown). */
+function dimUsesChipPicker(dim: string): boolean {
+  return dim === "shoulderDist" || dim === "forearmSupport";
+}
 /** The level the CURRENT athlete used most for this exercise+dimension over the last
  * ~3 months — so the add-set picker pre-selects "what you usually do", not the config
  * reference (owner: pick the default by the most frequent one in the last 3 months, or
@@ -19063,6 +19098,7 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
+  const projVec = effVec ?? projectedAddVec(exerciseName, fam);
   // ROOT FIX (PB-48, owner #persistent ×3 — gray "NONE" tags kept leaking next to the weight).
   // A PASSIVE tag is no longer RENDERED-then-HIDDEN (that hide raced the async select-enhancement
   // and failed via .closest, so the gray pills leaked through). Instead the ADD path renders ONLY
@@ -19072,7 +19108,12 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // variation there; the add-modal's own edit mode uses the no-edit call + inserts carried tags.
   // In the ADD path `lean` is its own rich pill (leanPillHtml), gated by tagActive in addmVariantField.
   const selects = famDimOrder(fam)
-    .filter((d) => !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d)))
+    .filter((d) => {
+      if (d === "lean" && !edit) return false;
+      if (edit) return true;
+      if (!tagActive(exerciseName, fam, d)) return false;
+      return dimAppliesInVec(fam, d, projVec);
+    })
     .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
     .join("");
   return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
@@ -19113,6 +19154,14 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
     return `<span class="addm-vtag" data-dim="rom"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
       `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="rom" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
       `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
+      `</span>`;
+  }
+  // Shoulder gap / forearm support (and other cm tags): floating chip picker — the inline xdd
+  // dropdown in the scrolling tag row was clipped/unusable on mobile (PB-55 class).
+  if (dimUsesChipPicker(dim)) {
+    return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
+      `<button type="button" class="wo-af-cmdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — tap to pick.">${escapeHtml(afLevelText(dim, cur, fam))}</button>` +
       `</span>`;
   }
   return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
@@ -19189,6 +19238,67 @@ function openRomDimPicker(pill: HTMLElement): void {
       if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = v; syncBlockFromReading(); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } }
     },
   });
+}
+/** Floating chip picker for shoulder gap / forearm support — never clipped (PB-55). */
+function openCmDimPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  const dim = sel.dataset.dim ?? "";
+  if (!fam || !dim) return;
+  const levels = famLevels(fam, dim);
+  const dflt = sel.dataset.dimdefault ?? "";
+  const setLevel = (lvl: string) => {
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    pill.textContent = afLevelText(dim, lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const renderHtml = (): string => {
+    const chips = Object.keys(levels).map((lvl) => {
+      const hint = afLevelHint(dim, lvl);
+      return `<button type="button" class="rom-ref-chip${lvl === sel.value ? " is-on" : ""}" data-cmdimlvl="${escapeHtml(lvl)}">${escapeHtml(afLevelText(dim, lvl, fam))}` +
+        (hint ? `<span class="muted"> · ${escapeHtml(hint)}</span>` : "") + `</button>`;
+    }).join("");
+    return `<div class="rom-ref-lbl muted">${escapeHtml(dimLabel(dim, fam))}</div>` +
+      `<div class="rom-ref-chips cmdim-chips">${chips}</div>` +
+      `<button type="button" class="inc-floor" data-cmdimdefault>default (${escapeHtml(afLevelText(dim, dflt, fam))})</button>`;
+  };
+  openFloatingPicker(pill, {
+    className: "inc-pop cmdim-pop",
+    renderHtml,
+    onClick: (t) => {
+      const chip = t.closest<HTMLElement>("[data-cmdimlvl]");
+      if (chip?.dataset.cmdimlvl) { setLevel(chip.dataset.cmdimlvl); closeFloatingPicker(); return; }
+      if (t.closest("[data-cmdimdefault]")) { setLevel(dflt); closeFloatingPicker(); }
+    },
+  });
+}
+/** When support changes, show/hide ladder / shoulder-gap pills that only apply to that support. */
+function refreshContextualDimTags(form: HTMLElement): void {
+  const ex = form.dataset.addex || form.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+  const fam = ex ? familyOf(ex) : null;
+  if (!fam) return;
+  const contextual = ["shoulderDist", "ladderGrip", "ladderH"] as const;
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const vec = readAddLineVec(ln);
+    const slot = ln.querySelector<HTMLElement>(".addm-line-vars");
+    if (!slot) continue;
+    for (const dim of contextual) {
+      const applies = dimAppliesInVec(fam, dim, vec) && tagActive(ex, fam, dim);
+      const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(dim)}"]`);
+      if (applies && !existing) {
+        const html = dimVtagHtml(ex, fam, dim);
+        const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+        if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+        else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+      } else if (!applies && existing) {
+        existing.remove();
+      }
+    }
+  }
+  syncAddmVtags(form);
+  syncAddmReal(form);
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
@@ -19934,7 +20044,11 @@ function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
   const fam = familyOf(ex);
   const tags: { id: string; label: string }[] = [];
-  if (fam) for (const dim of famDimOrder(fam)) if (dim !== "rom") tags.push({ id: dim, label: dimLabel(dim, fam) });
+  if (fam) for (const dim of famDimOrder(fam)) {
+    if (dim === "rom") continue;
+    if (dim === "tapContact" && !isWallTouchExercise(ex)) continue;
+    tags.push({ id: dim, label: dimLabel(dim, fam) });
+  }
   // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
   // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
   if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
@@ -20511,7 +20625,14 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     if (btn) btn.innerHTML = `${escapeHtml(rirLabel(dd.dataset.picked || dd.dataset.assumed || ""))}<span class="xdd-caret">▾</span>`;
   });
   wrap.addEventListener("input", syncPendingFromModal);
-  wrap.addEventListener("change", syncPendingFromModal);
+  wrap.addEventListener("change", (ev) => {
+    syncPendingFromModal();
+    const sel = (ev.target as HTMLElement).closest<HTMLSelectElement>("select.wo-af-dim");
+    if (sel?.dataset.dim === "support") {
+      const formEl = wrap.querySelector<HTMLElement>(".wo-addform");
+      if (formEl) refreshContextualDimTags(formEl);
+    }
+  });
   // ⚙ cog number fields (machine weight / ÷) persist on change; the live preview then follows.
   // No panel rebuild here (the input has already blurred) so the typed value stays put.
   wrap.addEventListener("change", (ev) => {
@@ -20656,6 +20777,9 @@ function onAddModalClick(e: MouseEvent): void {
   // old inline dropdown — PB-55).
   const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
   if (romDimPill) { openRomDimPicker(romDimPill); return; }
+  // Shoulder gap / forearm support → floating chip picker (not the clipped inline dropdown).
+  const cmDimPill = t.closest<HTMLElement>(".wo-af-cmdimpill");
+  if (cmDimPill) { openCmDimPicker(cmDimPill); return; }
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
   const multPill = t.closest<HTMLElement>(".wo-af-multpill");
   if (multPill) { openCustomMultPicker(multPill); return; }
@@ -20714,6 +20838,8 @@ function onAddModalClick(e: MouseEvent): void {
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
           if (nowOn && !existing) {
+            const vec = readAddLineVec(slot.closest<HTMLElement>(".addm-line") ?? form);
+            if (!dimAppliesInVec(fam, id, vec)) continue;
             const html = dimVtagHtml(ex, fam, id);
             const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
             if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
