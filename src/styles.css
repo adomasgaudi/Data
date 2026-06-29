@@ -3151,13 +3151,17 @@ sup.wr-bw { font-size: 0.85em; }
 }
 .addm-cog-num input:focus { border-color: var(--accent); outline: none; }
 .addm-cog-hint { font-size: 0.8rem; }
-.addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; }
+.addm-field { display: flex; flex-direction: column; gap: 0.2rem; margin: 0.45rem 0; min-width: 0; }
 /* Owner: everything stays VISIBLE while editing numbers (the sheet just scrolls) — the
    variant pickers, suggestions, ROM and note are no longer hidden when the keyboard is up. */
 .addm-flbl { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); }
 .addm-exname { font-size: 0.95rem; font-weight: 600; color: var(--accent); }
 /* The popup form stacks full-width (overrides .wo-addform's inline-flex wrap). */
-.wo-addform--modal { display: flex; flex-direction: column; align-items: stretch; gap: 0.1rem; margin: 0; width: 100%; }
+/* PB-53 (recurrence): the min-width:0 cascade stopped at .addm-lines/.addm-line and
+   never reached THIS parent or the note/actions rows below — so the note input and the
+   Add-button row could still floor at min-content and get clipped by the card's
+   overflow-x:hidden ("off bounds"). Cascade min-width:0 down the whole modal column. */
+.wo-addform--modal { display: flex; flex-direction: column; align-items: stretch; gap: 0.1rem; margin: 0; width: 100%; min-width: 0; }
 /* PB-24 (recurrence 2): GRID with minmax(0,1fr) instead of flex — three equal columns
    that are GUARANTEED to shrink to fit. Flex children floor at min-content (the number
    input's ~170px intrinsic width) unless every level gets min-width:0; the prior flex
@@ -3280,10 +3284,12 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-line:only-child .wo-af-rmline { visibility: hidden; }
 .wo-af-addline { margin-top: 0.4rem; align-self: flex-start; padding: 5px 11px; min-height: var(--tap-min); border: 1px dashed var(--line); border-radius: var(--r-pill); background: none; color: var(--accent); font-weight: 600; cursor: pointer; }
 .wo-af-addline:hover { background: var(--bg); }
-.wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; }
+.wo-addform--modal .wo-af-ex, .wo-addform--modal .wo-af-note { width: 100%; min-width: 0; max-width: 100%; }
 .wo-addform--modal .wo-af-dims { max-width: 100%; }
-.addm-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.7rem; }
-.addm-actions .wo-af-go { flex: 1 1 auto; padding: 9px 13px; }
+/* min-width:0 lets the row shrink; flex-wrap wraps the buttons to a new line instead of
+   spilling off the right edge when the card is narrow (PB-53). */
+.addm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.7rem; min-width: 0; }
+.addm-actions .wo-af-go { flex: 1 1 auto; min-width: 0; padding: 9px 13px; }
 /* Edit-mode footer: the set-management actions (not-comparable / reset / delete) kept when an
    edit routes through this sheet. A subtle row above Save — small text buttons, delete in the
    destructive terracotta, so the sheet still reads as the add sheet. */
