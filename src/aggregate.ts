@@ -141,7 +141,7 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  * Add a name here when the owner says "create exercise X". (PB-25.)
  */
 export const EXTRA_EXERCISES: readonly string[] = [
-  "Knee Raise", "Cross-Legged Squats",
+  "Knee Raise", "L Sit", "Cross-Legged Squats",
   // Lever — an adjustable one-sided loaded handle held like a sword/axe (the weight sits
   // toward one end on a movable plate, you grip the other), for forearm/wrist leverage. Four
   // movements across the two rotational axes the owner trains (NOT wrist flexion/extension):

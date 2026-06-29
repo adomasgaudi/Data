@@ -84,7 +84,7 @@ import {
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, handPointOffsetCm,
@@ -1922,6 +1922,7 @@ function setFamGray(family: string, dim: string, level: string, gray: boolean): 
 
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
+  vec = normalizeStaticLiftVec(family, vec);
   const fam = FAMILIES[family];
   if (!fam && !famUserDims[family]) return 1;
   let s = 1;
@@ -1930,6 +1931,7 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
     if (dim === "shoulderDist" && vec.support !== "back_to_wall") continue; // b2w-only
+    if (dim === "floorHeight" && vec.support !== "on_hands") continue; // on-hands only
     if (dim === "band") continue; // band is a kg subtraction (assistKg), not a multiplier
     if (dim === "lean") {
       // Lean applies to ALL supports (most sets just use 0 = ×1). Its factor is
@@ -1939,6 +1941,11 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
     }
     const levels = famLevels(family, dim);
     const lv = vec[dim] ?? "";
+    if (dim === "floorHeight") {
+      const cm = parseCmLevelKey(lv || "0cm") ?? 0;
+      if (cm > 0) s *= inclineMultForCm(cm);
+      continue;
+    }
     let f: number;
     if (dimUsesCmCurve(levels)) {
       const ncm = parseCmLevel(lv) !== undefined ? undefined : getNamedUnitCm(family, dim, lv);
@@ -1965,7 +1972,10 @@ function rNote(family: string, note: string) {
  * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
   const fam = familyOf(exerciseName);
-  if (fam) return scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+  if (fam) {
+    const vec = normalizeStaticLiftVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+    return scalarFromVec(fam, vec);
+  }
   return notePin(exerciseName, note) ?? 1;
 }
 /** Whether the owner has reviewed this note: pinned a number (non-model) or picked
@@ -3242,7 +3252,7 @@ function shortRomLabel(label: string): string {
  * of 30cm is it"). Dims whose level label already self-identifies (support b2w, band N, ladder
  * rung N, position, lean) get no code. */
 const DIM_CHIP_CODE: Record<string, string> = {
-  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD", forearmSupport: "FA",
+  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD", forearmSupport: "FA", floorHeight: "FH",
 };
 
 /**
@@ -8472,7 +8482,8 @@ function setVec(r: SetRecord): Record<string, unknown> {
   if (!fam) return {};
   const note = variationNote(r);
   if (!note) return {};
-  return { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  const raw = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  return normalizeStaticLiftVec(fam, raw);
 }
 /** How many variation chips show before the rest collapse behind a "see more" (＋N)
  * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
@@ -8487,6 +8498,7 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
   // "just the exercise" and never a chip. The universal %-ROM attribute is romOfSet's chip;
   // the family's own `rom` dim (e.g. HSPU hand height) shows here when non-gray.
   for (const dim of famDimOrder(fam)) {
+    if (dim === "floorHeight" && vec.support !== "on_hands") continue;
     const v = vec[dim] != null ? String(vec[dim]) : null;
     if (!v || isGray(fam, dim, v)) continue;
     if (suppress && suppress[dim] === v) continue;
@@ -19139,8 +19151,8 @@ let afNoteSeq = 0; // unique <datalist> id per open form
 // ladderGrip (L-shape / hooked / no support) is INFREQUENT (owner: "it shouldn't be the second
 // tag"), so it sits LATE in the order — its obvious "no support" default stays gray/hidden and it
 // only shows when you ＋reveal, after the common dims.
-const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "obstacle", "rom", "lean", "tapContact", "continuity", "band", "ladderGrip", "position"];
-const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", tapContact: "wall touch", continuity: "tempo", band: "band", position: "position" };
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "floorHeight", "rom", "lean", "tapContact", "continuity", "band", "ladderGrip", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", floorHeight: "floor height", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", tapContact: "wall touch", continuity: "tempo", band: "band", position: "position" };
 /** Every dimension a family carries IN DISPLAY ORDER: built-ins (AF_DIM_ORDER), then the owner's
  * user-created tags. The single SSOT for "what tags does this family have" — every enumeration
  * site (palette, per-set pickers, variation editor, scaling) reads THIS so a new tag shows up
@@ -19208,7 +19220,7 @@ function removeUserDim(family: string, dim: string): void {
 // rendered ONLY in the open picker menu (e.g. "b2w" with hint "back to wall").
 type AfLevelLabel = { label: string; hint?: string };
 const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
-  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hang", hint: "hanging" }, dips_bar: { label: "dips", hint: "dips bar" } },
+  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hang", hint: "hanging" }, on_hands: { label: "hands", hint: "on hands / parallettes" }, dips_bar: { label: "hands", hint: "on hands (legacy)" } },
   // Ladder leg grip + rung height (only meaningful on the ladder support).
   ladderGrip: { none: { label: "no support" }, lsit: { label: "L-shape", hint: "legs out in an L" }, hooked: { label: "hooked", hint: "legs hooked on a rung" } },
   ladderH: { none: { label: "any rung" }, lad3: { label: "rung 3" }, lad5: { label: "rung 5" }, lad6: { label: "rung 6" }, lad9: { label: "rung 9" } },
@@ -19231,7 +19243,12 @@ AF_LEVEL_LBL.tapContact = { none: { label: "no touch" } };
 for (const c of TAP_CONTACT_ORDER) AF_LEVEL_LBL.tapContact[c] = { label: TAP_CONTACT_LABEL[c as TapContact], hint: TAP_CONTACT_HINT[c as TapContact] };
 /** Canonical short label for a dimension level (cm levels like "+23cm" are left as-is) — used by BOTH the tag and the picker. */
 function afLevelText(dim: string, level: string, family?: string): string {
-  if (family) { const o = famLabelOf(family, dim, level); if (o) return o; } // owner's rename wins
+  if (family) { const o = famLabelOf(family, dim, level); if (o) return o; }
+  if (dim === "floorHeight") {
+    const cm = parseCmLevelKey(level);
+    if (cm === 0) return "floor";
+    if (cm != null) return `${cm}cm`;
+  }
   return AF_LEVEL_LBL[dim]?.[level]?.label ?? level;
 }
 /** Optional small-gray explanation for a level, shown only in the picker menu. */
@@ -19340,8 +19357,13 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   }
   // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
+<<<<<<< HEAD
   const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
   const projVec = effVec ?? projectedAddVec(exerciseName, fam);
+=======
+  const effVecRaw = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
+  const effVec = effVecRaw && fam ? normalizeStaticLiftVec(fam, effVecRaw) : effVecRaw;
+>>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
   // ROOT FIX (PB-48, owner #persistent ×3 — gray "NONE" tags kept leaking next to the weight).
   // A PASSIVE tag is no longer RENDERED-then-HIDDEN (that hide raced the async select-enhancement
   // and failed via .closest, so the gray pills leaked through). Instead the ADD path renders ONLY
@@ -19352,10 +19374,15 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // In the ADD path `lean` is its own rich pill (leanPillHtml), gated by tagActive in addmVariantField.
   const selects = famDimOrder(fam)
     .filter((d) => {
+<<<<<<< HEAD
       if (d === "lean" && !edit) return false;
       if (edit) return true;
       if (!tagActive(exerciseName, fam, d)) return false;
       return dimAppliesInVec(fam, d, projVec);
+=======
+      if (d === "floorHeight" && effVec?.support !== "on_hands") return false;
+      return !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d));
+>>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
     })
     .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
     .join("");
@@ -19370,8 +19397,9 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
   const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
   const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
   let cur: string;
-  // ROM is continuous: an off-preset cm (e.g. "+32cm") is a VALID stored value, keep it.
-  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = (levels[v] != null || (dim === "rom" && /^[+-]?\d+cm$/.test(v))) ? v : dflt; }
+  const isCmDim = dim === "rom" || dim === "floorHeight";
+  // ROM / floor height are continuous: an off-preset cm (e.g. "+32cm") is a VALID stored value.
+  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = (levels[v] != null || (isCmDim && /^[+-]?\d+cm$/.test(v))) ? v : dflt; }
   else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
   else cur = dflt;
   const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
@@ -19399,12 +19427,22 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
       `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
       `</span>`;
   }
+<<<<<<< HEAD
   // Shoulder gap / forearm support / wall touch: floating chip picker — the inline xdd
   // dropdown in the scrolling tag row was clipped/unusable on mobile (PB-55 class).
   if (dimUsesChipPicker(dim)) {
     return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
       `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
       `<button type="button" class="wo-af-cmdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — tap to pick.">${escapeHtml(afLevelText(dim, cur, fam))}</button>` +
+=======
+  if (dim === "floorHeight") {
+    const extraOpt = (cur && levels[cur] == null && /^[+-]?\d+cm$/.test(cur))
+      ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(afLevelText("floorHeight", cur, fam))}</option>`
+      : "";
+    return `<span class="addm-vtag" data-dim="floorHeight"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="floorHeight" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
+      `<button type="button" class="wo-af-fhdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — how high the floor/hands are (cm, yoga block, SQ, Smith…). Tap to pick.">${escapeHtml(afLevelText("floorHeight", cur, fam))}</button>` +
+>>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
       `</span>`;
   }
   return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
@@ -19482,6 +19520,7 @@ function openRomDimPicker(pill: HTMLElement): void {
     },
   });
 }
+<<<<<<< HEAD
 /** Floating chip picker for shoulder gap / forearm support — never clipped (PB-55). */
 function openCmDimPicker(pill: HTMLElement): void {
   const sel = pill.previousElementSibling;
@@ -19544,6 +19583,89 @@ function refreshContextualDimTags(form: HTMLElement): void {
   syncAddmReal(form);
   refreshAddmPalette(ex);
 }
+=======
+/** Floating floor-height picker for knee-raise / L-sit on-hands sets — cm + yoga block + SQ /
+ * Smith / rack / ladder box (owner: same tooling as push-up incline and HSPU ROM). Stores an
+ * exact cm key in the hidden `.wo-af-dim` select; difficulty uses the global incline cm curve. */
+function openFloorHeightPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  if (!fam) return;
+  const dflt = sel.dataset.dimdefault ?? "0cm";
+  type PickUnit = LevelDim | "block";
+  const allUnits: PickUnit[] = ["cm", "block", "sq", "smith", "rackbox", "ladbox"];
+  let unit: PickUnit = "cm";
+  const initCm = parseCmLevelKey(sel.value) ?? 0;
+  let dim: LevelDim = "cm";
+  let val = initCm;
+  let reading = initCm;
+  let block: YogaBlockSide = nearestYogaBlockSide(initCm);
+  const syncBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
+  const currentCm = (): number => (unit === "block" ? YOGA_BLOCK_CM[block] : levelCm(dim, val));
+  const setLevel = (lvl: string) => {
+    if (![...sel.options].some((o) => o.value === lvl)) sel.add(new Option(afLevelText("floorHeight", lvl, fam), lvl));
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    pill.textContent = afLevelText("floorHeight", lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const commit = () => setLevel(cmLevelKey(currentCm()));
+  const eqText = () => `= ${Math.round(currentCm())}cm · ×${Math.round(inclineMultForCm(currentCm()) * 100) / 100}`;
+  const renderHtml = (): string =>
+    `<div class="rom-ref-lbl muted">floor height — how high the hands/floor are</div>` +
+    `<div class="inc-units">` +
+    allUnits.map((u) => `<button type="button" class="inc-unit${u === unit ? " is-on" : ""}" data-fhunit="${u}">${escapeHtml(u === "block" ? "block" : inclineDimLabel(u))}</button>`).join("") +
+    `</div>` +
+    (unit === "block"
+      ? `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-fhblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
+      : `<div class="inc-valrow"><button type="button" class="inc-step" data-fhstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val fh-val" step="${unit === "cm" ? 1 : unit === "smith" ? 0.5 : 1}" value="${unit === "cm" ? reading : val}" inputmode="decimal" aria-label="Floor height" />` +
+        `<span class="rom-unit-lbl muted">${unit === "cm" ? "cm" : inclineDimLabel(unit)}</span><button type="button" class="inc-step" data-fhstep="1" aria-label="Higher">+</button></div>`) +
+    `<div class="inc-eq muted">${eqText()}</div>` +
+    `<button type="button" class="inc-floor" data-fhdefaultbtn>floor (0cm)</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop fh-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>("[data-fhunit]");
+      if (u?.dataset.fhunit) {
+        const newUnit = u.dataset.fhunit as PickUnit;
+        const cm = currentCm();
+        if (newUnit === "block") { unit = "block"; syncBlockFromReading(); }
+        else {
+          unit = newUnit;
+          dim = newUnit;
+          val = cmToLevel(dim, cm);
+          if (newUnit === "cm") reading = cm;
+        }
+        rerender(); commit(); return;
+      }
+      const s = t.closest<HTMLElement>("[data-fhstep]");
+      if (s?.dataset.fhstep) {
+        const d = unit === "cm" ? 1 : unit === "smith" ? 0.5 : 1;
+        if (unit === "cm") { reading = Math.round(reading + Number(s.dataset.fhstep) * d); syncBlockFromReading(); }
+        else val = Math.round((val + Number(s.dataset.fhstep) * d) * 2) / 2;
+        rerender(); commit(); return;
+      }
+      const bl = t.closest<HTMLElement>("[data-fhblock]");
+      if (bl?.dataset.fhblock) { block = bl.dataset.fhblock as YogaBlockSide; syncReadingFromBlock(); rerender(); commit(); return; }
+      if (t.closest("[data-fhdefaultbtn]")) { unit = "cm"; dim = "cm"; reading = 0; val = 0; syncBlockFromReading(); rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".fh-val");
+      if (!vi) return;
+      const v = parseFloat(vi.value);
+      if (!Number.isFinite(v)) return;
+      if (unit === "cm") { reading = v; syncBlockFromReading(); }
+      else { val = v; reading = levelCm(dim, val); syncBlockFromReading(); }
+      commit();
+      pop.querySelector(".inc-eq")!.textContent = eqText();
+    },
+  });
+}
+>>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
   if (selects) return selects; // the lean pill is added (captioned) in addmVariantField, like ROM
@@ -19695,6 +19817,31 @@ function syncAddmVtags(form: HTMLElement): void {
     const dim = sel.dataset.dim ?? "";
     const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? "");
     sel.classList.toggle("is-set", !gray);
+  }
+  syncFloorHeightVtags(form);
+}
+/** Knee-raise / L-sit: floor-height tag only applies when support is on-hands — drop the pill
+ * when hanging, (re)insert when on-hands and the tag is active in the palette. */
+function syncFloorHeightVtags(form: HTMLElement): void {
+  const ex = addmCogEx(form);
+  const fam = familyOf(ex);
+  if (fam !== "KNEERAISE") return;
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const supportSel = ln.querySelector<HTMLSelectElement>('.wo-af-dim[data-dim="support"]');
+    const onHands = supportSel?.value === "on_hands";
+    const slot = ln.querySelector<HTMLElement>(".addm-line-vars");
+    if (!slot) continue;
+    const fh = slot.querySelector<HTMLElement>('.addm-vtag[data-dim="floorHeight"]');
+    if (!onHands || !tagActive(ex, fam, "floorHeight")) { fh?.remove(); continue; }
+    if (!fh) {
+      const vec = supportSel ? { support: supportSel.value, floorHeight: famDefaultLevel(fam, "floorHeight") } : null;
+      const html = dimVtagHtml(ex, fam, "floorHeight", undefined, vec);
+      const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+      if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+      else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+      const newSel = slot.querySelector<HTMLSelectElement>('.wo-af-dim[data-dim="floorHeight"]');
+      if (newSel && !newSel.classList.contains("dd-native")) enhanceSelect(newSel);
+    }
   }
 }
 
@@ -21076,9 +21223,14 @@ function onAddModalClick(e: MouseEvent): void {
   // old inline dropdown — PB-55).
   const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
   if (romDimPill) { openRomDimPicker(romDimPill); return; }
+<<<<<<< HEAD
   // Shoulder gap / forearm support / wall touch → floating chip picker (not the clipped inline dropdown).
   const cmDimPill = t.closest<HTMLElement>(".wo-af-cmdimpill");
   if (cmDimPill) { openCmDimPicker(cmDimPill); return; }
+=======
+  const fhDimPill = t.closest<HTMLElement>(".wo-af-fhdimpill");
+  if (fhDimPill) { openFloorHeightPicker(fhDimPill); return; }
+>>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
   const multPill = t.closest<HTMLElement>(".wo-af-multpill");
   if (multPill) { openCustomMultPicker(multPill); return; }
@@ -27385,7 +27537,13 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
   });
   // Repopulating the select (new <option>s) or a code-driven change re-syncs.
   new MutationObserver(() => sync()).observe(sel, { childList: true, subtree: true });
-  sel.addEventListener("change", sync);
+  sel.addEventListener("change", () => {
+    sync();
+    if (vtagDim === "support" && addModalEl) {
+      const form = addModalEl.querySelector<HTMLElement>(".wo-addform");
+      if (form) syncFloorHeightVtags(form);
+    }
+  });
 }
 
 

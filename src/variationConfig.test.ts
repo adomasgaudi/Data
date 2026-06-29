@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec } from "./variationConfig";
 import { resolveNote } from "./variationModel";
 
 describe("familiesUsingDim", () => {
@@ -169,5 +169,25 @@ describe("defaultLeanTable", () => {
   it("returns an empty table for an unknown family", () => {
     expect(defaultLeanTable("NOPE", "free")).toEqual({});
     expect(defaultLeanTable("NOPE", "back_to_wall")).toEqual({});
+  });
+});
+
+describe("KNEERAISE — on-hands + floor height", () => {
+  it("maps L-sit spellings to KNEERAISE", () => {
+    expect(familyOf("L Sit")).toBe("KNEERAISE");
+    expect(familyOf("Pike L-Sit")).toBe("KNEERAISE");
+    expect(familyOf("pike lsit")).toBe("KNEERAISE");
+  });
+  it("has hanging / on-hands support and a continuous floorHeight dim", () => {
+    const dims = FAMILIES.KNEERAISE!.dims;
+    expect(dims.support).toMatchObject({ hanging: 1, on_hands: 0.85 });
+    expect(dims.floorHeight).toBeDefined();
+    expect(dims.obstacle).toBeUndefined();
+  });
+  it("normalizeStaticLiftVec migrates dips_bar + obstacle S/M/L", () => {
+    expect(normalizeStaticLiftVec("KNEERAISE", { support: "dips_bar", obstacle: "M" }))
+      .toEqual({ support: "on_hands", obstacle: "M", floorHeight: "15cm" });
+    expect(resolveNote("KNEERAISE", "dips bar m yoga", DEFAULT_VARIATION_CONFIG).vec)
+      .toMatchObject({ support: "on_hands", floorHeight: "15cm" });
   });
 });

@@ -129,12 +129,15 @@ export const FAMILIES: Record<string, FamilyDef> = {
     defaults: { height: "0", angle: "1", position: "full", rom: "0cm" },
   },
   KNEERAISE: {
+    // Knee raise + L-sit (owner): hanging vs on-hands support; on-hands floor height is a
+    // continuous cm height (yoga block / SQ / Smith / rack box…) scaled on the global incline
+    // curve — same tooling as push-up incline and HSPU ROM cm pickers.
     dims: {
-      support: { hanging: 1.0, dips_bar: 0.85 },
+      support: { hanging: 1.0, on_hands: 0.85 },
       backrest: { none: 1.0, "30cm": 0.9 },
-      obstacle: { none: 1.0, S: 1.05, M: 1.1, L: 1.15 },
+      floorHeight: { "0cm": 1.0, "6cm": 1.05, "15cm": 1.1, "23cm": 1.15 },
     },
-    defaults: { support: "hanging", backrest: "none", obstacle: "none" },
+    defaults: { support: "hanging", backrest: "none", floorHeight: "0cm" },
   },
   CROSSSQUAT: {
     // Cross-legged (seated cross-leg → stand) squat. The owner's two requested
@@ -333,26 +336,29 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
   KNEERAISE: {
     hanging: { support: "hanging" },
     "hang bar": { support: "hanging" },
-    "dips bar": { support: "dips_bar", priority: 4 },
-    "dip bar": { support: "dips_bar", priority: 4 },
-    dips: { support: "dips_bar" },
-    lygiagretės: { support: "dips_bar" },
-    lygiageretes: { support: "dips_bar" },
+    "on hands": { support: "on_hands", priority: 4 },
+    "on hand": { support: "on_hands", priority: 4 },
+    parallettes: { support: "on_hands" },
+    "dips bar": { support: "on_hands", priority: 4 },
+    "dip bar": { support: "on_hands", priority: 4 },
+    dips: { support: "on_hands" },
+    lygiagretės: { support: "on_hands" },
+    lygiageretes: { support: "on_hands" },
     "back rest": { backrest: "30cm" },
     backrest: { backrest: "30cm" },
     "back pad": { backrest: "30cm" },
     "nugaros atrama": { backrest: "30cm" },
-    "l yoga": { obstacle: "L" },
-    "yoga l": { obstacle: "L" },
-    "yoga block l": { obstacle: "L" },
-    "m yoga": { obstacle: "M" },
-    "yoga m": { obstacle: "M" },
-    "yoga block m": { obstacle: "M" },
-    "yoga block": { obstacle: "M" },
-    yoga: { obstacle: "M" },
-    "s yoga": { obstacle: "S" },
-    "yoga s": { obstacle: "S" },
-    "yoga block s": { obstacle: "S" },
+    "l yoga": { support: "on_hands", floorHeight: "23cm" },
+    "yoga l": { support: "on_hands", floorHeight: "23cm" },
+    "yoga block l": { support: "on_hands", floorHeight: "23cm" },
+    "m yoga": { support: "on_hands", floorHeight: "15cm" },
+    "yoga m": { support: "on_hands", floorHeight: "15cm" },
+    "yoga block m": { support: "on_hands", floorHeight: "15cm" },
+    "yoga block": { support: "on_hands", floorHeight: "15cm" },
+    yoga: { support: "on_hands", floorHeight: "15cm" },
+    "s yoga": { support: "on_hands", floorHeight: "6cm" },
+    "yoga s": { support: "on_hands", floorHeight: "6cm" },
+    "yoga block s": { support: "on_hands", floorHeight: "6cm" },
   },
   CROSSSQUAT: {
     // Assistance band by number (higher = heavier = more help). Longest-match-first
@@ -430,7 +436,20 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 21;
+export const CONFIG_VERSION = 22;
+
+/** Migrate legacy knee-raise vec keys (dips_bar support, obstacle S/M/L) → on_hands + floorHeight cm. */
+export function normalizeStaticLiftVec(fam: string, vec: Record<string, string>): Record<string, string> {
+  if (fam !== "KNEERAISE") return vec;
+  const out = { ...vec };
+  if (out.support === "dips_bar") out.support = "on_hands";
+  if (out.obstacle && !out.floorHeight) {
+    const map: Record<string, string> = { none: "0cm", S: "6cm", M: "15cm", L: "23cm" };
+    const fh = map[out.obstacle];
+    if (fh) out.floorHeight = fh;
+  }
+  return out;
+}
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -456,6 +475,11 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Knee Raises": "KNEERAISE",
   "Hanging Knee Raise": "KNEERAISE",
   "Hanging Knee Raises": "KNEERAISE",
+  "L Sit": "KNEERAISE",
+  "L-Sit": "KNEERAISE",
+  "L Sits": "KNEERAISE",
+  "Pike L-Sit": "KNEERAISE",
+  "Pike L Sit": "KNEERAISE",
   "Cross-Legged Squats": "CROSSSQUAT",
   "Cross-Legged Squat": "CROSSSQUAT",
   "Cross-leg Squat": "CROSSSQUAT",
@@ -509,6 +533,9 @@ export function familyOf(
   // push-up variants were already returned as HSPU above ("handstandpush" is caught
   // first), so this only catches the non-press handstand skill work.
   if (n.includes("handstand")) return "HANDSTAND";
+  // L-sit / knee-raise static core work — same support + floor-height model.
+  if (n.includes("kneeraise") || n.includes("kneeraises")) return "KNEERAISE";
+  if (n.includes("lsit") || n.includes("lsits")) return "KNEERAISE";
   return null;
 }
 
