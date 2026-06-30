@@ -383,6 +383,8 @@ const LT: Record<string, string> = {
   "support": "atrama",
   "Default ROM": "Numatyta amplitudė",
   "% of full ROM": "% nuo pilnos amplitudės",
+  "% of the full kick range (how far the legs go)": "% nuo pilno spyrio diapazono (kiek toli nueina kojos)",
+  "Leg range of motion — tap to set as % of how far the kick goes": "Kojų judesio amplitudė — bakstelėk, kad nustatytum % nuo to, kiek toli nueina spyris",
   "Machine weight": "Mašinos svoris",
   "kg base": "kg bazė",
   "Machine ÷": "Mašinos daliklis",
