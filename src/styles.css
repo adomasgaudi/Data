@@ -2989,8 +2989,9 @@ sup.wr-bw { font-size: 0.85em; }
 .romdim-pop .rom-ref-chip { font-size: 0.7rem; }
 /* Gray read-only combined ×multiplier (tag product ± custom) — under W/reps, not beside. */
 .addm-set-chip .addm-tag-total {
-  flex: 0 0 auto; align-self: center; margin: 1px 0 0;
+  display: block; flex: 0 0 auto; align-self: center; margin: 1px 0 0;
   font-size: 0.55rem; line-height: 1; color: var(--muted); font-weight: 600;
+  white-space: nowrap; text-align: center;
   pointer-events: none; user-select: none;
 }
 /* Custom ×multiplier pill — same compact pill look; accent when a custom value is set.
@@ -3232,8 +3233,9 @@ sup.wr-bw { font-size: 0.85em; }
   border: none; background: none; padding: 0;
 }
 /* Weight + reps on one row; the gray combined × sits directly underneath (owner). */
+.addm-wr-block { display: inline-flex; align-items: flex-start; gap: 0; flex: 0 0 auto; min-width: 0; }
 .addm-wr-col { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; min-width: 0; }
-.addm-wr-row { display: inline-flex; align-items: flex-start; gap: 1px; }
+.addm-wr-row { display: inline-flex; flex-wrap: nowrap; align-items: flex-start; gap: 1px; }
 .addm-set-chip .wo-af-weight, .addm-set-chip .wo-af-reps {
   box-sizing: border-box; min-height: var(--tap-min); margin: 0;
   border: 1px solid var(--line); background: var(--line); border-radius: 6px;
@@ -3274,11 +3276,11 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-real[hidden] { display: none; }
 /* Machine-base "N+" prefix glued to the LEFT of the weight box, so it reads "10+<weight>"
    (owner: see the machine weight even before dialing one). Accent, aligned to the box. */
-.addm-set-chip .wo-af-wpre {
+.addm-wr-block .wo-af-wpre {
   align-self: center; font-size: 1.05rem; font-weight: 700; color: var(--accent);
   white-space: nowrap; margin-right: -4px;
 }
-.addm-set-chip .wo-af-wpre[hidden] { display: none; }
+.addm-wr-block .wo-af-wpre[hidden] { display: none; }
 /* Unilateral: a small R/L side label + a second (left) weight×reps pair, kept compact so the
    line still fits one row (owner: "two entries for both arms, smaller"). */
 .addm-set-chip .wo-af-sidelbl { align-self: center; font-size: 0.7rem; font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }

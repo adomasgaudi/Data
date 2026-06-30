@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, usesLegPctRom, offersPctRomTag, showsPctRomPill } from "./variationConfig";
 import { resolveNote } from "./variationModel";
 
 describe("familiesUsingDim", () => {
@@ -76,6 +76,31 @@ describe("familyOf", () => {
   it("treats the scapular handstand push-up variant as HSPU", () => {
     expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
     expect(familyOf("Scapular HSPU")).toBe("HSPU");
+  });
+});
+
+describe("%-ROM passive tag", () => {
+  it("detects handstand kick spellings for %-only picker", () => {
+    for (const name of ["Handstand kicks", "Handstand Kicks", "handstand kick", "HS Kicks"]) {
+      expect(usesLegPctRom(name)).toBe(true);
+    }
+    expect(usesLegPctRom("Handstand hold")).toBe(false);
+    expect(usesLegPctRom("Handstand Push Ups")).toBe(false);
+  });
+  it("offers ROM in the palette for almost every named exercise", () => {
+    expect(offersPctRomTag("Handstand kicks")).toBe(true);
+    expect(offersPctRomTag("Handstand hold")).toBe(true);
+    expect(offersPctRomTag("Handstand wall touch")).toBe(true);
+    expect(offersPctRomTag("Handstand Push Ups")).toBe(true);
+    expect(offersPctRomTag("Push Up")).toBe(true);
+    expect(offersPctRomTag("Back Squat")).toBe(true);
+    expect(offersPctRomTag("")).toBe(false);
+  });
+  it("shows the %-ROM pill for all lifts except HSPU (cm rom dim)", () => {
+    expect(showsPctRomPill("Handstand kicks", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand walk", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand Push Ups", "HSPU")).toBe(false);
+    expect(showsPctRomPill("Push Up", "PUSHUP")).toBe(true);
   });
 });
 

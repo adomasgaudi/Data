@@ -159,8 +159,8 @@ export const FAMILIES: Record<string, FamilyDef> = {
     // and — back-to-wall only — shoulder distance. Support/ladder/lean factors mirror
     // HSPU's so difficulty reads consistently across all handstand work; the yoga
     // block is a neutral ×1 placeholder. Calibrate the numbers in ⚙ Difficulty
-    // multipliers. No "rom" dim → the depth×lean pad is skipped (it's HSPU-press only);
-    // lean shows as its own chip row, and the universal per-set ROM% covers range.
+    // multipliers. No "rom" dim (press depth is HSPU-only); every handstand skill can promote
+    // the generic %-ROM passive tag; Handstand kicks use a %-only leg-range picker.
     dims: {
       support: { free: 1.0, front_to_wall: 0.92, back_to_wall: 0.82, ladder: 0.55 },
       ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
@@ -510,6 +510,28 @@ export function familyOf(
   // first), so this only catches the non-press handstand skill work.
   if (n.includes("handstand")) return "HANDSTAND";
   return null;
+}
+
+/** Leg-movement handstand skills (e.g. Handstand kicks): ROM is % of how far the kick
+ * goes / what you touch — NOT cm hand height like HSPU's press-depth rom dim. */
+export function usesLegPctRom(exerciseName: string): boolean {
+  const n = exerciseName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return /handstandkick|hskick/.test(n);
+}
+
+export function offersPctRomTag(exerciseName: string): boolean {
+  return !!exerciseName;
+}
+
+/** Should the %-ROM pill render inline on an add-set line (when promoted)? HSPU uses its cm rom
+ * dim instead; all other lifts (incl. handstand skills) get the %-ROM pill. */
+export function showsPctRomPill(
+  exerciseName: string,
+  fam: string | null,
+  families: Record<string, FamilyDef> = FAMILIES,
+): boolean {
+  if (!exerciseName) return false;
+  return !families[fam ?? ""]?.dims.rom;
 }
 
 /** Centimetres encoded in a lean-level key (e.g. "15" → 15); 0 when unparseable. */
