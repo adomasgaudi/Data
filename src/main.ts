@@ -19200,6 +19200,22 @@ function dimAppliesInVec(_fam: string, dim: string, vec: Record<string, string>)
   if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
   return true;
 }
+function requiredSupportForDim(dim: string): string | null {
+  if (dim === "shoulderDist") return "back_to_wall";
+  if (dim === "ladderGrip" || dim === "ladderH") return "ladder";
+  return null;
+}
+/** Support must match active contextual tags (shoulder gap ↔ back-to-wall, ladder ↔ ladder). */
+function reconcileContextualSupport(ex: string, fam: string, vec: Record<string, string>): void {
+  if (tagActive(ex, fam, "shoulderDist") && vec.support !== "back_to_wall") vec.support = "back_to_wall";
+  if ((tagActive(ex, fam, "ladderGrip") || tagActive(ex, fam, "ladderH")) && vec.support !== "ladder") {
+    vec.support = "ladder";
+  }
+}
+function setLineSupport(ln: HTMLElement, support: string): void {
+  const sel = ln.querySelector<HTMLSelectElement>('select.wo-af-dim[data-dim="support"]');
+  if (sel && sel.value !== support) sel.value = support;
+}
 /** Wall-tap contact tag only applies to the wall-touch lift. */
 function isWallTouchExercise(exerciseName: string): boolean {
   return /wall\s*touch/i.test(exerciseName);
@@ -19213,6 +19229,7 @@ function projectedAddVec(ex: string, fam: string): Record<string, string> {
     const freq = frequentLevelFor(ex, fam, dim, dflt);
     if (famLevels(fam, dim)[freq] != null) vec[dim] = freq;
   }
+  reconcileContextualSupport(ex, fam, vec);
   return vec;
 }
 /** Read the current tag vector from one add/edit line's controls. */
@@ -19483,6 +19500,7 @@ function refreshContextualDimTags(form: HTMLElement): void {
   }
   syncAddmVtags(form);
   syncAddmReal(form);
+  refreshAddmPalette(ex);
 }
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
@@ -20825,7 +20843,16 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     const sel = (ev.target as HTMLElement).closest<HTMLSelectElement>("select.wo-af-dim");
     if (sel?.dataset.dim === "support") {
       const formEl = wrap.querySelector<HTMLElement>(".wo-addform");
-      if (formEl) refreshContextualDimTags(formEl);
+      if (formEl) {
+        const ex = formEl.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+        const fam = ex ? familyOf(ex) : null;
+        if (fam && sel.value !== "back_to_wall" && tagActive(ex, fam, "shoulderDist")) setTagShown(ex, "shoulderDist", false);
+        if (fam && sel.value !== "ladder") {
+          if (tagActive(ex, fam, "ladderGrip")) setTagShown(ex, "ladderGrip", false);
+          if (tagActive(ex, fam, "ladderH")) setTagShown(ex, "ladderH", false);
+        }
+        refreshContextualDimTags(formEl);
+      }
     }
   });
   // ⚙ cog number fields (machine weight / ÷) persist on change; the live preview then follows.
@@ -21042,9 +21069,15 @@ function onAddModalClick(e: MouseEvent): void {
         }
       } else if (fam) {
         for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const ln = slot.closest<HTMLElement>(".addm-line") ?? form;
           const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
           if (nowOn && !existing) {
-            const vec = readAddLineVec(slot.closest<HTMLElement>(".addm-line") ?? form);
+            let vec = readAddLineVec(ln);
+            if (!dimAppliesInVec(fam, id, vec)) {
+              const req = requiredSupportForDim(id);
+              if (req) setLineSupport(ln, req);
+              vec = readAddLineVec(ln);
+            }
             if (!dimAppliesInVec(fam, id, vec)) continue;
             const html = dimVtagHtml(ex, fam, id);
             const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
@@ -21053,10 +21086,10 @@ function onAddModalClick(e: MouseEvent): void {
           } else if (!nowOn && existing) existing.remove();
         }
       }
-      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
-      if (palette) palette.innerHTML = passivePaletteHtml(ex);
       syncAddmVtags(form);
       syncAddmReal(form);
+      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+      if (palette) palette.innerHTML = passivePaletteHtml(ex);
     }
     return;
   }
