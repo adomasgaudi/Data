@@ -96,6 +96,21 @@ describe("graph metric registry (TASK 26)", () => {
     expect(vol.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500); // volume conserved
   });
 
+  it("multi-day intervals (2d–5d) bucket volume into fixed N-day windows", () => {
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-02", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-03", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-04", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const vol3 = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "3d" });
+    expect(vol3.length).toBe(2);
+    expect(vol3.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(2000);
+    const vol2 = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "2d" });
+    expect(vol2.length).toBe(2);
+    expect(vol2.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(2000);
+  });
+
   it("every registered metric now has a compute (TASKS 31–41)", () => {
     // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
     // so it deliberately carries no registry compute.

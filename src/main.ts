@@ -24076,7 +24076,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     `<details class="wa-cfg-group" data-cfggroup="${escapeHtml(label)}"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
-    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}${opt("quarter", c.interval, "3 months")}${opt("halfyear", c.interval, "6 months")}${opt("year", c.interval, "12 months")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("2d", c.interval, "2 days")}${opt("3d", c.interval, "3 days")}${opt("4d", c.interval, "4 days")}${opt("5d", c.interval, "5 days")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}${opt("quarter", c.interval, "3 months")}${opt("halfyear", c.interval, "6 months")}${opt("year", c.interval, "12 months")}</select></label>` +
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."), "data");
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
@@ -24706,7 +24706,7 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
 // setting's explanation in a small popup. Keyed lookup keeps the long text out of attributes.
 const SETTING_INFO: Record<string, string> = {
   type: "Over time — track the metrics across dates. Reps × kg — plot every set as weight (x) × reps (y) instead.",
-  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width (day / week / bi-week / month). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
+  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width (day / 2–5 days / week / bi-week / month). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
   lines: "Hard sets only — drop easy / warm-up sets (high reps-in-reserve); also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
   bars: "Opacity — bar transparency. Bar girth — bar thickness. Right axis — bar height vs the kg axis. Volume shift — move the bars up or down, away from the lines.",
   spread: "Set spread — how far a session's sets fan out on the per-set views: 0 = stacked on one line, higher = spread across days.",
