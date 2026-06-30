@@ -3282,6 +3282,12 @@ sup.wr-bw { font-size: 0.85em; }
   white-space: nowrap; margin-right: -4px;
 }
 .addm-set-chip .wo-af-wpre[hidden] { display: none; }
+/* Assisted-machine "/N" suffix glued RIGHT of the weight box — only when weight is negative. */
+.addm-set-chip .wo-af-wsuf {
+  align-self: center; font-size: 1.05rem; font-weight: 700; color: var(--accent);
+  white-space: nowrap; margin-left: -4px;
+}
+.addm-set-chip .wo-af-wsuf[hidden] { display: none; }
 /* Unilateral: a small R/L side label + a second (left) weight×reps pair, kept compact so the
    line still fits one row (owner: "two entries for both arms, smaller"). */
 .addm-set-chip .wo-af-sidelbl { align-self: center; font-size: 0.7rem; font-weight: 800; color: var(--muted); letter-spacing: 0.03em; }

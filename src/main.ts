@@ -19005,6 +19005,7 @@ function afLine(ex: string): string {
     `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
     `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
+    `<span class="wo-af-wsuf" aria-hidden="true" hidden></span>` +
     `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
     `</div>` +
     `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
@@ -19681,8 +19682,8 @@ function syncAddmReal(form: HTMLElement): void {
     const totalEl = ln.querySelector<HTMLElement>(".addm-tag-total");
     const mpill = ln.querySelector<HTMLElement>(".wo-af-multpill");
     if (totalEl && ex) {
-      const tagScale = addLineTagScale(ex, ln);
-      const eff = mpill ? multPillEffective(ex, ln, mpill) : tagScale;
+      const tagScale = addLineDisplayScale(ex, ln);
+      const eff = mpill ? multPillEffective(ex, ln, mpill, true) : tagScale;
       const rounded = Math.round(eff * 100) / 100;
       if (rounded !== 1) {
         totalEl.textContent = `×${rounded}`;
@@ -19699,10 +19700,9 @@ function syncAddmReal(form: HTMLElement): void {
     }
     const out = ln.querySelector<HTMLElement>(".addm-real");
     const pre = ln.querySelector<HTMLElement>(".wo-af-wpre");
+    const wsuf = ln.querySelector<HTMLElement>(".wo-af-wsuf");
     if (!out) continue;
     const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
-    const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
-    const repsSup = reps === null ? "" : `<sup>${reps}</sup>`;
     // Machine base weight → a persistent "N+" prefix glued to the LEFT of the weight box, shown
     // ALWAYS (even before a weight is dialed) so the box reads "10+<weight>" like the history
     // (owner: "if it has a machine weight I should see it even before adding weight, 10+ then the weight").
@@ -19710,15 +19710,19 @@ function syncAddmReal(form: HTMLElement): void {
       if (eq && eq.kgBase > 0) { pre.textContent = `${fmt(eq.kgBase)}+`; pre.removeAttribute("hidden"); }
       else { pre.textContent = ""; pre.setAttribute("hidden", ""); }
     }
-    // Assisted machine (the ÷ multiplier): the dialed counterweight over-reads by the divisor.
-    // Show "÷N" before a weight is dialed, then the full "dial/N" once it is.
-    let formula = "";
-    if (eq && eq.assisted) {
-      if (w !== null && w < 0) formula = `= ${fmt(w)}/${fmt(eq.divisor)}${repsSup}`;
-      else if (w === null) formula = `÷${fmt(eq.divisor)}`;
+    // Assisted machine ÷ divisor: glued to the weight box, ONLY when a NEGATIVE counterweight is
+    // dialed — not when empty/0/positive (owner: "/3 next to weight, not after reps").
+    if (wsuf) {
+      if (eq && eq.assisted && w !== null && w < 0) {
+        wsuf.textContent = `/${fmt(eq.divisor)}`;
+        wsuf.removeAttribute("hidden");
+      } else {
+        wsuf.textContent = "";
+        wsuf.setAttribute("hidden", "");
+      }
     }
-    if (formula) { out.innerHTML = formula; out.removeAttribute("hidden"); }
-    else { out.textContent = ""; out.setAttribute("hidden", ""); }
+    out.textContent = "";
+    out.setAttribute("hidden", "");
   }
 }
 
@@ -20021,21 +20025,42 @@ function openRomPicker(pill: HTMLElement): void {
 // `scale` (multiply) or `scaleAbs` (replace) — both read by scaleForRecord.
 /** The tag-derived multiplier for an add/edit LINE (the family variation product × any incline
  * level), so the pill + picker can show the total before the set exists. */
-function addLineTagScale(ex: string, ln: HTMLElement): number {
-  const fam = ex ? familyOf(ex) : null;
+function addLineVec(ln: HTMLElement): Record<string, string> {
   const vec: Record<string, string> = {};
   for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) if (s.dataset.dim) vec[s.dataset.dim] = s.value;
   const lean = ln.querySelector<HTMLElement>(".wo-af-leanpill");
   if (lean?.dataset.leanlevel) vec.lean = lean.dataset.leanlevel;
+  return vec;
+}
+function addLineTagScale(ex: string, ln: HTMLElement): number {
+  const fam = ex ? familyOf(ex) : null;
+  const vec = addLineVec(ln);
   let s = fam ? scalarFromVec(fam, vec) : 1;
   const inc = ln.querySelector<HTMLElement>(".wo-af-incpill");
   if (inc && isInclineLevelExercise(ex)) { const d = inc.dataset.incdim as LevelDim; const v = Number(inc.dataset.incval); if (Number.isFinite(v)) s *= levelScaleFor(ex, d, v); }
   return Math.round(s * 1e6) / 1e6;
 }
+/** Combined × readout under W/reps — includes band levels (kg-assist in calc, but each band
+ * level still has a ×factor the owner tunes) so a band-only line isn't stuck at ×1. */
+function addLineDisplayScale(ex: string, ln: HTMLElement): number {
+  const fam = ex ? familyOf(ex) : null;
+  if (!fam) return 1;
+  const vec = addLineVec(ln);
+  let s = scalarFromVec(fam, vec);
+  const band = vec.band;
+  if (band && band !== "none") {
+    const bf = famLevels(fam, "band")[band];
+    if (typeof bf === "number") s *= bf;
+  }
+  const inc = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (inc && isInclineLevelExercise(ex)) { const d = inc.dataset.incdim as LevelDim; const v = Number(inc.dataset.incval); if (Number.isFinite(v)) s *= levelScaleFor(ex, d, v); }
+  return Math.round(s * 1e6) / 1e6;
+}
 /** The effective multiplier a line will record = the tag total, with the owner's custom value
- * either replacing it (abs) or multiplying on top (mult). */
-function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement): number {
-  const tags = addLineTagScale(ex, ln);
+ * either replacing it (abs) or multiplying on top (mult). Display uses addLineDisplayScale
+ * (includes band ×factors); the stored calc path still uses addLineTagScale via scaleForRecord. */
+function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement, forDisplay = false): number {
+  const tags = forDisplay ? addLineDisplayScale(ex, ln) : addLineTagScale(ex, ln);
   const v = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
   if (!(Number.isFinite(v) && v > 0)) return tags;
   return pill.dataset.multmode === "abs" ? v : Math.round(tags * v * 1e6) / 1e6;
