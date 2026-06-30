@@ -4,6 +4,9 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  # Netlify skips deploys when this exits 0. Always rebuild on push — the publish dir
+  # is dist/ (gitignored), so file-diff detection cannot see when the app changed.
+  ignore = "exit 1"
 
 # Functions live in netlify/functions and are auto-detected. The data function
 # declares its own route (/api/data) via `export const config = { path }`.

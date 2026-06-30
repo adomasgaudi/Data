@@ -204,10 +204,10 @@ if (touchedRelease) {
   // dist must match the on-screen version too — a rebase that resolves dist with
   // `git checkout --theirs` leaves a STALE deployed build (it shipped b.2.8.424 once
   // while source was .425). The owner only sees the live build, so this matters.
-  const distVer = ((read("dist/index.dev.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
+  const distVer = ((read("dist/index.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
   const pubVer = ((read("index.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
   if (distVer && spanVer && distVer !== spanVer) {
-    violations.push(`dist/index.dev.html is built at ${distVer} but index.dev.html is ${spanVer} — rebuild (\`npm run build\`) and publish index.html.`);
+    violations.push(`dist/index.html is built at ${distVer} but index.dev.html is ${spanVer} — rebuild (\`npm run build\`) and publish index.html.`);
   }
   if (pubVer && spanVer && pubVer !== spanVer) {
     violations.push(`index.html (published) is ${pubVer} but index.dev.html is ${spanVer} — run build and commit the published index.html.`);
