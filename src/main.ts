@@ -24368,7 +24368,10 @@ function buildBubbleInput(
       });
       areaBands = [
         band(0.6, 0.8, "rgba(120,120,120,0.07)"), // 60–80% hypertrophy
-        band(0.8, 1.0, "rgba(120,120,120,0.13)"), // 80–100% strength
+        band(0.8, 1.0, "rgba(120,120,120,0.10)"), // 80–100% strength (base)
+        band(0.9, 1.0, "rgba(220,110,100,0.05)"), // 90%+ — light red, ramps up near max
+        band(0.95, 1.0, "rgba(210,85,75,0.07)"), // 95%+
+        band(0.975, 1.0, "rgba(200,65,58,0.09)"), // 97.5%+ — still subtle
       ];
     }
   }
