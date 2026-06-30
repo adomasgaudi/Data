@@ -1944,10 +1944,6 @@ tr.set-edit-row > td { padding: 0; border: 0; background: none; }
 .wo-mform, .set-mform { color: var(--accent); font-weight: 600; white-space: nowrap; }
 .wo-mform > sup, .set-mform > sup { font-size: 0.7em; }
 /* Machine-type toggle in the Analysis selector (single mode). */
-.wa-machine { margin: 0 0 0.5rem; }
-.wa-machine-head { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
-.wa-machine-note { margin: 0.35rem 0 0; font-size: 0.78rem; }
-.wa-machine-review { color: var(--gold); }
 .ex-combine-lbl { font-size: var(--fs-xs); }
 .ex-combine-chip {
   border: 1px solid var(--line); border-radius: var(--r-pill); background: var(--accent-soft);
