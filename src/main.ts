@@ -39,6 +39,7 @@ import {
   exerciseProgressByWeek,
   addedWeight1RM,
   effectiveE1RM,
+  filterCardLiftRecords,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -13459,8 +13460,8 @@ function closePairGradeMenu(): void {
  *  agrees with the plan. null when they've never logged it. */
 function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormula): number | null {
   const byDay = new Map<number, number>();
-  for (const r of computedRecords()) {
-    if (r.username !== username || r.exerciseName !== name || !r.date) continue;
+  for (const r of cardLiftRecords(name)) {
+    if (r.username !== username || !r.date) continue;
     if (addedWeight1RM(r, formula) === null) continue; // skip un-scorable (e.g. >15-rep) sets
     const e = estimate1RM(r.weight, r.reps, formula);
     if (e === null) continue;
@@ -13473,19 +13474,51 @@ function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormu
   return series.length ? series[series.length - 1]!.y : Math.max(...pts.map((p) => p.y));
 }
 
+/** Graph-scope lens active for this lift (merged or separated group view). */
+function cardGroupLensActive(name: string): boolean {
+  return !!(chosenGroup("graph", name, "combine") || chosenGroup("graph", name, "compare"));
+}
+
+/** Exercise names plotted on this lift's info card — same lens rules as Analysis graph. */
+function cardPlotExerciseNames(name: string): string[] {
+  return lensExpand("graph", [name]);
+}
+
+/** The current athlete's computed records for this lift's info card (curve, 1RM, volume). */
+function cardLiftRecords(name: string): SetRecord[] {
+  const user = els.athlete.value;
+  const plotNames = cardPlotExerciseNames(name);
+  return filterCardLiftRecords(computedRecordsAllLifts(), user, name, plotNames, cardGroupLensActive(name));
+}
+
+/** Compact lens picker above the exercise-info graph — same ⊕/⇄ choices as Analysis. */
+function exInfoLensBarHtml(name: string): string {
+  if (!allGroupsForEx(name).length) return "";
+  const cg = chosenGroup("graph", name, "combine");
+  const pg = chosenGroup("graph", name, "compare");
+  let label: string;
+  let hint: string;
+  if (cg) {
+    label = `⊕ ${escapeHtml(cg.derivedName ?? cg.label)}`;
+    hint = "Merged pattern mix — loads scaled to a common equivalent. Tap to change or pick one member.";
+  } else if (pg) {
+    label = `⇄ ${escapeHtml(pg.derivedName ?? pg.label)}`;
+    hint = "Separated members — each lift at its own load. Tap to change or pick one member.";
+  } else {
+    label = `${escapeHtml(displayName(name))}<span class="exinfo-lens-only"> only</span>`;
+    hint = "This lift only — not the pattern mix. Tap to merge or separate group members.";
+  }
+  return (
+    `<div class="exinfo-lens-bar">` +
+    `<span class="exinfo-lens-lbl muted">Showing</span>` +
+    `<button type="button" class="exinfo-lens-pick wa-title-lift${lensClass("graph", name)}" data-liftmenu="${escapeHtml(name)}" data-liftscope="graph" title="${escapeHtml(hint)}">${label} ▾</button>` +
+    `</div>`
+  );
+}
+
 /** One logged set in the card graph's ADDED-weight space: x = the plate you added
  *  (negative = assisted), y = reps; date + setNumber drive the same-day connector. */
 type CardNuzzoSet = { date: string; setNumber: number; added: number; reps: number };
-
-/** The current athlete's computed records that belong to this lift's card — matched by
- * exerciseName OR originalExerciseName, so it covers a plain lift, a synthetic combine/
- * compare lift (exerciseName = the derived name), AND a spelling-merge VARIANT whose sets
- * live under the canonical name but kept their original spelling (e.g. "Chin Ups" sets
- * stored as "Pull Ups" with originalExerciseName "Chin Ups" — they'd otherwise vanish). */
-function cardLiftRecords(name: string): SetRecord[] {
-  const user = els.athlete.value;
-  return computedRecordsAllLifts().filter((r) => r.username === user && (r.exerciseName === name || r.originalExerciseName === name));
-}
 
 /** Every logged set for this lift in the card graph's ADDED-weight space (x = added
  * plate, negative = assisted). The added weight mirrors addedWeight1RM's convention:
@@ -14079,6 +14112,7 @@ function liftTrainingHtml(name: string): string {
     `</details>`;
 
   return `<div class="lt-wrap">` +
+    exInfoLensBarHtml(name) +
     (hasLogged
       ? sec("Graph", graphBlock)
       : sec("Calculate", calcRow) + sec("Graph", graphHost)) +
@@ -16378,6 +16412,7 @@ async function init() {
       else if (act === "only") { if (scope === "graph") waGraphSel = [name]; else waSelected = [name]; }
       else if (act === "member") { const mem = row.dataset.lmmem; if (mem) { if (scope === "graph") waGraphSel = [mem]; else waSelected = [mem]; } }
       closeLiftMenu();
+      if (currentExInfo && name === currentExInfo && (act === "merged" || act === "separated" || act === "only")) refreshExerciseInfo();
       deferRender(renderWorkoutAnalysis);
       return;
     }
