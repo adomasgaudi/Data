@@ -117,7 +117,7 @@ import {
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
 import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
-import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
+import { classifyMixed, GRAVITY_MULT } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES, effectiveDecayInput } from "./graphMetrics";
 import {
   loadHardSetFilter,
@@ -3024,51 +3024,85 @@ function exerciseCounts(records: readonly SetRecord[], username: string): Exerci
 }
 
 // ---- Machine type (gravity vs cable), e.g. Lat Pulldown ---------------------
-// Per-exercise choice saved on device: "cable" (default, weights as-logged),
-// "gravity" (every set ×0.6 for strength), or "mixed" (classify each set — see
-// src/machine.ts). The gravity scaling is applied in computeRecordBase, keeping
-// the logged weight in origWeight for display (like assisted pull-ups).
+// Per-SET choice only (setOverrides[sid].machine): default cable (weights as-logged);
+// flag gravity on a set via the set editor ⚖ pill or the variant popover — ×0.6 for
+// strength, logged weight kept in origWeight. The old per-exercise All cable / All
+// gravity / Mixed bar (WO-54) is retired — gravity is a tag, not a lift-wide mode.
 const MACHINE_MODE_KEY = "colosseum.machineMode.v1";
-const machineModes: Record<string, MachineMode> = (() => {
-  try {
-    const o = JSON.parse(localStorage.getItem(MACHINE_MODE_KEY) ?? "{}");
-    return o && typeof o === "object" ? (o as Record<string, MachineMode>) : {};
-  } catch { return {}; }
-})();
-/** The machine mode for an exercise (defaults to "cable" = no change). */
-function machineModeFor(exerciseName: string): MachineMode {
-  return machineModes[exerciseName] ?? "cable";
-}
-function setMachineMode(exerciseName: string, mode: MachineMode) {
-  if (mode === "cable") delete machineModes[exerciseName];
-  else machineModes[exerciseName] = mode;
-  saveJson(MACHINE_MODE_KEY, machineModes);
-  clearMachineCache();
-}
-/** True for lifts that can be done on a cable AND a gravity machine (e.g. Lat
- * Pulldown), or that are already in a non-cable machine mode — i.e. the ones the
- * cable/gravity control applies to. */
+const MACHINE_MODE_MIGRATED_KEY = "colosseum.machineMode.migrated.v2";
+/** True for lifts that can be done on a cable AND a gravity machine (e.g. Lat Pulldown). */
 function machineModeEligible(exerciseName: string): boolean {
   const eq = equipmentForExercise(exerciseName);
-  return (eq.includes("Cable") && eq.includes("Machine")) || machineModeFor(exerciseName) !== "cable";
+  return eq.includes("Cable") && eq.includes("Machine");
 }
-/** A single set's effective machine type for the set-editor pill: the manual per-set
- * choice if any, else gravity when the whole lift is on "all gravity", else cable. */
-function setMachineTypeById(exerciseName: string, sid: string): "cable" | "gravity" {
-  return setOverrides[sid]?.machine ?? (machineModeFor(exerciseName) === "gravity" ? "gravity" : "cable");
+/** A single set's machine type for the set-editor pill (default cable). */
+function setMachineTypeById(_exerciseName: string, sid: string): "cable" | "gravity" {
+  return setOverrides[sid]?.machine === "gravity" ? "gravity" : "cable";
 }
 function setMachineTypeFor(s: SetRecord): "cable" | "gravity" {
   return setMachineTypeById(s.exerciseName, setId(s));
 }
-/** Toggle a single set's machine type cable↔gravity (the per-set override that wins).
- * First use on a lift still in whole-exercise "all gravity" drops it to cable default
- * and flags only this set. Shared by the set-editor ⚖ pill and the variant popover. */
-function flipSetMachineGravity(ex: string, sid: string): void {
-  const o = setOverrides[sid] ?? {};
-  if (machineModeFor(ex) !== "cable") { setMachineMode(ex, "cable"); o.machine = "gravity"; }
-  else { o.machine = o.machine === "gravity" ? "cable" : "gravity"; }
-  setOverrides[sid] = o;
+/** Toggle a single set's machine type cable↔gravity. Shared by the set-editor ⚖ pill
+ * and the variant popover. */
+function flipSetMachineGravity(_ex: string, sid: string): void {
+  const o = { ...(setOverrides[sid] ?? {}) };
+  if (o.machine === "gravity") delete o.machine;
+  else o.machine = "gravity";
+  if (Object.keys(o).length === 0) delete setOverrides[sid];
+  else setOverrides[sid] = o;
   saveSetOverrides();
+  clearMachineCache();
+}
+/** One-time: fold legacy per-exercise machineModes (all-gravity / mixed) into per-set
+ * overrides, then drop the old storage so the Analysis header toggle never returns. */
+function migrateLegacyMachineModes(): void {
+  try { if (localStorage.getItem(MACHINE_MODE_MIGRATED_KEY) === "1") return; } catch { /* ignore */ }
+  let legacy: Record<string, string>;
+  try {
+    const o = JSON.parse(localStorage.getItem(MACHINE_MODE_KEY) ?? "{}");
+    legacy = o && typeof o === "object" ? (o as Record<string, string>) : {};
+  } catch { legacy = {}; }
+  if (!Object.keys(legacy).length) {
+    try { localStorage.setItem(MACHINE_MODE_MIGRATED_KEY, "1"); } catch { /* ignore */ }
+    return;
+  }
+  const formula = currentFormula();
+  let changed = false;
+  for (const [ex, mode] of Object.entries(legacy)) {
+    if (mode === "cable") continue;
+    const sets = data.records.filter((r) => r.exerciseName === ex);
+    if (mode === "gravity") {
+      for (const r of sets) {
+        const sid = setId(r);
+        if (setOverrides[sid]?.machine) continue;
+        setOverrides[sid] = { ...(setOverrides[sid] ?? {}), machine: "gravity" };
+        changed = true;
+      }
+    } else if (mode === "mixed") {
+      // Last auto-classify pass: stamp only the sets that clearly read as gravity.
+      const e1rms: number[] = [];
+      const ids: string[] = [];
+      for (const x of sets) {
+        const w = applySetOverride(x).weight;
+        ids.push(setId(x));
+        e1rms.push(estimate1RM(w, x.reps, formula) ?? 0);
+      }
+      const verdicts = classifyMixed(e1rms);
+      for (let i = 0; i < ids.length; i++) {
+        if (verdicts[i] !== "gravity") continue;
+        const sid = ids[i]!;
+        if (setOverrides[sid]?.machine) continue;
+        setOverrides[sid] = { ...(setOverrides[sid] ?? {}), machine: "gravity" };
+        changed = true;
+      }
+    }
+  }
+  if (changed) saveSetOverrides();
+  try {
+    localStorage.removeItem(MACHINE_MODE_KEY);
+    localStorage.setItem(MACHINE_MODE_MIGRATED_KEY, "1");
+  } catch { /* ignore */ }
+  clearMachineCache();
 }
 
 // ---- Per-exercise GRAPH PERMISSIONS (the "allowed graphs" review system) ----
@@ -3116,54 +3150,12 @@ function afterGraphPermChange(name: string) {
   refreshExerciseInfo(); // the exercise-settings overlay, if it's open
   renderWaGraph();        // universal graph (single + auto overview)
 }
-// Mixed-mode verdicts are memoised per (athlete|exercise); cleared when anything
-// that changes a set's estimated 1RM does (mode, per-set edits, formula, data).
-let machineVerdictCache = new Map<string, Map<string, MachineVerdict>>();
-let machineCacheFormula: OneRepMaxFormula | null = null;
-function clearMachineCache() { machineVerdictCache = new Map(); machineCacheFormula = null; }
-/** The mixed-mode verdict for one set, building (and caching) the whole exercise's
- * classification on first touch. Uses the LOGGED weight's estimated 1RM. */
-function mixedVerdictFor(r: SetRecord): MachineVerdict {
-  const formula = currentFormula();
-  if (machineCacheFormula !== formula) { machineVerdictCache = new Map(); machineCacheFormula = formula; }
-  const key = `${r.username}|${r.exerciseName}`;
-  let map = machineVerdictCache.get(key);
-  if (!map) {
-    // All this athlete's logged sets for the exercise, in a stable order.
-    const sets = data.records.filter((x) => x.username === r.username && x.exerciseName === r.exerciseName);
-    const e1rms: number[] = [];
-    const ids: string[] = [];
-    for (const x of sets) {
-      const w = applySetOverride(x).weight;
-      const e = estimate1RM(w, x.reps, formula);
-      ids.push(setId(x));
-      e1rms.push(e ?? 0);
-    }
-    const verdicts = classifyMixed(e1rms);
-    map = new Map();
-    for (let i = 0; i < ids.length; i++) map.set(ids[i]!, verdicts[i]!);
-    machineVerdictCache.set(key, map);
-  }
-  return map.get(setId(r)) ?? "cable";
-}
-/** Apply the exercise's machine mode to a computed record: gravity sets scale to
- * their cable-equivalent (×0.6) keeping the logged weight in origWeight; review
- * sets are flagged only. Cable / unconfigured exercises pass through untouched. */
+function clearMachineCache() { /* no-op — kept so call sites stay stable */ }
+/** Apply a per-set gravity tag: scale to cable-equivalent (×0.6), keep logged weight in origWeight. */
 function applyMachineMode(out: SetRecord): SetRecord {
-  // A MANUAL per-set machine choice (set in the set editor) always wins; otherwise fall
-  // back to the per-exercise mode (cable default / all-gravity / mixed auto-classify).
-  const perSet = setOverrides[setId(out)]?.machine;
-  const mode = machineModeFor(out.exerciseName);
-  let verdict: MachineVerdict;
-  if (perSet) verdict = perSet;
-  else if (mode === "cable") return out;
-  else verdict = mode === "gravity" ? "gravity" : mixedVerdictFor(out);
-  if (verdict === "gravity") {
-    const logged = out.origWeight ?? out.weight; // preserve what to set on the machine
-    return { ...out, weight: out.weight === null ? null : out.weight * GRAVITY_MULT, origWeight: logged, machineType: "gravity" };
-  }
-  if (verdict === "review") return { ...out, machineType: "review" };
-  return { ...out, machineType: "cable" };
+  if (setOverrides[setId(out)]?.machine !== "gravity") return out;
+  const logged = out.origWeight ?? out.weight;
+  return { ...out, weight: out.weight === null ? null : out.weight * GRAVITY_MULT, origWeight: logged, machineType: "gravity" };
 }
 /** Layer a set's on-device edits over the logged weight / reps / bodyweight. */
 function applySetOverride(r: SetRecord): SetRecord {
@@ -10155,10 +10147,8 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const assistToggle = assisted || (s.weight !== null && s.weight < 0)
     ? `<button type="button" class="set-edit-assist${assisted ? " is-on" : ""}" data-assistex="${escapeHtml(s.exerciseName)}" aria-pressed="${assisted}" title="Assisted machine — a NEGATIVE logged weight is the machine's counterweight (it reads ~2× the real help), so it's counted at HALF for strength. The logged value still shows so you know what to dial. Toggles for the whole exercise.">⌁ ${assisted ? "assisted ½" : "assisted?"}</button>`
     : "";
-  // Machine-type pill — for gravity-or-cable lifts (e.g. Lat Pulldown) it sets the
-  // variant for THIS SET ONLY (default cable; tap to flag it gravity). The first tap on
-  // a lift that's still on whole-exercise "all gravity" drops that mode to cable default,
-  // so from then on each set is gravity only if you flag it here.
+  // Machine-type pill — for gravity-or-cable lifts (e.g. Lat Pulldown) flags THIS SET
+  // as gravity (×0.6 for strength). Default cable — weights as logged.
   const machSetType = setMachineTypeFor(s);
   const machineToggle = machineModeEligible(s.exerciseName)
     ? `<button type="button" class="set-edit-mach${machSetType === "gravity" ? " is-on" : ""}" data-machsetid="${escapeHtml(sid)}" data-machsetex="${escapeHtml(s.exerciseName)}" title="Machine type for THIS set — tap to toggle cable ↔ gravity. Gravity scales this set ×${GRAVITY_MULT} for strength. Each set is set on its own (default cable).">⚖ ${machSetType}</button>`
@@ -15859,6 +15849,7 @@ async function init() {
   // Fold in any hand-logged sets saved on this device (the Add tab).
   loadedRecords = data.records; // immutable base for spelling-split re-derivation
   mergeManualSets();
+  migrateLegacyMachineModes();
   loadAlone(); // "trained alone" workout tags saved on this device
 
   // Build the leaderboard exercise picker (see populateExercisePicker): every
@@ -23136,10 +23127,6 @@ function renderWorkoutAnalysis(): void {
   renderSelector("graph");
   renderSelector("hist");
   applyPickDrawer(); // re-float the picker drawer if one is open (the selectors rebuilt)
-  // Single-lift extras (machine-type cable/gravity toggle) follow the HISTORY
-  // selector (waSelected), per the two-selector design.
-  const assignBox = document.getElementById("waAssign");
-  if (assignBox) assignBox.innerHTML = (mode === "single" && waSelected[0]) ? machineModeControl(waSelected[0]) : "";
   renderWaGraph();
 }
 
@@ -25557,44 +25544,6 @@ function graphReviewPromptHtml(targetEx: string, scopeNames: readonly string[]):
 
 /** The TASK 24 assignment editor for one exercise: joint / movement / plane
  * multi-selects prefilled with its current (saved-or-seeded) values + Save. */
-/** Three-way machine-type toggle (cable / gravity / mixed) for the selected lift,
- * shown for exercises that can be done on both a cable and a machine (e.g. Lat
- * Pulldown). In mixed mode it reports how many sets were auto-classified. */
-function machineModeControl(name: string): string {
-  const mode = machineModeFor(name);
-  if (!machineModeEligible(name)) return "";
-  const btn = (m: MachineMode, label: string, title: string) =>
-    segBtn(label, { active: mode === m, attrs: `data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}"` });
-  let note = "";
-  if (mode === "gravity") {
-    note = `<p class="muted wa-machine-note">Every set scaled to its cable-equivalent (×${GRAVITY_MULT}). The logged machine weight still shows in the set list.</p>`;
-  } else if (mode === "mixed") {
-    const user = els.athlete.value;
-    let gravity = 0, review = 0, cable = 0;
-    for (const r of data.records.filter((x) => x.username === user && x.exerciseName === name)) {
-      const v = mixedVerdictFor(r);
-      if (v === "gravity") gravity++; else if (v === "review") review++; else cable++;
-    }
-    note = `<p class="muted wa-machine-note">Auto-split by your cable strength level: <strong>${cable}</strong> cable · <strong>${gravity}</strong> gravity (×${GRAVITY_MULT})` +
-      (review ? ` · <strong class="wa-machine-review">${review} need review</strong>` : "") + `.</p>`;
-  }
-  return (
-    `<div class="wa-machine">` +
-    `<div class="wa-machine-head"><span class="wa-ctl-lbl">Machine</span>` +
-    segToggle(
-      btn("cable", "All cable", "Weights as logged (cable stack).") +
-      btn("gravity", "All gravity", `Gravity machine — every set ×${GRAVITY_MULT} for strength.`) +
-      btn("mixed", "Mixed", "Both machines logged together — auto-classify each set."),
-      { tag: "div", attrs: `role="group" aria-label="Machine type"` }
-    ) + `</div>` + note + `</div>`
-  );
-}
-
-/** The per-exercise taxonomy editor (joints / movements / planes + Save). Lives
- * collapsed inside an exercise's Index inspector / ℹ More-info — NOT in the
- * Analysis view — and the saved metadata drives the Analysis filters. Save button
- * + message use classes (not ids) so the editor can appear in two places at once
- * (the Index row inspector and the overlay) without duplicate ids. */
 function taxonomyEditorHtml(name: string): string {
   const sel = (cur: readonly string[], all: readonly string[], cls: string) => {
     const have = new Set(cur);
@@ -26778,13 +26727,6 @@ function setupWorkoutAnalysis(): void {
       if (key === "potentialLog" && waGraphConfig.potentialLog) { waGraphConfig.potentialNativeLog = false; S.waPerBodyweight = false; }
       if (key === "potentialNativeLog" && waGraphConfig.potentialNativeLog) { waGraphConfig.potentialLog = false; S.waPerBodyweight = false; }
       scheduleWaGraph();
-      return;
-    }
-    // Machine type (cable / gravity / mixed) for the selected exercise.
-    const machBtn = t.closest<HTMLElement>("[data-machinemode]");
-    if (machBtn?.dataset.machinemode && machBtn.dataset.machineEx) {
-      setMachineMode(machBtn.dataset.machineEx, machBtn.dataset.machinemode as MachineMode);
-      renderWorkoutAnalysis();
       return;
     }
     // (Taxonomy save moved to a document-level handler — the editor now lives in
