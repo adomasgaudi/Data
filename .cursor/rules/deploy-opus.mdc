@@ -1,28 +1,31 @@
 ---
-description: Always merge and push to opus-4.8 so the live site updates
+description: Always merge finished work into opus-4.8 and push — the live site only updates from opus
 alwaysApply: true
 ---
 
-# Always deploy on `opus-4.8`
+# Always merge to `opus-4.8`
 
-The owner only sees the **live site** (GitHub Pages from `opus-4.8`). Unpushed or branch-only work is invisible.
+`opus-4.8` is the **only** branch the owner sees (GitHub Pages). Feature branches and open PRs do **not** update the live site.
 
-## When work is done
+## Done = merged on opus + pushed
 
-1. **Commit + push** the feature branch (if you used one).
-2. **Merge into `opus-4.8`** — fast-forward or merge; never leave verified work stranded on a side branch.
-3. **Push `origin opus-4.8`** — this triggers the Pages deploy workflow.
-4. **Confirm deploy** — `gh run list --branch opus-4.8` should show a successful "Deploy to GitHub Pages" run.
+1. Finish the change (tests + typecheck green, version bump if shipping).
+2. Commit + push your working branch (e.g. `cursor/*-2e40`) if you used one.
+3. **Merge into `opus-4.8`** — cherry-pick, fast-forward, or merge commit; pick the cleanest path.
+4. **Push `origin opus-4.8`** — triggers the Pages deploy workflow.
+5. Confirm deploy green (`gh run list --branch opus-4.8`).
+
+**Never stop at "PR opened" or "feature branch pushed".** That is not done for this project.
 
 ## Release trinity (when shipping)
 
-All three together: bump `src/changelog.ts`, update `<span class="version">` in `index.html`, patch version only.
+All three together: prepend `src/changelog.ts`, update `<span class="version">` in `index.html`, patch bump only.
 
 ## Do not
 
-- Stop at "PR opened" or "pushed feature branch" without merging to `opus-4.8`.
-- Ask the owner to deploy unless merge is genuinely blocked (conflict you cannot resolve).
+- Leave verified work stranded on a side branch.
+- Ask the owner to deploy unless merge is genuinely blocked.
 
-## If the owner says "deploy" / "push to opus"
+## Owner says "deploy" / "merge to opus" / "push to opus"
 
-Merge to `opus-4.8`, push, wait for deploy green — no extra confirmation needed.
+Merge to `opus-4.8`, push, wait for deploy — no extra confirmation needed.
