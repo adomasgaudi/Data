@@ -384,6 +384,7 @@ const LT: Record<string, string> = {
   "Default ROM": "Numatyta amplitudė",
   "% of full ROM": "% nuo pilnos amplitudės",
   "Machine weight": "Mašinos svoris",
+  "Pin only — keep weights": "Tik skydelis — palikti svorius",
   "kg base": "kg bazė",
   "Machine ÷": "Mašinos daliklis",
   "dial over-read": "ciferblato perviršis",

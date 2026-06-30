@@ -118,7 +118,8 @@ import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVE
 import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES, effectiveDecayInput } from "./graphMetrics";
-import { initI18n, getLang, setLang, type Lang } from "./i18n";
+import { adjustedSetWeight, type MachineWeightSetAdjust } from "./machineWeightShift";
+import { getLang, initI18n, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
 import {
   loadDashboardFor, saveDashboardFor, defaultDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
@@ -2690,12 +2691,140 @@ function afterMachineEdit(ex: string): void {
   if (addModalEl) { refreshAddmSettings(); syncPendingFromModal(); }
   scheduleRender(() => reopenIndexDetail(ex));
 }
+
+type MachineKgShiftSnap = { id: string; before: number; raw: number | null };
+
+/** Sets whose logged weight should follow a machine-base edit (legacy per-exercise or one named machine). */
+function recordsForMachineKgEdit(ex: string, equipId: string | null): SetRecord[] {
+  return activeRecords().filter((r) => {
+    if (r.weight == null) return false;
+    const stamp = setEquipment[setId(r)];
+    if (equipId) return stamp === equipId;
+    return (r.exerciseName === ex || r.originalExerciseName === ex) && !stamp;
+  });
+}
+
+function shiftSetsForMachineBaseDelta(records: readonly SetRecord[], delta: number): MachineKgShiftSnap[] {
+  const snap: MachineKgShiftSnap[] = [];
+  for (const r of records) {
+    const id = setId(r);
+    const cur = applySetOverride(r).weight;
+    if (cur == null || !Number.isFinite(cur)) continue;
+    const next = adjustedSetWeight(cur, delta, "shift");
+    snap.push({ id, before: cur, raw: r.weight });
+    setSetOverrideField(id, "weight", next);
+  }
+  return snap;
+}
+
+function undoMachineWeightShift(snap: readonly MachineKgShiftSnap[]): void {
+  for (const { id, before, raw } of snap) {
+    if (raw !== null && before === raw) setSetOverrideField(id, "weight", null);
+    else setSetOverrideField(id, "weight", before);
+  }
+}
+
+function uiMachineWeightAdjustChoice(
+  oldBase: number,
+  newBase: number,
+  setCount: number,
+  exLabel: string,
+): Promise<MachineWeightSetAdjust | null> {
+  const delta = newBase - oldBase;
+  const abs = Math.abs(delta);
+  const lt = getLang() === "lt";
+  const shiftLbl = lt
+    ? (delta > 0 ? `Nuo kiekvieno seto atimti ${fmt(abs)} kg` : `Prie kiekvieno seto pridėti ${fmt(abs)} kg`)
+    : (delta > 0 ? `Subtract ${fmt(abs)} kg from each set` : `Add ${fmt(abs)} kg to each set`);
+  const baseMsg = lt
+    ? (newBase > 0
+      ? `${exLabel} mašinos svoris dabar ${fmt(newBase)} kg`
+      : `${exLabel} mašinos svoris išvalytas`)
+    : (newBase > 0
+      ? `Machine weight for ${exLabel} is now ${fmt(newBase)} kg`
+      : `Machine weight for ${exLabel} is cleared`);
+  const setsWord = lt
+    ? (setCount === 1 ? "įrašytas setas" : "įrašyti setai")
+    : (setCount === 1 ? "logged set" : "logged sets");
+  const msg = lt
+    ? `${baseMsg} — turite ${setCount} ${setsWord}. Ar svoriai buvo tik skydelis (ką pasukėte), ar pilnas krūvis su mašinos baze?`
+    : `${baseMsg} — you have ${setCount} logged set${setCount === 1 ? "" : "s"}. Were those logged as the pin only (what you dialed), or as the full load including the machine base?`;
+  const keepLbl = lt ? "Tik skydelis — palikti svorius" : "Pin only — keep weights";
+  return uiChoice<MachineWeightSetAdjust>(msg, [
+    { id: "keep", label: keepLbl, primary: true },
+    { id: "shift", label: shiftLbl },
+  ]);
+}
+
+function writeMachineKgBase(ex: string, equipId: string | null, value: number | null): void {
+  if (equipId && equipmentReg[equipId]) {
+    equipmentReg[equipId]!.kgBase = value ?? 0;
+    saveEquipment();
+  } else setMachineWeight(ex, value);
+  clearMachineCache();
+}
+
+async function applyMachineKgBaseWithSetPrompt(ctx: {
+  ex: string;
+  equipId: string | null;
+  oldBase: number;
+  newBase: number | null;
+  inputEl?: HTMLInputElement;
+  equipName?: string;
+}): Promise<void> {
+  const newB = ctx.newBase ?? 0;
+  if (newB === ctx.oldBase) return;
+  const delta = newB - ctx.oldBase;
+  const recs = recordsForMachineKgEdit(ctx.ex, ctx.equipId);
+  let mode: MachineWeightSetAdjust = "keep";
+  if (recs.length > 0 && delta !== 0) {
+    const label = ctx.equipName ?? displayName(ctx.ex);
+    const choice = await uiMachineWeightAdjustChoice(ctx.oldBase, newB, recs.length, label);
+    if (choice === null) {
+      if (ctx.inputEl) ctx.inputEl.value = ctx.oldBase > 0 ? String(ctx.oldBase) : "";
+      else afterMachineEdit(ctx.ex);
+      return;
+    }
+    mode = choice;
+  }
+  const snap = mode === "shift" ? shiftSetsForMachineBaseDelta(recs, delta) : [];
+  const prevBase = ctx.oldBase;
+  const prevVal = ctx.newBase;
+  writeMachineKgBase(ctx.ex, ctx.equipId, ctx.newBase);
+  afterMachineEdit(ctx.ex);
+  deferRender(() => {
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+    refreshExerciseInfo();
+  });
+  const what = ctx.equipName ?? displayName(ctx.ex);
+  const valStr = prevVal == null ? (getLang() === "lt" ? "nėra" : "none") : `${fmt(newB)} kg`;
+  const toastMsg = getLang() === "lt"
+    ? (mode === "shift" && snap.length
+      ? `${what} mašinos svoris → ${valStr}; pakoreguota ${snap.length} set${snap.length === 1 ? "as" : "ų"}.`
+      : `${what} mašinos svoris → ${valStr}, pakeista visiems naudotojams su šia mašina.`)
+    : (mode === "shift" && snap.length
+      ? `Machine weight for ${what} → ${valStr}; shifted ${snap.length} set${snap.length === 1 ? "" : "s"}.`
+      : `Machine weight for ${what} → ${valStr}, changed for all users with this machine.`);
+  showToast(toastMsg, "Undo", () => {
+    writeMachineKgBase(ctx.ex, ctx.equipId, prevBase > 0 ? prevBase : null);
+    undoMachineWeightShift(snap);
+    afterMachineEdit(ctx.ex);
+    deferRender(() => {
+      renderAll();
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+      refreshExerciseInfo();
+    });
+  });
+}
+
 function setMachineWeightWithUndo(ex: string, value: number | null): void {
   const prev = machineWeightFor(ex);
-  if ((value ?? 0) === prev) return; // no real change → no toast
-  setMachineWeight(ex, value);
-  afterMachineEdit(ex);
-  showToast(`Machine weight for ${displayName(ex)} → ${value == null ? "none" : `${fmt(value)} kg`}, changed for all users with this machine.`, "Undo", () => { setMachineWeight(ex, prev || null); afterMachineEdit(ex); });
+  const newB = value ?? 0;
+  if (newB === prev) return;
+  void applyMachineKgBaseWithSetPrompt({ ex, equipId: null, oldBase: prev, newBase: value });
 }
 function setMachineMultWithUndo(ex: string, value: number | undefined): void {
   const prev = machineMultFor(ex);
@@ -2771,10 +2900,15 @@ function createEquipmentFor(ex: string): string {
 function setEquipFieldWithUndo(id: string, field: "kgBase" | "divisor", value: number, ex: string): void {
   const e = equipmentReg[id];
   if (!e || e[field] === value) return;
+  if (field === "kgBase") {
+    void applyMachineKgBaseWithSetPrompt({
+      ex, equipId: id, oldBase: e.kgBase, newBase: value, equipName: e.name,
+    });
+    return;
+  }
   const prev = e[field];
   e[field] = value; saveEquipment(); clearMachineCache(); afterMachineEdit(ex);
-  const what = field === "kgBase" ? `weight → ${fmt(value)} kg` : `multiplier → ÷${fmt(value)}`;
-  showToast(`${e.name} ${what}, changed for all users with this machine.`, "Undo", () => { e[field] = prev; saveEquipment(); clearMachineCache(); afterMachineEdit(ex); });
+  showToast(`${e.name} multiplier → ÷${fmt(value)}, changed for all users with this machine.`, "Undo", () => { e[field] = prev; saveEquipment(); clearMachineCache(); afterMachineEdit(ex); });
 }
 // EXPERIMENTAL exercises (owner): a preliminary scratchpad while exploring a movement — log a
 // lot of sets/notes without worrying about precision. Experimental data is EXCLUDED from ALL
@@ -3350,6 +3484,41 @@ function uiAlert(message: string, opts: { ok?: string } = {}): Promise<void> {
     wrap.querySelector(".ui-modal-ok")!.addEventListener("click", done);
     wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) done(); });
     requestAnimationFrame(() => wrap.querySelector<HTMLButtonElement>(".ui-modal-ok")!.focus());
+  });
+}
+
+/** Two- or three-button choice modal — replaces window.confirm for styled picks. */
+function uiChoice<T extends string>(
+  message: string,
+  choices: { id: T; label: string; primary?: boolean }[],
+  opts: { cancel?: string } = {},
+): Promise<T | null> {
+  return new Promise((resolve) => {
+    document.getElementById("uiModal")?.remove();
+    const wrap = document.createElement("div");
+    wrap.id = "uiModal";
+    wrap.className = "ui-modal-back";
+    const btns = choices.map((c) =>
+      `<button type="button" class="ui-modal-${c.primary ? "ok" : "cancel"}" data-pick="${escapeHtml(c.id)}">${escapeHtml(c.label)}</button>`,
+    ).join("");
+    wrap.innerHTML =
+      `<div class="ui-modal" role="dialog" aria-modal="true">` +
+        `<div class="ui-modal-msg">${escapeHtml(message)}</div>` +
+        `<div class="ui-modal-acts ui-modal-acts-stack">${btns}` +
+          `<button type="button" class="ui-modal-cancel" data-pick="">${escapeHtml(opts.cancel ?? "Cancel")}</button>` +
+        `</div></div>`;
+    document.body.appendChild(wrap);
+    const done = (v: T | null) => { document.removeEventListener("keydown", onKey, true); wrap.remove(); resolve(v); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    document.addEventListener("keydown", onKey, true);
+    wrap.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]");
+      if (!b || !wrap.contains(b)) return;
+      const id = b.dataset.pick ?? "";
+      done(id ? (id as T) : null);
+    });
+    wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) done(null); });
+    requestAnimationFrame(() => wrap.querySelector<HTMLButtonElement>(".ui-modal-ok, .ui-modal-cancel")?.focus());
   });
 }
 /** Small popup menu off a selected lift (replaces the inline ⓘ ⊕ ⇄ buttons): Info,
@@ -20691,9 +20860,20 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     } else if (el.classList.contains("addm-cog-mw")) {
       const txt = (el as HTMLInputElement).value.trim();
       const val = txt === "" ? null : parseFloat(txt);
-      if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "kgBase", val ?? 0, cex);
-      else setMachineWeightWithUndo(cex, val);
-      syncPendingFromModal(); // refresh the live base+dial preview immediately
+      const oldBase = curId && equipmentReg[curId] ? equipmentReg[curId]!.kgBase : machineWeightFor(cex);
+      const newB = val ?? 0;
+      if (newB === oldBase) return;
+      if (curId && equipmentReg[curId]) {
+        void applyMachineKgBaseWithSetPrompt({
+          ex: cex, equipId: curId, oldBase, newBase: val, inputEl: el as HTMLInputElement,
+          equipName: equipmentReg[curId]!.name,
+        });
+      } else {
+        void applyMachineKgBaseWithSetPrompt({
+          ex: cex, equipId: null, oldBase, newBase: val, inputEl: el as HTMLInputElement,
+        });
+      }
+      syncPendingFromModal();
     } else if (el.classList.contains("addm-cog-mm")) {
       const txt = (el as HTMLInputElement).value.trim();
       const v = parseFloat(txt);
