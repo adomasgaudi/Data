@@ -31,7 +31,7 @@ export const LOCAL_ONLY_KEYS: ReadonlySet<string> = new Set([
   "colosseum.bcMassUnit", "colosseum.asExcOpen", "colosseum.simplifiedView", "colosseum.viewTier.v1",
   "colosseum.idxEditAttr.v1", "colosseum.timeCompact.v1", "colosseum.bwReviewOpen",
   "colosseum.xrmReps",
-  "colosseum.faintLines", "colosseum.hardSetsOnly", "colosseum.hideUgly", "colosseum.strengthWindow.v1",
+  "colosseum.faintLines", "colosseum.hardSetsOnly", "colosseum.hardSetFilter.v1", "colosseum.hideUgly", "colosseum.strengthWindow.v1",
   "colosseum.allGraphsAllowed",
   "colosseum.activeSet.include.v1", "colosseum.activeSet.exclude.v1",
   "colosseum.activeSet.solo.v1", "colosseum.activeSet.freq.v1",

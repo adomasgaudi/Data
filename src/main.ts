@@ -119,6 +119,17 @@ import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVE
 import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
 import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES, effectiveDecayInput } from "./graphMetrics";
+import {
+  loadHardSetFilter,
+  saveHardSetFilter,
+  cycleHardSetFilterMode,
+  cycleHardSetFilterPct,
+  cycleHardSetFilterRef,
+  hardSetFilterDropIds,
+  hardSetFilterModeLabel,
+  hardSetFilterRefLabel,
+  type HardSetFilterConfig,
+} from "./hardSetsFilter";
 import { adjustedSetWeight, type MachineWeightSetAdjust } from "./machineWeightShift";
 import { getLang, initI18n, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
@@ -2413,29 +2424,30 @@ function setEffortClass(s: SetRecord, predRir: number | null): EffortClass | nul
   const rir = rirBandMid(rpeFor(s)) ?? predRir;
   return rir === null ? null : effortClass(rir, isBigLegsLift(s.exerciseName));
 }
-// "Hard sets only" lens (persisted): drop easy / warm-up sets (high reps in
-// reserve) from the graphs AND the training calendar, keeping only hard working
-// sets — plus sets with no RIR signal at all, which we can't call easy.
-let waHardOnly = (() => { try { return localStorage.getItem("colosseum.hardSetsOnly") === "1"; } catch { return false; } })();
-function saveHardOnly() { try { localStorage.setItem("colosseum.hardSetsOnly", waHardOnly ? "1" : "0"); } catch { /* ignore */ } }
-/** Set-ids the effort model classifies as easy (mid / warm-up), built once from
- * the computed records. Hard sets and sets with no RIR signal are NOT included. */
-function easySetIds(): Set<string> {
-  const ids = new Set<string>();
+// Hard-sets lens (persisted): RIR effort bands, or a % of 1RM threshold with a choice of
+// strength reference (strict that-day vs smoothed decay curve). Applies to graphs + calendar.
+let hardSetFilter: HardSetFilterConfig = loadHardSetFilter();
+
+function hardFilterGraphCfg(): GraphConfig {
+  return {
+    ...waGraphConfig,
+    formula: currentFormula(),
+    strengthWindow: currentStrengthWindow().ms,
+  };
+}
+
+/** Set-ids to drop under the hard-sets lens. */
+function filteredSetDropIds(): Set<string> {
   const formula = currentFormula();
   const sm = currentStrengthByUserExercise(formula);
-  for (const r of computedRecords()) {
-    const eff = setEffortClass(r, predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula));
-    if (eff === "mid" || eff === "warmup") ids.add(setId(r));
-  }
-  return ids;
+  const effortOf = (r: SetRecord) =>
+    setEffortClass(r, predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula));
+  return hardSetFilterDropIds(computedRecords(), hardSetFilter, hardFilterGraphCfg(), effortOf);
 }
-/** Apply the "hard sets only" lens to a record list (no-op when off). Keyed by
- * setId, so it works identically on raw or computed records. */
-function applyHardSetsFilter<T extends SetRecord>(records: readonly T[], easy?: Set<string>): T[] {
-  if (!waHardOnly) return [...records];
-  const e = easy ?? easySetIds();
-  return records.filter((r) => !e.has(setId(r)));
+function applyHardSetsFilter<T extends SetRecord>(records: readonly T[], drop?: Set<string>): T[] {
+  if (hardSetFilter.mode === "off") return [...records];
+  const d = drop ?? filteredSetDropIds();
+  return records.filter((r) => !d.has(setId(r)));
 }
 const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
@@ -7991,9 +8003,9 @@ function scopeWorkoutGroups(groups: WorkoutGroup[]): WorkoutGroup[] {
  * / warm-up sets so the calendar reflects only hard training. The Workouts
  * session list keeps using the unfiltered athleteWorkouts. */
 function heatWorkoutDays(): WorkoutDay[] {
-  if (!waHardOnly) return athleteWorkouts;
-  const easy = easySetIds();
-  return workoutsForUser(activeRecords().filter((r) => !easy.has(setId(r))), els.athlete.value, setUnitsForRecord);
+  if (hardSetFilter.mode === "off") return athleteWorkouts;
+  const drop = filteredSetDropIds();
+  return workoutsForUser(activeRecords().filter((r) => !drop.has(setId(r))), els.athlete.value, setUnitsForRecord);
 }
 
 /** Map of this athlete's training dates (ISO) → total sets that day (respecting
@@ -24068,7 +24080,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const compact = getTimeCompact();
   const onoff = (on: boolean, attr: string, label: string, title: string) =>
     `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
-  const lensCount = [c.decay, waHardOnly].filter(Boolean).length;
+  const lensCount = [c.decay, hardSetFilter.mode !== "off"].filter(Boolean).length;
   const openCfgGroups = new Set<string>();
   if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
     if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
@@ -24082,8 +24094,16 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       : "") +
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."), "data");
+  const hf = hardSetFilter;
+  const hfModeLbl = hardSetFilterModeLabel(hf.mode);
+  const hfPctLbl = `≥${Math.round(hf.minPct * 100)}%`;
+  const hfRefLbl = hardSetFilterRefLabel(hf.strengthRef);
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
-    onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
+    `<button type="button" class="wa-name-opt${hf.mode !== "off" ? " is-on" : ""}" data-wahardmode title="Filter sets on the graph and calendar. Off = all sets. RIR = drop warm-ups (effort bands). %1RM = keep only sets above a % of your strength. Tap to cycle.">Filter: ${hfModeLbl}</button>` +
+    (hf.mode === "pct"
+      ? `<button type="button" class="wa-name-opt is-on" data-wahardpct title="Minimum % of your strength a set must reach to stay visible. Tap to cycle.">${hfPctLbl}</button>` +
+        `<button type="button" class="wa-name-opt is-on" data-wahardref title="Now = strict strength at that date (same best: window as the Strength line — jumps when you PR). Smooth = decay curve (gradual). Tap to cycle.">1RM: ${hfRefLbl}</button>`
+      : "") +
     onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."), "lines");
   const cfgBars = hasBarMetric
     ? cfgGroup("Bars & axes", "",
@@ -24713,7 +24733,7 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
 const SETTING_INFO: Record<string, string> = {
   type: "Over time — track the metrics across dates. Reps × kg — plot every set as weight (x) × reps (y) instead.",
   data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width for Volume / Reps / Sets (day / 2–5 days / week / bi-week / month). Vol overlay interval — a second volume bar series at a different width (turn on Vol overlay). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
-  lines: "Hard sets only — drop easy / warm-up sets (high reps-in-reserve); also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
+  lines: "Set filter — Off / RIR (drop warm-ups by effort) / %1RM (keep sets above a % of your strength; pick Now = strict that-day strength, or Smooth = decay curve). Also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
   bars: "Opacity — bar transparency. Bar girth — bar thickness. Right axis — bar height vs the kg axis. Volume shift — move the bars up or down, away from the lines.",
   spread: "Set spread — how far a session's sets fan out on the per-set views: 0 = stacked on one line, higher = spread across days.",
   potential: "Log to potential — compress the strength axis near a lifetime ceiling so an approach reads straight. Native log — transform each point's value (experimental). Ceiling — the kg target both converge on.",
@@ -25079,9 +25099,21 @@ function handleExInfoGraphControl(t: HTMLElement): boolean {
     scheduleExInfoGraph();
     return true;
   }
-  if (t.closest<HTMLElement>("[data-wahardonly]")) {
-    waHardOnly = !waHardOnly;
-    saveHardOnly();
+  if (t.closest<HTMLElement>("[data-wahardmode]")) {
+    hardSetFilter = cycleHardSetFilterMode(hardSetFilter);
+    saveHardSetFilter(hardSetFilter);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wahardpct]")) {
+    hardSetFilter = cycleHardSetFilterPct(hardSetFilter);
+    saveHardSetFilter(hardSetFilter);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wahardref]")) {
+    hardSetFilter = cycleHardSetFilterRef(hardSetFilter);
+    saveHardSetFilter(hardSetFilter);
     scheduleExInfoGraph();
     return true;
   }
@@ -26202,13 +26234,12 @@ function setupWorkoutAnalysis(): void {
       deferRender(renderWorkoutAnalysis); // rebuild both selectors so they stay in sync
       return;
     }
-    // "Hard sets only" lens — re-render the graph(s) AND the training calendar,
-    // since this filter applies to both.
+    // Hard-sets lens (legacy checkbox if still in DOM) — graph + calendar.
     const hard = target.closest<HTMLInputElement>("#waHardOnly");
     if (hard) {
-      waHardOnly = hard.checked;
-      saveHardOnly();
-      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); }); // pin scroll
+      hardSetFilter = { ...hardSetFilter, mode: hard.checked ? "rir" : "off" };
+      saveHardSetFilter(hardSetFilter);
+      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
       return;
     }
     const perBw = target.closest<HTMLInputElement>("#waPerBw");
@@ -26685,10 +26716,21 @@ function setupWorkoutAnalysis(): void {
       renderWaGraph();
       return;
     }
-    // "Hard sets only" lens (now a pill) — re-render graph AND calendar (both use it).
-    if (t.closest<HTMLElement>("[data-wahardonly]")) {
-      waHardOnly = !waHardOnly;
-      saveHardOnly();
+    if (t.closest<HTMLElement>("[data-wahardmode]")) {
+      hardSetFilter = cycleHardSetFilterMode(hardSetFilter);
+      saveHardSetFilter(hardSetFilter);
+      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
+      return;
+    }
+    if (t.closest<HTMLElement>("[data-wahardpct]")) {
+      hardSetFilter = cycleHardSetFilterPct(hardSetFilter);
+      saveHardSetFilter(hardSetFilter);
+      deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
+      return;
+    }
+    if (t.closest<HTMLElement>("[data-wahardref]")) {
+      hardSetFilter = cycleHardSetFilterRef(hardSetFilter);
+      saveHardSetFilter(hardSetFilter);
       deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
       return;
     }

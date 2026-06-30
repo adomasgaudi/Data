@@ -207,6 +207,44 @@ export function effectiveDecayInput(
   return { pts, offset };
 }
 
+/** Per-set strength denominator (added kg) for % filters — `now` = Strength-line windowed
+ * best at that timestamp; `smooth` = decay-curve level (gradual, not a step on every PR). */
+export function strengthDenominatorAtSets(
+  records: readonly SetRecord[],
+  cfg: GraphConfig,
+  ref: "now" | "smooth",
+): Map<SetRecord, number> {
+  const times = setTimes(records, cfg.spread ?? DEFAULT_SPREAD);
+  const out = new Map<SetRecord, number>();
+  const dated: { r: SetRecord; x: number; y: number }[] = [];
+  for (const r of records) {
+    const y = addedWeight1RM(r, cfg.formula);
+    const x = times.get(r) ?? ts(r.date);
+    if (y != null && Number.isFinite(y) && Number.isFinite(x)) dated.push({ r, x, y });
+  }
+  dated.sort((a, b) => a.x - b.x);
+  if (!dated.length) return out;
+  if (ref === "now") {
+    const strengths = windowedMaxAtEach(
+      dated.map((p) => ({ x: p.x, y: p.y })),
+      cfg.strengthWindow,
+    );
+    dated.forEach((p, i) => out.set(p.r, strengths[i]!));
+    return out;
+  }
+  const { pts, offset } = effectiveDecayInput(records, cfg.formula, cfg);
+  const curve = decayedStrengthSeries(pts, Date.now(), 4, cfg.decayParams, null, offset);
+  for (const p of dated) {
+    let s: number | null = null;
+    for (const c of curve) {
+      if (c.x > p.x) break;
+      if (c.y != null) s = c.y;
+    }
+    if (s != null && s > 0) out.set(p.r, s);
+  }
+  return out;
+}
+
 /** Running maximum — the legacy "Strength Score" line that never drops. */
 function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
   let m = -Infinity;
@@ -224,8 +262,8 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
  * curve should jump on 1d view). We instead look back (windowDays − 1) whole days, so "1d" = the
  * SAME calendar day only, "1w" = today + 6 prior days, etc.; the line then drops between periods. */
 /** Best e1RM in the trailing window at EACH point (same calendar-day rules as windowedMax).
- * Used by the Now% metric — one strength denominator per set, not the corner-pruned line. */
-function windowedMaxAtEach(pts: { x: number; y: number }[], windowMs: number | undefined): number[] {
+ * Used by the Now% metric and the %1RM hard-set filter — one strength denominator per set. */
+export function windowedMaxAtEach(pts: { x: number; y: number }[], windowMs: number | undefined): number[] {
   if (windowMs == null || !Number.isFinite(windowMs)) {
     let m = -Infinity;
     return pts.map((p) => r1((m = Math.max(m, p.y))));
