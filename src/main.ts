@@ -10,6 +10,7 @@ import {
 } from "./format";
 import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
+import { addmSetChipHtml } from "./addmLine";
 import { resolveEquip, type Equipment, type EquipSettings } from "./equipment";
 // Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
 // imported as raw text so the panel is always a projection of the files and can
@@ -18844,25 +18845,7 @@ function afLine(ex: string): string {
     `<div class="addm-line">` +
     `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
     `<div class="addm-line-main">` +
-    `<div class="addm-set-chip">` +
-    `<div class="addm-wr-col">` +
-    `<div class="addm-wr-row">` +
-    `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
-    `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
-    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
-    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
-    `</div>` +
-    `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
-    `</div>` +
-    // Unilateral: a second weight×reps pair for the LEFT side, shown only for a unilateral lift in
-    // the ADD path (toggled in syncAddmReal). The strength calc uses the WEAKER side (onInlineAddGo).
-    `<span class="wo-af-lside" hidden>` +
-    `<span class="wo-af-sidelbl" title="Left side">L</span>` +
-    `<input class="wo-af-weight-l" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Left weight (kg)" />` +
-    `<input class="wo-af-reps-l" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Left reps" />` +
-    `</span>` +
-    `<span class="addm-real" aria-hidden="true" hidden></span>` +
-    `</div>` +
+    addmSetChipHtml() +
     `<span class="addm-rir-slot"></span>` +
     `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
     `</div>` +
