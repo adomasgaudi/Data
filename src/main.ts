@@ -19072,7 +19072,7 @@ function readAddLineVec(ln: HTMLElement): Record<string, string> {
 }
 /** Dims that use a floating chip picker (never the clipped inline xdd dropdown). */
 function dimUsesChipPicker(dim: string): boolean {
-  return dim === "shoulderDist" || dim === "forearmSupport";
+  return dim === "shoulderDist" || dim === "forearmSupport" || dim === "tapContact";
 }
 /** The level the CURRENT athlete used most for this exercise+dimension over the last
  * ~3 months — so the add-set picker pre-selects "what you usually do", not the config
@@ -19185,7 +19185,7 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
       `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
       `</span>`;
   }
-  // Shoulder gap / forearm support (and other cm tags): floating chip picker — the inline xdd
+  // Shoulder gap / forearm support / wall touch: floating chip picker — the inline xdd
   // dropdown in the scrolling tag row was clipped/unusable on mobile (PB-55 class).
   if (dimUsesChipPicker(dim)) {
     return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
@@ -20813,7 +20813,7 @@ function onAddModalClick(e: MouseEvent): void {
   // old inline dropdown — PB-55).
   const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
   if (romDimPill) { openRomDimPicker(romDimPill); return; }
-  // Shoulder gap / forearm support → floating chip picker (not the clipped inline dropdown).
+  // Shoulder gap / forearm support / wall touch → floating chip picker (not the clipped inline dropdown).
   const cmDimPill = t.closest<HTMLElement>(".wo-af-cmdimpill");
   if (cmDimPill) { openCmDimPicker(cmDimPill); return; }
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
