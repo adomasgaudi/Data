@@ -2987,9 +2987,9 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-line-vars .wo-af-rompill.is-set, .addm-line-vars .wo-af-leanpill.is-set, .addm-line-vars .wo-af-romdimpill.is-set, .addm-line-vars .wo-af-cmdimpill.is-set { background: var(--accent); border-color: var(--accent); color: #fff; }
 /* ROM cm-level popup (PB-55): same cm/block stepper as the lean picker; block chips stay compact. */
 .romdim-pop .rom-ref-chip { font-size: 0.7rem; }
-/* Gray read-only combined ×multiplier (tag product ± custom) — sits by the weight, not a tag. */
+/* Gray read-only combined ×multiplier (tag product ± custom) — under W/reps, not beside. */
 .addm-set-chip .addm-tag-total {
-  flex: 0 0 auto; align-self: center; margin-right: 2px;
+  flex: 0 0 auto; align-self: center; margin: 1px 0 0;
   font-size: 0.55rem; line-height: 1; color: var(--muted); font-weight: 600;
   pointer-events: none; user-select: none;
 }
@@ -3216,6 +3216,9 @@ sup.wr-bw { font-size: 0.85em; }
   display: inline-flex; align-items: flex-start; gap: 1px; flex: 0 0 auto;
   border: none; background: none; padding: 0;
 }
+/* Weight + reps on one row; the gray combined × sits directly underneath (owner). */
+.addm-wr-col { display: flex; flex-direction: column; align-items: center; flex: 0 0 auto; min-width: 0; }
+.addm-wr-row { display: inline-flex; align-items: flex-start; gap: 1px; }
 .addm-set-chip .wo-af-weight, .addm-set-chip .wo-af-reps {
   box-sizing: border-box; min-height: var(--tap-min); margin: 0;
   border: 1px solid var(--line); background: var(--line); border-radius: 6px;

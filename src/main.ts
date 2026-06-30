@@ -18842,11 +18842,15 @@ function afLine(ex: string): string {
     `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
     `<div class="addm-line-main">` +
     `<div class="addm-set-chip">` +
-    `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
+    `<div class="addm-wr-col">` +
+    `<div class="addm-wr-row">` +
     `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
     `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
     `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
     `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+    `</div>` +
+    `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
+    `</div>` +
     // Unilateral: a second weight×reps pair for the LEFT side, shown only for a unilateral lift in
     // the ADD path (toggled in syncAddmReal). The strength calc uses the WEAKER side (onInlineAddGo).
     `<span class="wo-af-lside" hidden>` +
