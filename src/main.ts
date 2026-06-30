@@ -15675,11 +15675,11 @@ function restoreScrollY(y: number): void {
  * latest fn queued in a frame is the one that runs (one render per frame), and the
  * scroll position is captured now and restored after — so a tap repaints its own
  * control first and a rebuild won't make the page jump. */
-function deferRender(fn: () => void): void {
+function deferRender(fn: () => void, preserveScrollY?: number): void {
   pendingRender = fn;
   if (renderRafQueued) return;
   renderRafQueued = true;
-  const y = window.scrollY;
+  const y = preserveScrollY ?? window.scrollY;
   requestAnimationFrame(() => {
     renderRafQueued = false;
     const f = pendingRender; pendingRender = null;
@@ -21320,13 +21320,21 @@ function applySetEdit(form: HTMLElement): boolean {
   }
   const rir = ln.querySelector<HTMLElement>(".addm-rir")?.dataset.picked || "";
   if (rir) setRpe(sid, rir);
-  closeAddModal();
+  // PB-56 class: capture scroll BEFORE the modal closes (closing can reset scrollY), then
+  // defer the rebuild — same idiom as deleteSetsWithUndo / refreshAfterDifficultyEdit.
+  // Do NOT call renderWorkoutAnalysis here: it forces S.workoutsPage = 0 and rebuilds
+  // selectors/calendar, which yanks the history to the top. renderWorkoutsPage + renderWaGraph
+  // are enough (mirrors the add-set save path).
   const y = window.scrollY;
-  renderAll();
-  if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
-  refreshExerciseInfo();
-  restoreScrollY(y);
+  closeAddModal();
+  showHydrating();
+  deferRender(() => {
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+    refreshExerciseInfo();
+    hideHydrating();
+  }, y);
   return true;
 }
 function onInlineAddGo(form: HTMLElement): boolean {
