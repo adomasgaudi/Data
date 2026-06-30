@@ -26,6 +26,7 @@ import {
   addedWeight1RM,
   scaleToGroup,
   withSyntheticGroups,
+  filterCardLiftRecords,
   buildActiveExerciseSet,
   nearDuplicateExercises,
   canonicalizeExerciseNames,
@@ -307,6 +308,51 @@ describe("scaleToGroup", () => {
     );
     expect(scaled!.exerciseName).toBe("DL pattern");
     expect(scaled!.originalExerciseName).toBe("Romanian Deadlift");
+  });
+});
+
+describe("filterCardLiftRecords", () => {
+  const user = "ada";
+  const squat = rec({ username: user, exerciseName: "Squat", weight: 100, reps: 5 });
+  const smith = rec({ username: user, exerciseName: "Smith Machine Squat", weight: 90, reps: 5 });
+  const sqPattern = rec({
+    username: user,
+    exerciseName: "Squat pattern",
+    originalExerciseName: "Romanian Deadlift",
+    weight: 120,
+    reps: 8,
+    syntheticGroupId: "compare.squat-pattern",
+  });
+  const chinVariant = rec({
+    username: user,
+    exerciseName: "Pull Ups",
+    originalExerciseName: "Chin Ups",
+    weight: 0,
+    reps: 10,
+  });
+  const otherUser = rec({ username: "bob", exerciseName: "Squat", weight: 80, reps: 5 });
+  const records = [squat, smith, sqPattern, chinVariant, otherUser];
+
+  it("without a group lens plots only the lift itself (not pattern synthetics)", () => {
+    const got = filterCardLiftRecords(records, user, "Squat", ["Squat"], false);
+    expect(got.map((r) => r.exerciseName)).toEqual(["Squat"]);
+  });
+
+  it("with a merged lens plots the derived group name", () => {
+    const got = filterCardLiftRecords(records, user, "Squat", ["Squat pattern"], true);
+    expect(got.map((r) => r.exerciseName)).toEqual(["Squat pattern"]);
+  });
+
+  it("with a separated lens plots each member at raw load", () => {
+    const plot = ["Squat", "Smith Machine Squat", "Front Squat"];
+    const got = filterCardLiftRecords(records, user, "Squat", plot, true);
+    expect(got.map((r) => r.exerciseName).sort()).toEqual(["Smith Machine Squat", "Squat"]);
+  });
+
+  it("keeps spelling-merge variants via originalExerciseName when no group lens", () => {
+    const got = filterCardLiftRecords(records, user, "Chin Ups", ["Chin Ups"], false);
+    expect(got).toHaveLength(1);
+    expect(got[0]!.originalExerciseName).toBe("Chin Ups");
   });
 });
 
