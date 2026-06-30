@@ -770,7 +770,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         for (const p of s.points) {
           if (p.lo != null && p.y != null && Math.abs(p.y - p.lo) > 0.05) {
             const cx = xPix(p.x), yTop = ymap(p.y), yBot = ymap(p.lo);
-            body += `<line x1="${cx.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${s.color}" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>`;
+            body += `<line x1="${cx.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${s.color}" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.28"/>`;
           }
         }
         for (const p of s.points) {
