@@ -11,3 +11,7 @@ declare const process: { env: Record<string, string | undefined> };
 declare module "node:child_process" {
   export function execSync(command: string): { toString(): string };
 }
+
+declare module "node:path" {
+  export function resolve(...paths: string[]): string;
+}

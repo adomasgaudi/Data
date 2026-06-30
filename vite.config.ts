@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 import { execSync } from "node:child_process";
+import path from "node:path";
 // Node `process` / `node:child_process` typed minimally in src/build-env.d.ts (no
 // @types/node in this project), and __BUILD_BRANCH__ declared there too.
 
@@ -20,6 +21,11 @@ function buildBranch(): string {
 export default defineConfig({
   // Inline JS/CSS/data into a single dist/index.html that opens with no server.
   plugins: [viteSingleFile()],
+  build: {
+    rollupOptions: {
+      input: path.resolve(__dirname, "index.dev.html"),
+    },
+  },
   // Bake the build branch in so the title can show the working model (see modelName.ts).
   define: { __BUILD_BRANCH__: JSON.stringify(buildBranch()) },
   // Expose the dev server on the local network so a phone on the same Wi-Fi can

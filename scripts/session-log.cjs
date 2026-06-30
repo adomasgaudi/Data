@@ -100,7 +100,7 @@ try {
   // 3. Mechanical facts.
   const sha = sh("git rev-parse --short HEAD").trim();
   const branch = sh("git rev-parse --abbrev-ref HEAD").trim();
-  const verMatch = read("index.html").match(/class="version">([^<]+)</);
+  const verMatch = read("index.dev.html").match(/class="version">([^<]+)</);
   const version = verMatch ? verMatch[1].trim() : "";
   const timestamp = new Date().toISOString().slice(0, 16).replace("T", " ");
 

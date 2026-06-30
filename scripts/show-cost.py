@@ -195,7 +195,7 @@ def current_version():
                "Katen Kyōkotsu", "Tenken", "Senbonzakura", "Sakanade", "Minazuki",
                "Kinshara", "Suzumebachi", "Ryūjin Jakka"]
     try:
-        html = (Path(__file__).resolve().parent.parent / "index.html").read_text(encoding="utf-8")
+        html = (Path(__file__).resolve().parent.parent / "index.dev.html").read_text(encoding="utf-8")
         m = re.search(r'class="version">b\.(\d+)\.(\d+)\.(\d+)', html)
         if not m:
             return ("", "", "")
@@ -212,7 +212,7 @@ def git_prev_version():
     try:
         import subprocess
         root = Path(__file__).resolve().parent.parent
-        out = subprocess.run(["git", "-C", str(root), "show", "HEAD~1:index.html"],
+        out = subprocess.run(["git", "-C", str(root), "show", "HEAD~1:index.dev.html"],
                              capture_output=True, text=True, timeout=5)
         m = re.search(r'class="version">b\.\d+\.\d+\.(\d+)', out.stdout)
         return m.group(1) if m else None

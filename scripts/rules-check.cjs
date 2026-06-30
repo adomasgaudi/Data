@@ -15,9 +15,9 @@
  *
  * The rest run only when THIS session touched the relevant files, so they never
  * nag on unrelated turns:
- *   When a RELEASE was touched (src/changelog.ts or index.html):
+ *   When a RELEASE was touched (src/changelog.ts or index.dev.html):
  *     1. the newest RELEASES entry has a `model:` stamp (rule: STAMP YOUR MODEL);
- *     2. index.html <span class="version"> matches the newest release (lockstep);
+ *     2. index.dev.html <span class="version"> matches the newest release (lockstep);
  *     3. the newest version is a clean patch bump b.X.Y.Z — no 4th digit (rule 1);
  *     3b. the newest entry's shortTitle is a 2–5-word label, not a sentence (rule 48).
  *   When the UI was touched (src/main.ts or src/styles.css):
@@ -44,7 +44,7 @@ const violations = [];
 // happen — it has happened twice (a bad b.2.8.1 and stray markers in src/main.ts both
 // reached opus during a rebase). `<<<<<<<` / `>>>>>>>` are never legitimate in these
 // files, so flag them loudly so the marker is fixed before the next push.
-for (const f of ["src/main.ts", "src/styles.css", "src/changelog.ts", "index.html", "src/i18n.ts"]) {
+for (const f of ["src/main.ts", "src/styles.css", "src/changelog.ts", "index.dev.html", "index.html", "src/i18n.ts"]) {
   if (/^(<<<<<<<|>>>>>>>)/m.test(read(f))) {
     violations.push(`${f} has an UNRESOLVED git conflict marker (<<<<<<< / >>>>>>>) — do NOT push; resolve it, rebuild, and re-verify first.`);
   }
@@ -157,13 +157,13 @@ for (const line of sh("git status --porcelain").split("\n")) {
 for (const f of sh(`git diff --name-only ${DEPLOYED}...HEAD`).split("\n")) {
   if (f.trim()) changed.add(f.trim());
 }
-const touchedRelease = changed.has("src/changelog.ts") || changed.has("index.html");
+const touchedRelease = changed.has("src/changelog.ts") || changed.has("index.dev.html");
 const touchedUi = changed.has("src/main.ts") || changed.has("src/styles.css");
 
 // ── Release checks (rules: model stamp, version lockstep, patch-only) ──────────
 if (touchedRelease) {
   const changelog = read("src/changelog.ts");
-  const indexHtml = read("index.html");
+  const indexHtml = read("index.dev.html");
 
   // Balanced scan for the first {...} entry after `export const RELEASES`.
   const firstEntry = (src) => {
@@ -196,7 +196,7 @@ if (touchedRelease) {
   const spanVer = ((indexHtml.match(/class="version">([^<]+)</) || [])[1] || "").trim();
 
   if (newestVer && spanVer && newestVer !== spanVer) {
-    violations.push(`index.html <span class="version"> is ${spanVer} but the newest release is ${newestVer} — keep the on-screen version in lockstep.`);
+    violations.push(`index.dev.html <span class="version"> is ${spanVer} but the newest release is ${newestVer} — keep the on-screen version in lockstep.`);
   }
   if (newestVer && !/^b\.\d+\.\d+\.\d+$/.test(newestVer)) {
     violations.push(`version ${newestVer} is not a clean patch bump b.X.Y.Z — bump the PATCH digit only, never a 4th digit or minor/major.`);
@@ -204,9 +204,13 @@ if (touchedRelease) {
   // dist must match the on-screen version too — a rebase that resolves dist with
   // `git checkout --theirs` leaves a STALE deployed build (it shipped b.2.8.424 once
   // while source was .425). The owner only sees the live build, so this matters.
-  const distVer = ((read("dist/index.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
+  const distVer = ((read("dist/index.dev.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
+  const pubVer = ((read("index.html").match(/class="version">([^<]+)</) || [])[1] || "").trim();
   if (distVer && spanVer && distVer !== spanVer) {
-    violations.push(`dist/index.html is built at ${distVer} but index.html is ${spanVer} — the DEPLOYED build is STALE; rebuild it (\`npm run build\`) and commit dist (never resolve dist with --theirs).`);
+    violations.push(`dist/index.dev.html is built at ${distVer} but index.dev.html is ${spanVer} — rebuild (\`npm run build\`) and publish index.html.`);
+  }
+  if (pubVer && spanVer && pubVer !== spanVer) {
+    violations.push(`index.html (published) is ${pubVer} but index.dev.html is ${spanVer} — run build and commit the published index.html.`);
   }
 }
 

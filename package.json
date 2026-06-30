@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Strength training dashboard. Reads StrengthLevel data (ingested via the existing Apps Script pipeline) and computes leaderboards, PRs and estimated 1RMs over the full set log.",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite index.dev.html",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    if: ${{ !contains(github.event.head_commit.message, '[pages-index]') }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -29,23 +30,25 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: node scripts/verify-dist.cjs
-      # Legacy branch deploy (opus-4.8 /) serves raw index.html — absolute /src/…
-      # paths 404 on adomasgaudi.github.io/Colosseum/ (mobile shows unstyled HTML).
-      # Force GitHub Actions as the Pages source so dist/ (single-file build) goes live.
-      - name: Use GitHub Actions for Pages
-        run: |
-          CURRENT=$(gh api "repos/${{ github.repository }}/pages" --jq '.build_type')
-          echo "Pages build_type: $CURRENT"
-          if [ "$CURRENT" != "workflow" ]; then
-            gh api -X PUT "repos/${{ github.repository }}/pages" -f build_type=workflow
-            echo "Switched Pages to GitHub Actions deploy"
-          fi
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
+
+      # Legacy Pages deploy serves opus-4.8 / (not the Actions artifact). Publish the
+      # single-file build as root index.html so github.io/Colosseum/ gets inlined CSS/JS.
+      - name: Publish built index.html to branch
+        run: |
+          cp dist/index.dev.html index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --staged --quiet; then
+            echo "index.html already up to date"
+          else
+            git commit -m "deploy: publish built index.html [pages-index]"
+            git push
+          fi
 
   deploy:
     needs: build
