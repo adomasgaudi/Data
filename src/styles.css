@@ -2805,29 +2805,44 @@ sup.wr-bw { font-size: 0.85em; }
 .data-table sup { color: var(--muted); font-weight: 400; font-size: 0.7em; }
 .wo-date { white-space: nowrap; }
 /* Longer date: big relative phrase ("Last Thursday") + a smaller month-day ("May 12"). */
-.wo-rel { font-weight: 700; }
-.wo-md { color: var(--muted); font-weight: 600; font-size: 0.82em; }
+.wo-rel { font-weight: 800; font-size: 1.25rem; line-height: 1.2; }
+.wo-md { color: var(--muted); font-weight: 600; font-size: 0.78em; }
 /* The full year (e.g. 2026) is only shown once the day is EXPANDED — keeps the collapsed
    list clean but disambiguates the year when you open a session. */
 .wo-year { display: none; color: var(--muted); font-weight: 600; font-size: 0.82em; }
 .wo-row.open .wo-year { display: inline; }
 /* PERIOD-grouped header (week/month/…): a clear, period-sized MAIN label (no weekday) with the
    exact span small beside it (owner). The main grows with the period via data-persize 1→4. */
-.wo-perdate .wo-permain { font-weight: 800; color: var(--text); }
+.wo-perdate .wo-permain { font-weight: 800; color: var(--text); line-height: 1.15; }
 .wo-perdate .wo-persub { color: var(--muted); font-weight: 600; font-size: 0.72rem; margin-left: 0.15rem; }
-.wo-perdate[data-persize="1"] .wo-permain { font-size: 1.05rem; }
-.wo-perdate[data-persize="2"] .wo-permain { font-size: 1.2rem; }
-.wo-perdate[data-persize="3"] .wo-permain { font-size: 1.45rem; }
-.wo-perdate[data-persize="4"] .wo-permain { font-size: 1.7rem; }
+.wo-perdate[data-persize="1"] .wo-permain { font-size: 1.3rem; }
+.wo-perdate[data-persize="2"] .wo-permain { font-size: 1.45rem; }
+.wo-perdate[data-persize="3"] .wo-permain { font-size: 1.65rem; }
+.wo-perdate[data-persize="4"] .wo-permain { font-size: 1.85rem; }
+/* Clear band between every day/week/month bucket — owner couldn't tell where one ends. */
+.data-table tbody tr.wo-row + tr.wo-row > td {
+  border-top: 2px solid color-mix(in srgb, var(--accent) 24%, var(--line));
+  padding-top: 1rem;
+}
 /* Slight separators between day rows when the week / month / year changes (the list
    is newest-first). Week = faint dashed, month = a soft accent line, year = a bolder
    accent line plus a year chip. */
-.wo-row.wo-newweek > td { border-top: 1px dashed color-mix(in srgb, var(--muted) 35%, transparent); }
-.wo-row.wo-newmonth > td { border-top: 1px solid color-mix(in srgb, var(--accent) 32%, var(--line)); }
-.wo-row.wo-newyear > td { border-top: 2px solid var(--accent); }
+.wo-row.wo-newweek > td { border-top: 2px dashed color-mix(in srgb, var(--accent) 40%, var(--muted)); }
+.wo-row.wo-newmonth > td { border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.wo-row.wo-newyear > td { border-top: 3px solid var(--accent); }
 .wo-yearmark { display: inline-block; font-size: 0.72rem; font-weight: 800; color: var(--accent); background: var(--accent-soft); border-radius: var(--r-pill); padding: 0 7px; margin-right: 6px; }
-/* In the workouts list the date sits as a small header above that entry's exercises. */
-.wo-row .wo-date { display: block; font-weight: 600; margin-bottom: 4px; }
+/* In the workouts list the date sits as a section header above that bucket's exercises. */
+.wo-row .wo-date {
+  display: block;
+  font-weight: 800;
+  margin-bottom: 0.45rem;
+  padding: 0.35rem 0.55rem;
+  margin-left: -0.55rem;
+  margin-right: -0.55rem;
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  border-radius: var(--r-xs);
+}
+.data-table tbody tr.wo-row > td { padding-top: 0.55rem; padding-bottom: 0.65rem; }
 .wo-did { line-height: 1.5; }
 /* Workouts "alone" filter — one button that cycles Both → Only alone → Not
    alone. Faint when off (Both = no filter), accent when filtering. */
@@ -3360,7 +3375,7 @@ sup.wr-bw { font-size: 0.85em; }
 /* Once a day is expanded its exercises appear below as their own expandable
    rows, so the inline summary up here would just be a duplicate — hide it. */
 .wo-row.open .wo-did { display: none; }
-.wo-row.open .wo-date { margin-bottom: 0; }
+.wo-row.open .wo-date { margin-bottom: 0; padding-bottom: 0.25rem; }
 /* A rest day in the Show-rest-days view: a thin sliver, no text — each line is
    one empty day, so you can see at a glance how many days passed between
    sessions. Hover/tap shows the date via the row's title. */
