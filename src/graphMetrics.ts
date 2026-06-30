@@ -455,7 +455,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
   // summary, so the bars match it. (Was r.weight = bodyweight-inclusive effective load,
   // which double-counted bodyweight lifts like Hip Thrust — graph 12k vs history 6k.)
   { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
-  { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
+  { id: "volumeLoad", label: "Vol overlay", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.volumeAltInterval ?? cfg.interval) },
   { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => r.reps, cfg.interval) },
   { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs, cfg) => setsPerBucket(rs, cfg.interval) },
   { id: "frequency", label: "Frequency", axis: "right", compute: (rs) => sessionsPerWeek(rs) },

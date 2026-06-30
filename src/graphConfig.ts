@@ -84,6 +84,39 @@ export interface GraphConfig {
    * POINT's value to −ln(ceiling − value) and plot THAT on a normal linear axis (so the
    * plotted numbers themselves become the log values). Off / undefined = normal. */
   potentialNativeLog?: boolean | undefined;
+  /** Vol overlay (volumeLoad metric): bucket on this interval instead of `interval` —
+   *  a second volume bar series at a different width (e.g. 2d Volume + bi-week overlay). */
+  volumeAltInterval?: GraphConfig["interval"];
+}
+
+export type GraphInterval = GraphConfig["interval"];
+
+/** Short interval tag for dual-volume legend labels (e.g. "2d", "2wk"). */
+export const INTERVAL_LABELS: Record<GraphInterval, string> = {
+  day: "day", "2d": "2d", "3d": "3d", "4d": "4d", "5d": "5d",
+  week: "wk", biweek: "2wk", month: "mo", quarter: "3mo", halfyear: "6mo", year: "yr",
+};
+
+export const INTERVAL_CHOICES: { v: GraphInterval; label: string }[] = [
+  { v: "day", label: "Day" }, { v: "2d", label: "2 days" }, { v: "3d", label: "3 days" },
+  { v: "4d", label: "4 days" }, { v: "5d", label: "5 days" }, { v: "week", label: "Week" },
+  { v: "biweek", label: "Bi-week" }, { v: "month", label: "Month" },
+  { v: "quarter", label: "3 months" }, { v: "halfyear", label: "6 months" }, { v: "year", label: "12 months" },
+];
+
+export function intervalSelectOptions(current: GraphInterval): string {
+  return INTERVAL_CHOICES.map(({ v, label }) =>
+    `<option value="${v}"${v === current ? " selected" : ""}>${label}</option>`,
+  ).join("");
+}
+
+export const GRAPH_PLOT_HEIGHT_PHONE = 300;
+export const GRAPH_PLOT_HEIGHT_DESKTOP = 600;
+
+/** Analysis graph plot height — 2× on desktop (≥641px), phone stays 300px. */
+export function graphPlotHeight(): number {
+  if (typeof window === "undefined" || !window.matchMedia) return GRAPH_PLOT_HEIGHT_PHONE;
+  return window.matchMedia("(min-width: 641px)").matches ? GRAPH_PLOT_HEIGHT_DESKTOP : GRAPH_PLOT_HEIGHT_PHONE;
 }
 
 export const DEFAULT_GRAPH_CONFIG: GraphConfig = {

@@ -42,7 +42,8 @@ const LT: Record<string, string> = {
   "Guide": "Vadovas",
   "Settings": "Nustatymai",
   "│ 1RM stems": "│ 1RM stiebeliai",
-  "│ 1RM stems off": "│ 1RM stiebeliai išj.",
+  "Vol overlay": "Tūrio perdanga",
+  "Vol overlay interval": "Tūrio perdangos intervalas",
   // ---- "More" menu ----
   "Clients": "Klientai",
   "Coach": "Treneris",

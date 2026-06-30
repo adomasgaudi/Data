@@ -111,6 +111,19 @@ describe("graph metric registry (TASK 26)", () => {
     expect(vol2.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(2000);
   });
 
+  it("vol overlay buckets on volumeAltInterval, independent of primary interval", () => {
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-08", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-15", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const primary = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "2d" });
+    const overlay = graphMetric("volumeLoad")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "2d", volumeAltInterval: "biweek" });
+    expect(primary.length).toBeGreaterThan(overlay.length);
+    expect(primary.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500);
+    expect(overlay.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500);
+  });
+
   it("every registered metric now has a compute (TASKS 31–41)", () => {
     // pctWR is computed specially in analyticsGraph (needs sex/bodyweight/the WR),
     // so it deliberately carries no registry compute.

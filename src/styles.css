@@ -1306,11 +1306,13 @@ body.admin-only-hidden .wa-soon .wa-soon-word { text-transform: uppercase; }
 }
 .gdash-title:hover { text-decoration: underline; }
 .gdash-title.is-empty { color: var(--muted); font-weight: 700; }
-/* STABLE height (owner): every bubble's chart draws at ONE constant plot height (300px, set
-   via buildBubbleInput → input.height) so switching bubbles/tabs doesn't resize the frame —
-   otherwise it feels like buttons snapping the view, not swiping a stable reel. min-height
-   reserves the space (incl. the empty-state) so the foot never jumps up. */
+/* STABLE height (owner): every bubble's chart draws at ONE constant plot height (300px phone,
+   600px desktop — set via buildBubbleInput → graphPlotHeight) so switching bubbles/tabs
+   doesn't resize the frame. min-height reserves the space so the foot never jumps up. */
 .gdash-stage { min-height: 300px; position: relative; }
+@media (min-width: 641px) {
+  .gdash-stage { min-height: 600px; }
+}
 .gdash-stage .wa-placeholder { padding-top: 5rem; text-align: center; }
 /* Stage wrapper + top-right corner overlay — the kg/×BW + ℹ buttons and the relocated
    Legend/⤢ Fit bar sit ON the chart edge (owner: "move fit and kg/bw to the top corner"),

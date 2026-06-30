@@ -140,7 +140,7 @@ import {
 } from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
-import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
+import { DEFAULT_GRAPH_CONFIG, type GraphConfig, intervalSelectOptions, graphPlotHeight } from "./graphConfig";
 import {
   type GraphPermissions,
   type GraphLevel,
@@ -24076,7 +24076,10 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
     `<details class="wa-cfg-group" data-cfggroup="${escapeHtml(label)}"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
-    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("2d", c.interval, "2 days")}${opt("3d", c.interval, "3 days")}${opt("4d", c.interval, "4 days")}${opt("5d", c.interval, "5 days")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}${opt("quarter", c.interval, "3 months")}${opt("halfyear", c.interval, "6 months")}${opt("year", c.interval, "12 months")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${intervalSelectOptions(c.interval)}</select></label>` +
+    (waMetrics.has("volumeLoad")
+      ? `<label class="wa-gcfg-f" title="Bucket width for the Vol overlay bars — can differ from Interval so you can stack e.g. 2-day Volume + bi-weekly overlay.">Vol overlay interval<select class="wa-cfg" data-wacfg="volumeAltInterval">${intervalSelectOptions(c.volumeAltInterval ?? "biweek")}</select></label>`
+      : "") +
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
     onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."), "data");
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
@@ -24389,7 +24392,7 @@ function buildBubbleInput(
       persistDash();
     },
     onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
-    height: 300, // one constant plot height across all bubble types (stable reel, owner)
+    height: graphPlotHeight(), // 300px phone · 600px desktop (owner)
     xMarkers: projMarkers, // projection fit-window lines (drag to set the forecast fit range)
     onMarkerDrag: onProjMarkerDrag,
     rvwFitOf,
@@ -24706,7 +24709,7 @@ function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
 // setting's explanation in a small popup. Keyed lookup keeps the long text out of attributes.
 const SETTING_INFO: Record<string, string> = {
   type: "Over time — track the metrics across dates. Reps × kg — plot every set as weight (x) × reps (y) instead.",
-  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width (day / 2–5 days / week / bi-week / month). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
+  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width for Volume / Reps / Sets (day / 2–5 days / week / bi-week / month). Vol overlay interval — a second volume bar series at a different width (turn on Vol overlay). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
   lines: "Hard sets only — drop easy / warm-up sets (high reps-in-reserve); also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
   bars: "Opacity — bar transparency. Bar girth — bar thickness. Right axis — bar height vs the kg axis. Volume shift — move the bars up or down, away from the lines.",
   spread: "Set spread — how far a session's sets fan out on the per-set views: 0 = stacked on one line, higher = spread across days.",
@@ -24717,7 +24720,7 @@ const SETTING_INFO: Record<string, string> = {
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
   mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
   decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. Phases: three growth phases by hard-set count (beginner → intermediate → advanced), each with its own growth PACE (how fast it accepts gains); only the world record caps gains, and phase 1 reads your RIR (assumes 3 upper / 6 lower when none is logged). Boundary lines mark each phase on the graph. All levels share the grace days and the floor. Full formulas: Plan → Formulas → 'How the numbers work'.",
-  mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
+  mVolume: "Volume — weight × reps summed per Interval (bars). Vol overlay — a second volume series at its own interval (Options → Vol overlay interval). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
   assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
 };
@@ -24961,6 +24964,9 @@ function handleExInfoGraphControl(t: HTMLElement): boolean {
     if (waMetrics.has(id)) { waMetrics.delete(id); met.classList.remove("is-on"); }
     else {
       waMetrics.add(id); met.classList.add("is-on");
+      if (id === "volumeLoad" && !waGraphConfig.volumeAltInterval) {
+        waGraphConfig.volumeAltInterval = waGraphConfig.interval === "biweek" ? "week" : "biweek";
+      }
       if (WEIGHT_EXCLUSIVE.includes(id)) {
         for (const other of WEIGHT_EXCLUSIVE) {
           if (other !== id && waMetrics.delete(other)) {
@@ -25093,6 +25099,7 @@ function handleExInfoGraphConfigChange(target: HTMLElement): boolean {
     const el = cfg as HTMLInputElement | HTMLSelectElement;
     if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
     else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+    else if (key === "volumeAltInterval") waGraphConfig.volumeAltInterval = el.value as GraphConfig["interval"];
     else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
     else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
     else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
@@ -26210,6 +26217,7 @@ function setupWorkoutAnalysis(): void {
       const el = cfg as HTMLInputElement | HTMLSelectElement;
       if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
       else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+      else if (key === "volumeAltInterval") waGraphConfig.volumeAltInterval = el.value as GraphConfig["interval"];
       else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
       else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
       else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
@@ -26500,6 +26508,9 @@ function setupWorkoutAnalysis(): void {
       if (waMetrics.has(id)) { waMetrics.delete(id); met.classList.remove("is-on"); }
       else {
         waMetrics.add(id); met.classList.add("is-on");
+        if (id === "volumeLoad" && !waGraphConfig.volumeAltInterval) {
+          waGraphConfig.volumeAltInterval = waGraphConfig.interval === "biweek" ? "week" : "biweek";
+        }
         if (WEIGHT_EXCLUSIVE.includes(id)) {
           for (const other of WEIGHT_EXCLUSIVE) {
             if (other !== id && waMetrics.delete(other)) {

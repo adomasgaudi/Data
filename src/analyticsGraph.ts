@@ -16,6 +16,7 @@ import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import { bestFitNuzzo1RM, nuzzoWeightForReps, nuzzo1RM } from "./metrics";
 import type { GraphConfig } from "./graphConfig";
+import { INTERVAL_LABELS } from "./graphConfig";
 
 // Series palette built around the app's "Girl with a Pearl Earring" theme: the two
 // anchors are lapis BLUE and ochre GOLD (the accent + gold tokens), then a harmonious
@@ -169,6 +170,10 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   // but total training volume per day/week is a useful whole-athlete trend).
   const defaultMetric = isAll ? "volume" : "e1rm";
   const metrics = (input.metrics.length ? input.metrics : [defaultMetric]).map(graphMetric).filter((m): m is NonNullable<typeof m> => !!m);
+  const metricIds = new Set(metrics.map((m) => m.id));
+  const dualVol = metricIds.has("volume") && metricIds.has("volumeLoad");
+  const volIv = input.config.interval;
+  const volAltIv = input.config.volumeAltInterval ?? volIv;
   const inRange = (r: SetRecord) => (!input.dateFrom || r.date >= input.dateFrom) && (!input.dateTo || r.date <= input.dateTo);
   const records = input.records.filter(inRange);
   const code = input.codeOf ?? ((n) => n);
@@ -439,7 +444,9 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
         }));
       }
       // One group → label by metric only; several → prefix the exercise.
-      const name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
+      let name = groups.length > 1 ? `${g.label} · ${m.label}` : m.label;
+      if (dualVol && m.id === "volume") name += ` (${INTERVAL_LABELS[volIv]})`;
+      if (dualVol && m.id === "volumeLoad") name += ` (${INTERVAL_LABELS[volAltIv]})`;
       // Vertical shift (fraction of plot height) for the Volume bars only — lifts
       // them off the strength line. Both share the same dates, so we shift in y,
       // never x. Applied as a per-series render offset by the chart.
