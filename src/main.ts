@@ -20026,8 +20026,7 @@ function addmVariantField(ex: string): string {
   const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
   // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
   // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
-  // HSPU has its own cm hand-height `rom` dim; other handstands have no ROM except leg-kick
-  // skills (Handstand kicks) where ROM is a % of kick range (owner).
+  // HSPU has its own cm hand-height `rom` dim; every other lift gets the generic %-ROM pill.
   const rfam = familyOf(ex);
   const showPctRom = tagActive(ex, rfam, "rom") && showsPctRomPill(ex, rfam);
   const rom = showPctRom ? cap("ROM", romPillHtml(ex)) : "";
@@ -20077,9 +20076,8 @@ function passivePaletteHtml(ex: string): string {
     if (dim === "tapContact" && !isWallTouchExercise(ex)) continue;
     tags.push({ id: dim, label: dimLabel(dim, fam) });
   }
-  // Generic %-ROM tag: HSPU uses its cm rom dim; leg-kick handstands get %-ROM; other lifts too.
-  // Non-press handstands (hold/walk/tap…) have no ROM unless they're kick skills.
-  if (offersPctRomTag(ex, fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
+  // ROM passive tag: offered for almost every lift (HSPU promotes cm rom dim; others get %-ROM).
+  if (offersPctRomTag(ex)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   tags.push({ id: CUSTOM_MULT_ID, label: "multiplier" });
   // Each tag is ONE pill = [label button that toggles add/remove] + [ⓘ info/edit button], so a tap
   // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill

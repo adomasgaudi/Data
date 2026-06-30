@@ -79,24 +79,28 @@ describe("familyOf", () => {
   });
 });
 
-describe("leg %-ROM (Handstand kicks)", () => {
-  it("detects handstand kick spellings", () => {
+describe("%-ROM passive tag", () => {
+  it("detects handstand kick spellings for %-only picker", () => {
     for (const name of ["Handstand kicks", "Handstand Kicks", "handstand kick", "HS Kicks"]) {
       expect(usesLegPctRom(name)).toBe(true);
     }
     expect(usesLegPctRom("Handstand hold")).toBe(false);
     expect(usesLegPctRom("Handstand Push Ups")).toBe(false);
   });
-  it("offers %-ROM in the palette for kicks but not other handstand skills", () => {
-    expect(offersPctRomTag("Handstand kicks", "HANDSTAND")).toBe(true);
-    expect(offersPctRomTag("Handstand hold", "HANDSTAND")).toBe(false);
-    expect(offersPctRomTag("Handstand Push Ups", "HSPU")).toBe(true); // cm rom dim
-    expect(offersPctRomTag("Push Up", "PUSHUP")).toBe(true);
+  it("offers ROM in the palette for almost every named exercise", () => {
+    expect(offersPctRomTag("Handstand kicks")).toBe(true);
+    expect(offersPctRomTag("Handstand hold")).toBe(true);
+    expect(offersPctRomTag("Handstand wall touch")).toBe(true);
+    expect(offersPctRomTag("Handstand Push Ups")).toBe(true);
+    expect(offersPctRomTag("Push Up")).toBe(true);
+    expect(offersPctRomTag("Back Squat")).toBe(true);
+    expect(offersPctRomTag("")).toBe(false);
   });
-  it("shows the %-ROM pill inline only for kicks among handstand skills", () => {
+  it("shows the %-ROM pill for all lifts except HSPU (cm rom dim)", () => {
     expect(showsPctRomPill("Handstand kicks", "HANDSTAND")).toBe(true);
-    expect(showsPctRomPill("Handstand walk", "HANDSTAND")).toBe(false);
-    expect(showsPctRomPill("Handstand Push Ups", "HSPU")).toBe(false); // cm dim instead
+    expect(showsPctRomPill("Handstand walk", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand Push Ups", "HSPU")).toBe(false);
+    expect(showsPctRomPill("Push Up", "PUSHUP")).toBe(true);
   });
 });
 
