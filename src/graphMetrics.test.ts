@@ -32,6 +32,8 @@ describe("graph metric registry (TASK 26)", () => {
     const e = graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
     expect(e.length).toBe(2);
     expect(e[0]!.x).toBeLessThan(e[1]!.x); // sorted by date ascending
+    expect(e[0]!.lo).toBe(100); // weight used — stem bottom for the 1RM bubble
+    expect(e[0]!.y).toBeGreaterThan(e[0]!.lo!);
     const vol = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
     expect(vol.map((p) => p.y)).toEqual([300, 450]); // 100×3, 90×5
     expect(graphMetric("reps")!.compute!(recs, DEFAULT_GRAPH_CONFIG).map((p) => p.y)).toEqual([3, 5]);
