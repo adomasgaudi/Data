@@ -45,6 +45,13 @@ const styleSubs = new Set<() => void>();
 function setFaintLines(on: boolean): void { if (on === faintLines) return; faintLines = on; try { localStorage.setItem(FAINT_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
 function setDataTags(on: boolean): void { if (on === dataTags) return; dataTags = on; try { localStorage.setItem(TAGS_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
 
+/** Dedup key for on-chart exercise names — one label per lift, not per metric series. */
+function seriesLabelKey(name: string): string {
+  const parts = name.split(" · ");
+  if (parts.length >= 3) return parts[1]!; // Athlete · Exercise · Type
+  return parts[0]!;
+}
+
 /** Blend a #rrggbb colour toward its own grey (luma) by `amt` (0..1) → #rrggbb. */
 function grayify(hex: string, amt: number): string {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
@@ -883,8 +890,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // for legibility over a busy chart; flips to the left near the right edge.
       // Tag annotation: find this SCATTER series' DENSEST cluster of points (where
       // it's most concentrated, not a random end) and mark it with a brace + name.
-      if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12 && !tagged.has(s.name)) {
-        tagged.add(s.name);
+      if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12) {
+        const lbl = seriesLabelKey(s.name);
+        if (!tagged.has(lbl)) {
+        tagged.add(lbl);
         const px = s.points
           .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
           .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
@@ -900,8 +909,6 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           // Skip if a cluster was already tagged right here (don't stack labels).
           if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
             tagSpots.push(best);
-            const parts = s.name.split(" · ");
-            const lbl = parts.length >= 3 ? parts[1]! : parts[0]!; // the exercise segment
             const col = grayify(s.color, 0.12); // keep most of the athlete hue
             const right = best.x < W - M.r - 56;
             const lx = best.x + (right ? 16 : -16);
@@ -913,9 +920,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             );
           }
         }
+        }
       }
-      if (cfg.directLabels && (s.type === "scatter" || s.type === "line") && s.points.length) {
-        const label = s.name.split(" · ")[0]!;
+      // Floating name at the series end — only when ⟨⟩ line-tags are OFF (they name the
+      // densest cluster instead; both at once duplicated every lift — owner screenshot).
+      if (cfg.directLabels && !wantTags && (s.type === "scatter" || s.type === "line") && s.points.length) {
+        const label = seriesLabelKey(s.name);
         if (!labeled.has(label)) {
           const last = s.points[s.points.length - 1]!;
           const cx = xPix(last.x), cy = ymap(last.y ?? 0);
