@@ -20424,13 +20424,15 @@ function addmSettingsPanelInner(ex: string): string {
       : "")
   );
 }
-/** The DEFAULTS row above passive tags — machine / counterweight / unilateral / machine wt. */
+/** The DEFAULTS row above passive tags — machine / counterweight / unilateral / machine wt.
+ * Collapsed by default (owner: rarely changed); tap "defaults" to expand. */
 function addmDefaultTagsHtml(ex: string): string {
   if (!ex) return "";
   return (
-    `<div class="addm-default-tags" data-defex="${escapeHtml(ex)}" aria-label="Exercise defaults">` +
-    `<div class="addm-default-grp"><span class="addm-default-lbl muted">defaults</span>` +
-    `<div class="addm-default-pills">${addmSettingsPanelInner(ex)}</div></div></div>`
+    `<details class="addm-default-tags" data-defex="${escapeHtml(ex)}" aria-label="Exercise defaults">` +
+    `<summary class="addm-default-sum"><span class="addm-default-lbl muted">defaults</span></summary>` +
+    `<div class="addm-default-pills">${addmSettingsPanelInner(ex)}</div>` +
+    `</details>`
   );
 }
 /** Re-derive the open add-modal's default-tags row from the live exercise. */
@@ -20439,7 +20441,9 @@ function refreshAddmSettings(): void {
   const slot = addModalEl?.querySelector<HTMLElement>(".addm-default-tags-slot");
   if (!form || !slot) return;
   const ex = addmCogEx(form);
+  const wasOpen = slot.querySelector<HTMLDetailsElement>("details.addm-default-tags")?.open ?? false;
   slot.innerHTML = addmDefaultTagsHtml(ex);
+  if (wasOpen) slot.querySelector<HTMLDetailsElement>("details.addm-default-tags")?.setAttribute("open", "");
 }
 /** Re-derive the open add-modal's cog exercise (the typed new-lift name, else the fixed one). */
 function addmCogEx(form: HTMLElement): string {

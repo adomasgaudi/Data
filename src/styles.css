@@ -3056,13 +3056,28 @@ sup.wr-bw { font-size: 0.85em; }
 .addm-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem; }
 .addm-title { font-size: 1rem; font-weight: 700; flex: 1 1 auto; }
 .addm-x { font-size: 1.35rem; line-height: 1; cursor: pointer; background: none; border: none; color: var(--muted); padding: 0 6px; }
-/* Exercise DEFAULTS row — machine / counterweight / unilateral / machine wt (above passive tags). */
+/* Exercise DEFAULTS — machine / counterweight / unilateral / machine wt (above passive tags).
+   Collapsed by default; tap the "defaults" row to expand (owner: rarely changed). */
 .addm-default-tags-slot { min-width: 0; max-width: 100%; }
-.addm-default-tags { display: flex; flex-direction: column; gap: 0.25rem; margin: 0.15rem 0 0.25rem 0.35rem; padding: 0 0.6rem 0.35rem 0; border-bottom: 1px solid var(--line); min-width: 0; max-width: 100%; }
-.addm-default-tags:empty { display: none; }
-.addm-default-grp { display: grid; grid-template-columns: 2.6rem minmax(0, 1fr); align-items: center; gap: 0.4rem; min-width: 0; max-width: 100%; }
-.addm-default-lbl { width: 2.6rem; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
-.addm-default-pills { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; min-width: 0; }
+.addm-default-tags-slot:empty { display: none; }
+.addm-default-tags {
+  margin: 0.15rem 0 0.25rem 0.35rem; padding: 0 0.6rem 0.35rem 0;
+  border-bottom: 1px solid var(--line); min-width: 0; max-width: 100%;
+}
+.addm-default-sum {
+  cursor: pointer; list-style: none; user-select: none;
+  display: flex; align-items: center; gap: 0.4rem; min-width: 0;
+  padding: 2px 0; font-size: 0.82rem;
+}
+.addm-default-sum::-webkit-details-marker { display: none; }
+.addm-default-sum::after { content: "▸"; margin-left: auto; color: var(--muted); font-size: var(--fs-xs); flex: 0 0 auto; }
+.addm-default-tags[open] > .addm-default-sum::after { content: "▾"; }
+.addm-default-tags[open] > .addm-default-sum .addm-default-lbl { color: var(--accent); }
+.addm-default-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.addm-default-pills {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem;
+  min-width: 0; padding: 0.35rem 0 0.1rem 0;
+}
 /* TAG palette above the sets: a ＋ for EVERY tag the exercise can carry (owner: "a list of all
    the tags above the sets"). A ＋ promotes the tag to a pill on every set line; once on it shows
    ✓ and removes on a second tap. Many tags now → ONE horizontally-scrolling row (rule #cram),
