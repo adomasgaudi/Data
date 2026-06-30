@@ -104,6 +104,64 @@ export function nuzzoWeightForReps(oneRepMax: number | null, reps: number | null
 }
 
 /**
+ * The ADDED weight (plate, or −assistance) you could lift for `reps` reps, given your
+ * added-weight 1RM and the bodyweight SHARE folded into the lift (coeff × bodyweight).
+ *
+ * The Nuzzo %-of-1RM relationship holds on the EFFECTIVE load (added + body share), so:
+ *   effective(reps) = (added1RM + bodyShare) × pct(reps)/100
+ *   added(reps)     = effective(reps) − bodyShare
+ * The result goes NEGATIVE once the effective load drops below the body share — i.e. the
+ * rep range where you'd need ASSISTANCE (high-rep pull-ups). For a bar-only lift
+ * (bodyShare = 0) it reduces to nuzzoWeightForReps. Null on missing/degenerate input.
+ */
+export function nuzzoAddedWeightForReps(
+  added1RM: number | null,
+  bodyShare: number,
+  reps: number | null,
+): number | null {
+  if (added1RM === null || reps === null || !Number.isFinite(bodyShare)) return null;
+  const eff = nuzzoWeightForReps(added1RM + bodyShare, reps);
+  return eff === null ? null : eff - bodyShare;
+}
+
+/** The heaviest weight logged at each (rounded) rep count, 1..maxReps — the lifter's
+ * real rep-maxes. These are the points that, plotted as %1RM vs reps, should sit ON
+ * the Nuzzo curve when the assumed 1RM is right (the card's interactive fit). The cap
+ * matches the Nuzzo curve's drawn range (~60 reps / 15% of 1RM) so high-rep sets — a
+ * 22kg×30 — still plot instead of vanishing (PB-30: "I don't see the 30-rep dots"). */
+export function nuzzoRepMaxes(
+  sets: ReadonlyArray<{ weight: number | null; reps: number | null }>,
+  maxReps = 60,
+): { reps: number; weight: number }[] {
+  const best = new Map<number, number>();
+  for (const s of sets) {
+    const w = s.weight, r = s.reps;
+    if (w == null || r == null || !(w > 0) || !(r >= 1)) continue;
+    const rr = Math.round(r);
+    if (rr < 1 || rr > maxReps) continue;
+    best.set(rr, Math.max(best.get(rr) ?? 0, w));
+  }
+  return [...best.entries()].map(([reps, weight]) => ({ reps, weight })).sort((a, b) => a.reps - b.reps);
+}
+
+/** The 1RM that best fits the rep-max points to the Nuzzo %1RM curve, in closed form.
+ * Minimising Σ(100·w/R − pct(reps))² over R gives R = Σ(100w)² / Σ(pct·100w). Null
+ * when there are no usable points. This is the "snap-to-best-fit" the card offers. */
+export function bestFitNuzzo1RM(
+  repMaxes: ReadonlyArray<{ reps: number; weight: number }>,
+): number | null {
+  let num = 0, den = 0;
+  for (const { reps, weight } of repMaxes) {
+    const a = 100 * weight;
+    const t = benchPctForReps(reps);
+    num += a * a;
+    den += t * a;
+  }
+  return den > 0 ? num / den : null;
+}
+
+
+/**
  * Predicted bench reps to failure at a given load, given your 1RM (Nuzzo curve):
  * read the curve at (weight/1RM)×100. At or above the 1RM it's a single.
  */
@@ -285,6 +343,8 @@ export const STRENGTH_DECAY = {
   stabilityGrowth: 1.8, // each session makes the lift this much more durable
   maxStability: 90, // modest cap — trained lifts fade slower, but still clearly
   floor: 0.5, // never decays below half the peak (muscle memory)
+  maxGrowthFraction: 0.08, // a single session can't lift the level beyond 8% above the all-time peak
+  calibrationThreshold: 0.88, // if a returning set is ≥88% of the previous level, the gap ≈ maintained
 } as const;
 
 /**
@@ -303,11 +363,89 @@ export function strengthRetention(
   return Math.max(floor, 1 - loss);
 }
 
+// ---- Adjustable strength-decay model (4 complexity levels) ------------------
+// The owner can dial the strength-fade curve in the graph Options to SEE the model on
+// their data and check it. Four levels, simplest → fullest:
+//   1 LINEAR — flat for `graceDays`, then lose `linearLossPerDay` of the peak each day.
+//   2 LOG    — flat, then the logarithmic decline at a FIXED durability `stabilityDays`.
+//   3 FULL   — the log decline PLUS durability that grows with training, the RIR-confidence
+//              blend, the per-session growth cap and gap calibration.
+//   4 PHASES — three training PHASES by hard-set count (beginner → intermediate → advanced),
+//              each with its own GROWTH PACE (how fast the line accepts upward jumps): the
+//              beginner phase rises fast & chaotic, the advanced phase barely moves. No cap on
+//              gains except the world record. Phase 1 trusts the (user / assumed) RIR fully.
+// Every level shares `graceDays` + `floor`. retentionWith() handles 1 (linear) vs 2/3/4 (log);
+// the per-session guards differ by level inside decayedStrengthSeries.
+export type DecayLevel = 1 | 2 | 3 | 4;
+export interface DecayParams {
+  level: DecayLevel;
+  graceDays: number;            // all: days of full strength after a session
+  linearLossPerDay: number;     // L1: fraction of the peak lost per day past the grace
+  lossPerLog: number;           // L2/L3/L4: loss per ln-unit of (days past grace ÷ S)
+  stabilityDays: number;        // L2/L4 fixed durability / L3 base durability (days)
+  stabilityGrowth: number;      // L3: durability ×factor each session
+  maxStability: number;         // L3: durability cap (days)
+  floor: number;                // all: never below this fraction of the peak (muscle memory)
+  maxGrowthFraction: number;    // L3: one session can't raise the level beyond this above the peak
+  calibrationThreshold: number; // L3: a returning set ≥ this × the prior level "maintained" the gap
+  // ---- L4 PHASES ----
+  phase1EndSets: number;        // hard-set count ending the beginner phase (≈ 10)
+  phase2EndSets: number;        // hard-set count ending the intermediate phase (≈ 300)
+  phase1Pace: number;           // 0..1 fraction of an upward jump accepted per session (beginner — fast)
+  phase2Pace: number;           // intermediate — moderate
+  phase3Pace: number;           // advanced — slow
+  phase1RirUpper: number;       // assumed RIR for an un-graded UPPER-body set in phase 1
+  phase1RirLower: number;       // assumed RIR for legs / lower back / erectors in phase 1
+}
+/** Defaults = the shipped FULL model (level 3), so an un-touched decay matches before. */
+export const DEFAULT_DECAY_PARAMS: DecayParams = {
+  level: 3,
+  graceDays: STRENGTH_DECAY.graceDays,
+  linearLossPerDay: 0.01, // 1%/day after the grace — the level-1 starting point
+  lossPerLog: STRENGTH_DECAY.lossPerLog,
+  stabilityDays: STRENGTH_DECAY.baseStability,
+  stabilityGrowth: STRENGTH_DECAY.stabilityGrowth,
+  maxStability: STRENGTH_DECAY.maxStability,
+  floor: STRENGTH_DECAY.floor,
+  maxGrowthFraction: STRENGTH_DECAY.maxGrowthFraction,
+  calibrationThreshold: STRENGTH_DECAY.calibrationThreshold,
+  phase1EndSets: 10,
+  phase2EndSets: 300,
+  phase1Pace: 1,
+  phase2Pace: 0.5,
+  phase3Pace: 0.25,
+  phase1RirUpper: 3,
+  phase1RirLower: 6,
+};
+/** Retention under a chosen model: linear (level 1) or logarithmic (level 2/3/4). Flat
+ * through the grace, floored. `stabilityDays` is passed in so the series can grow it. */
+export function retentionWith(daysSinceTrained: number, stabilityDays: number, params: DecayParams): number {
+  const { graceDays, floor } = params;
+  if (!Number.isFinite(daysSinceTrained) || daysSinceTrained <= graceDays) return 1;
+  const t = daysSinceTrained - graceDays;
+  const loss = params.level === 1
+    ? params.linearLossPerDay * t
+    : params.lossPerLog * Math.log(1 + t / Math.max(1, stabilityDays));
+  return Math.max(floor, 1 - loss);
+}
+
 /** Each training session consolidates the lift: durability (stability) grows by
  * the growth factor, capped at maxStability. So every repetition makes the future
  * decay weaker — the more you've trained a lift, the slower it fades. */
 export function grownStability(stabilityDays: number): number {
   return Math.min(STRENGTH_DECAY.maxStability, stabilityDays * STRENGTH_DECAY.stabilityGrowth);
+}
+
+/**
+ * Fraction of a set's e1RM estimate to trust, based on reported RIR.
+ * Near-failure sets (RIR 0–1) are taken at face value (1.0). High-RIR sets
+ * are blended with the current level because the Epley formula extrapolates
+ * from fewer reps, making the e1RM noisier the more reps in reserve there are.
+ * Floor at 0.2 so even a very light set contributes some evidence.
+ */
+export function rirConfidence(rir: number | null | undefined): number {
+  if (rir == null || !Number.isFinite(rir) || rir < 0) return 1;
+  return Math.max(0.2, 1 - rir / 10);
 }
 
 /** Whole days from ISO date `from` to ISO date `to` (negative if `to` precedes

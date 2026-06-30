@@ -51,11 +51,15 @@ One priority = the pattern, with a chosen spearhead variant carrying the intensi
 - [x] 4. Dropdown = one horizontally-scrolling row of chips (✦ marks a pattern, inset ring = already a focus, each shows ~/wk); tap opens the lift. Open state remembered (`prioExpanded`). — b.2.8.324
 - [x] 5. Build + 501 tests pass; data/symbols only (no new translatable strings). — b.2.8.324
 
-### Phase 2 — Intensity vs Volume facets (schema change) — Path B
-- [ ] 6. Extend the priority record: optional `intensity` (a spearhead variant + optional 1RM target) and `volume` (weekly sets across the pattern). Migrate existing entries losslessly.
-- [ ] 7. When the user adds BOTH a lift and its pattern (or a pattern, then a member), offer "merge into one focus (spearhead + volume)".
-- [ ] 8. Row UI: the two facets as compact controls (a PR target on the spearhead + the weekly-volume stepper), per #cram.
-- [ ] 9. Invariant test: a set counts once; merging never changes total tracked volume. Ship.
+### Phase 2 — GOALS (the D2 "lets add goals too"), NOT the merge
+> The Path-B "merge a lift + its pattern into one entry" was SUPERSEDED by the owner's
+> Phase-1 feedback: keep DL and DL pattern as SEPARATE flat rows (relations via the
+> dropdown). So Phase 2 = the still-wanted facet: an optional 1RM GOAL per priority
+> (the max-effort level flag stays; the goal is the kg you chase). Merge dropped.
+- [x] 6. Schema: `PriorityEntry.goalKg?` — optional target 1RM (kg). Backward-compatible. — b.2.8.328
+- [x] 7. `bestE1rmFor(user, ex)` — the athlete's current best 1RM (aggregates members for a synthetic). — b.2.8.328
+- [x] 8. Row detail (the ▸ caret, now always present): a "🎯 Goal" kg input + "now ~Xkg · N%" progress, above the related-lifts dropdown. Saved per lift. — b.2.8.328
+- [x] 9. Build + 501 tests pass; LT added for the goal labels. — b.2.8.328
 
 ### Phase 3 — Reconcile the Live "Train today" plan
 - [ ] 10. Treat a merged priority as ONE item in Train-today; doing the spearhead satisfies both facets; show per-facet progress.

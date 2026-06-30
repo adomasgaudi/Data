@@ -17,6 +17,7 @@ import {
   type VariationConfig,
   type TokenDef,
 } from "./variationConfig";
+import { interpCmFactor } from "./handstandLean";
 
 /** One flag explaining something the owner may want to review. */
 export interface ResolveFlag {
@@ -146,7 +147,11 @@ export function resolveNote(
   let scalar = 1;
   for (const dim of Object.keys(fam.dims)) {
     const level = vec[dim];
-    const factor = level !== undefined ? fam.dims[dim]![level] : undefined;
+    // Exact table key first; for a CONTINUOUS cm dim (rom) an off-table value like
+    // "+32cm" interpolates from the cm anchors instead of flagging bad_level.
+    const factor = level !== undefined
+      ? (fam.dims[dim]![level] ?? ((dim === "rom" || dim === "floorHeight") ? interpCmFactor(fam.dims[dim]!, level) : undefined))
+      : undefined;
     if (typeof factor === "number") scalar *= factor;
     else flags.push({ type: "bad_level", detail: `${dim}=${level}` });
   }

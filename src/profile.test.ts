@@ -348,6 +348,12 @@ describe("muscleGroup (fine split)", () => {
     expect(muscleGroup("Bench Press")).toBe("Chest");
     expect(muscleGroup("Seated Shoulder Press")).toBe("Shoulders");
   });
+  it("the Lever wrist/forearm rotations are Forearms", () => {
+    expect(muscleGroup("Lever Pronation")).toBe("Forearms");
+    expect(muscleGroup("Lever Supination")).toBe("Forearms");
+    expect(muscleGroup("Lever Abduction")).toBe("Forearms");
+    expect(muscleGroup("Lever Adduction")).toBe("Forearms");
+  });
   it("splits the back into lower / upper / lats (pulls and rows are one Lats group)", () => {
     expect(muscleGroup("Bent Over Row")).toBe("Lats");
     expect(muscleGroup("Seated Cable Row")).toBe("Lats");
@@ -506,6 +512,14 @@ describe("realPullupWeight", () => {
     expect(isAssistablePullup("Pullover")).toBe(false);
     expect(isAssistablePullup("Bench Press")).toBe(false);
   });
+  it("treats a bare Pull / Chin (the combined pull-up + chin-up lift) as assistable", () => {
+    expect(isAssistablePullup("Pull")).toBe(true);
+    expect(isAssistablePullup("Chin")).toBe(true);
+    expect(isAssistablePullup("Pulls")).toBe(true);
+    // …but still excludes the cable "pull*" lifts that merely contain "pull".
+    expect(isAssistablePullup("Face Pull")).toBe(false);
+    expect(isAssistablePullup("Pulldown")).toBe(false);
+  });
 
   it("halves a negative (machine-assisted) pull-up weight", () => {
     expect(realPullupWeight("Pull Ups", -30)).toBe(-15);
@@ -538,5 +552,12 @@ describe("assistedRealWeight (per-exercise override)", () => {
     expect(assistedRealWeight(20, true)).toBe(20);
     expect(assistedRealWeight(0, true)).toBe(0);
     expect(assistedRealWeight(null, true)).toBeNull();
+  });
+  it("divides by a custom machine multiplier (default 2, invalid falls back to 2)", () => {
+    expect(assistedRealWeight(-20, true, 4)).toBe(-5);
+    expect(assistedRealWeight(-20, true, 2.5)).toBe(-8);
+    expect(assistedRealWeight(-20, true)).toBe(-10); // default
+    expect(assistedRealWeight(-20, true, 0)).toBe(-10); // 0 → fall back to 2
+    expect(assistedRealWeight(-20, false, 4)).toBe(-20); // not assisted → unchanged
   });
 });

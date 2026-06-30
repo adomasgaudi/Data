@@ -12,6 +12,105 @@ committed `CAT-n` is derived at commit time (rule 8). Risky deletions go via the
 attic/warehouse tiers (rule 10). Keep this file updated — mark items done, add new
 ones, re-grade as the code changes.
 
+## 🎨 UI consistency (UIC — see docs/ui-consistency-audit.md)
+- 🟠 **CLN-VEC-LABELS** [main.ts variant editor] (SP:3) — The per-set "Change variant"
+  vector editor (`vecSelect`, ~main.ts:13734) still keeps its OWN level-label maps
+  (`SUPPORT_LBL`, `SHD_LBL`, `GRIP_LBL`, `HT_LBL`) instead of the shared `AF_LEVEL_LBL`
+  SSOT (rule 60). They match for support today, but `shoulderDist` already drifts
+  ("0cm (wall)"/"blue 6cm" vs the picker's "none"/"blue"+hint), and `ladderGrip`/
+  `ladderH` aren't in the shared map at all. Fold these dims into `AF_LEVEL_LBL` +
+  route `vecSelect` through `afLevelText`/`afLevelHint`, keeping the ×factor display.
+  Found during the WO-233..235 variation-UI prune (tag + add-preview already unified
+  on `variationChipsFromVec`; this editor is the remaining sibling).
+- 🟠 **CLN-DEAD-EXPORTS** [several modules] (SP:2) — Dead-code sweep (owner: "always ~10×
+  more lines added than removed", rule 61). `noUnusedLocals` already guarantees no unused
+  LOCALS, so the dead code is unused EXPORTS. Confirmed unreferenced across all src (incl
+  tests + scripts + html), READY to delete (typecheck/tests are the safety net):
+  **safe / superseded** — `DEFAULT_BW_COEFF`, `JOINT_MOVEMENTS`+`JOINT_KEYWORDS`+`jointMovements`
+  (the whole unused joint-movement taxonomy, ~38 lines, `profile.ts`); `GRAPH_DASH_KEY` (v1,
+  superseded by `GRAPH_DASH_KEY_V2`, `graphDash.ts`); `loadHistoryDashboard`+`saveHistoryDashboard`
+  +`HISTORY_DASH_KEY` (v1, superseded by the `…For` per-athlete v2, `historyDash.ts`);
+  `costForSp`+`COST_PER_SP_EUR` (superseded by the model-aware `costForNode`/`EUR_PER_WEIGHTED_SP`,
+  `changelog.ts`). **Verify-before-cut → VERDICT: KEEP (verified, not rot).** `fetchFromSupabase`
+  (+ its only consumer `fetchSets` + `dbSetToRawRow`, `dataSource.ts`), `fetchAllRows`
+  (`strengthlevel.ts`) and `isAdmin`/`ADMIN_EMAIL` (`supabase.ts`) are DORMANT INFRASTRUCTURE
+  for the stated multi-user/cloud goal (rule 41 "mirroring the rest is the goal") + the
+  website-side scraper that's deliberately not wired YET — deleting them would erase progress,
+  not trim rot. Leave them unless the owner abandons the cloud/scraper plans. The CLEARLY-DEAD
+  set above was removed in CLN-1 (b.2.9.209, −70 lines); sweep closed.
+  NOTE: a naive CSS-class sweep flagged ~288 "unused" classes but most are
+  FALSE POSITIVES from dynamically-built names (e.g. `cl-model--${…}`, `eff-${…}`) — a CSS
+  prune needs per-class verification against template strings, not bulk grep.
+- ✅ **UIC-DEAD-CSS (DONE)** [CSS] (SP:0.5) — Deleted the unused bottom-nav classes
+  `.subtabs` / `.subtab` / `.subtab-ico` (+ `:hover`/`.is-active`) in `src/styles.css`:
+  the bottom tab bar was replaced by the `.ex-tab` tabs, so these were dead. The retired
+  `.tab`/`.tabs` top-bar CSS is left (it's still the `is-active` source). Plus added a
+  Stop-hook guard (`scripts/rules-check.cjs`) that flags any catalogued class missing
+  from CSS, so this drift class can't recur. Found during the UIC-7 catalogue-drift audit.
+
+## 🔁 Duplicated / redundant UI (DEDUP — #prune sweep, Euclid)
+
+Owner #prune on "there shouldn't be two separate set-editing views" + "don't show the
+×N multiplier on the collapsed view." The sweep (Explore agent) mapped the whole class:
+
+- ✅ **DEDUP-1 (DONE, b.2.9.130)** `[history/collapsed]` (SP:1) — **Redundant ×N on the
+  collapsed set line.** `setDisplay()` (`src/main.ts` ~7574) showed `wo-scale` ×N on every
+  scaled set even when a variation CHIP (B2W/LEAN…) already conveyed it. Now ×N shows ONLY
+  when CUSTOM: a manual per-set `Scale ×` override, or no chip at all (then ×N is the only
+  indicator). The expanded row (`set-scale` in `setRowsHtml`) KEEPS ×N — it's the detail view.
+- ✅ **DEDUP-2 (DONE, b.2.9.132)** `[set-editor]` (SP:13) — **TWO parallel per-set editors → ONE.**
+  The old floating "scale editor" popover (Support / Band / Depth×Lean 2D pad / Tempo / Hands /
+  Range) now renders INLINE inside the set-edit card. `renderScaleEditor()` gained an in-card
+  host mode (`scaleEditInCard`): when the card opens, `renderCardVarModel()` sets `scaleEditState`
+  off the container's `data-scaleedit-*` and renders the model BODY (level + `notePickerHtml`)
+  into `.set-edit-varmodel`; the card supplies the frame (✕, machine, not-comparable). `afterModelPick()`
+  keeps the in-card model open on a pick (the standalone popover still closes); the dirty sync is
+  deferred a frame on card-close (avoids detaching the row mid-toggle). The EXPANDED row's ×N chip
+  now falls through to open the card (one editor). The standalone popover stays ONLY for the
+  collapsed `wo-set-variant` chip (no card there). `refreshPoseViz` is a no-op so the pad is static
+  HTML + delegated handlers — they read `scaleEditState` and work in either host.
+- 🟢 **DEDUP-3 (note, mostly moot)** `[set-editor]` — the card's own `set-edit-nc` (not-comparable)
+  + the popover `scale-edit-nc` are no longer both visible at once (the in-card model omits the
+  popover's nc/mach, the card supplies them). Standalone popover still has its own for the
+  collapsed path. Nothing urgent.
+
+## 🧩 One-component-not-two (rule 65 — found in the 2026-06-22 app-wide scan)
+
+- 🟠 **DEDUP-4** `[main.ts floating pickers]` (SP:5) — **Four near-identical floating-picker
+  functions → ONE factory.** `openRomPicker` / `openLeanPicker` / `openInclinePicker` /
+  `openCustomMultPicker` (plus their `close…` + `…PickerClose` state) all share the exact same
+  skeleton: create div, `place()` (clamp into view), `commit()` (write the pill's dataset),
+  `render()` (rebuild innerHTML), click/input/Esc + outside-tap handlers, append, deferred
+  listener attach. They differ ONLY in the popover's inner HTML, which dataset keys they
+  read/write, and the commit logic. Parameterise as `openFloatingPicker(pill, config)` where
+  config = { className, initialState, render(state), onClick, onInput, commit }. HIGH confidence;
+  pure refactor (no behaviour change), good test-by-build candidate. Biggest line-count win.
+- ✅ **DEDUP-5 (mostly DONE, b.2.9.272)** `[set-editor / add-modal]` — **The old popover is already
+  UNREACHABLE — verified all three entry points are dead.** `.wo-set-variant` is no longer emitted
+  anywhere; the `act:"variant"` set-menu action is no longer emitted (→ `openVariantFromAttrs`
+  dead); and the only live editable chip (`.set-scale.is-editable`) is rendered inside `tr.set-main`
+  (setRowsHtml), where `toggleScaleEditor` returns false → it falls through to the unified
+  `openAddModal` edit card. So the user never reaches a second editor (rule 65 goal met). Trimmed
+  the dead entry points: removed the `variant` handleSetAct branch, `openVariantFromAttrs`, and
+  `.wo-set-variant` from the `toggleScaleEditor` selector. **Remainder → DEDUP-5b** (below).
+- 🟢 **DEDUP-5b** `[set-editor]` (SP:5) — **Remove the now-unreachable popover INTERNALS.**
+  `openScaleEditor` + the `else` (popover) branch of `renderScaleEditor` + the `.scale-edit-close`
+  handling are dead at runtime but still REFERENCED (so tsc doesn't flag them), and are ENTANGLED
+  with the in-card model that legitimately shares `renderScaleEditor`/`closeScaleEditor`/the
+  variation handlers. Untangling needs care (and on-device verification of the in-card editor),
+  so it's deferred from DEDUP-5. Low priority — it's invisible dead code, not a user-facing dup.
+- 🟡 **DEDUP-6** `[set-editor / add-modal]` (SP:8) — **Two render paths for the SAME variation
+  picker.** The per-set card builds its dim dropdowns / ROM·lean·band pills via
+  `renderCardVarModel` → `renderScaleEditor` (driven by the `scaleEditState` global, re-renders on
+  every change), while `openAddModal` builds the same controls inline as HTML via `afLine` and
+  reads them at save. The chips/labels are already unified (`variationChipsFromVec`/`afLevelText`,
+  rule 60), but the FORM markup is emitted twice. Extract one `variationFormHtml(mode)` both call.
+  Medium confidence (real but larger); do AFTER DEDUP-5 (which may absorb it).
+- ℹ️ **Not duplication (excluded):** `renderSAnalysis` vs `renderWorkoutAnalysis` (rule 12, S-ANL
+  stays its own), the Curve/Volume/Map charts (different visualizations), and the generic
+  `open*/close*` menu pairs (`openLiftMenu`, `openHistTabMenu`… — same close idiom, genuinely
+  different content). The leaderboard vs compare charts/tables are different data shapes, not twins.
+
 ## ✅ Done sweeps (recent)
 
 - **Synthetic-lift inheritance prune (DONE)** `[exercises/grouping]` — synthetic
@@ -83,7 +182,7 @@ Everything else is optional. A cleanup backlog regenerates itself — don't grin
 
 ## 🟡 Mid — dedup & helpers
 - 🟠 **TOOL-1** [Build] (SP:3) — Add ESLint + Prettier (machine guardrail for AI-written code).
-- 🟠 **DUP-1** [Data] (SP:2) — Collapse triplicated leg/chest/back keyword lists in `profile.ts`.
+- ✅ **DUP-1** [Data] (SP:2) — DONE (#co-work): extracted the duplicated leg list (`LEG_KW_ALL` / `LEG_KW_BIG3`) and chest list (`CHEST_KW`) in `profile.ts` to module constants — the verbatim copies at the category & muscle/discipline guessers now share one source (back lists genuinely differ, left inline). 501 tests unchanged.
 - 🟠 **DUP-2** [Code] (SP:5) — Auto-escaping `` html`` `` template to kill 227 manual `escapeHtml` calls.
 - 🟢 **CSS-1** [CSS] (SP:2) — CSS-token consolidation: `--shadow-menu`, `.chip` base, one `:focus-visible`, route reds through `--danger`/`--warn`. *(merged the old CSS-1+CSS-2.)*
 - ✅ Pure-helper extraction + `storage` dedup — DONE (REF rounds, b.2.6.50).
@@ -92,7 +191,7 @@ Everything else is optional. A cleanup backlog regenerates itself — don't grin
 - 🔴 **ARCH-1** [Architecture] (SP:30) — Split `main.ts` (jsdom net → `let`→state-object → ~7 feature modules). The one big-ticket item that genuinely matters: you edit with AIs and a 10k-line file blocks that. *(IN PROGRESS: `appState` container + 2 state clusters migrated — b.2.6.60/61, ~11/95 globals on `S`. Paused while `main.ts` is hot with concurrent edits, per #co-work.)*
 - 🟠 **ARCH-2** [Architecture] (SP:8) — Test + move untested compute (strength-fade, world-record, difficulty maths) into tested modules.
 - 🟠 **DEL-1** [Code] (SP:3) — Warehouse/delete speculative scaffolding (`DISSOLVABLE_TAGS`, empty `EXERCISE_GROUPS`, unused identity model, 8 dead exports).
-- 🟠 **DOC-1** [Docs] (SP:2) — Reconcile docs that actively MISLEAD AIs (README/CLAUDE "Chart.js" gone, stale Netlify steps).
+- ✅ **DOC-1** [Docs] (SP:2) — DONE (b.2.9.x): fixed CLAUDE.md's stack line ("+ Chart.js" → in-house SVG engine `svgChart.ts`); the only genuinely misleading claim. README's Netlify steps verified ACCURATE (the site runs on Netlify — `netlify.toml`, `coloseum.netlify.app`), and README has no Chart.js. Other "Chart.js" mentions in src/changelog are correct (they describe the *replacement* engine or are historical removal notes).
 - 🟢 **ARCH-3** [Architecture] (SP:5) — Merge over-split clusters (`exercise*` + `profile`; `variation*`) — the over-split is mild.
 
 ## 🔵 CEO / ROI — a priority LENS, not a task bucket
@@ -118,6 +217,11 @@ shed via CLN-1; duplicate graphs handled via CUT-2.
 
 ## 🧹 Prune sweeps (single-class hunts — see CLAUDE.md `#prune`)
 Each `#prune` run records its finds here so the sweep survives across sessions.
+
+### GRAPH-TECH — "a data graph hand-rolled as inline SVG instead of the shared svgChart engine" (owner: "all graphs should use the same tech")
+The class: a chart drawn by bespoke `<svg>`/`<path>` string-building rather than `mountSvgChart` (the one engine behind Analysis / compare / calculator / decay / SP-timeline). Non-graph SVGs (muscle map `body-svg`, instructional sketches `ex-shd-svg`/`ex-pad-scene`, legend glyphs `lift-shape`) are NOT this class — leave them.
+- ✅ **GRAPH-TECH-1** [ExInfo] (b.2.8.x) — the exercise-card **reps→%1RM (Nuzzo)** mini-curve (`nuzzoSvg`, `.nz-*` CSS) → converted to `mountSvgChart` (line curve + study-dot scatter + gold suggested-set dot), mounted via a new `paintExInfo` chokepoint that all 6 card-render paths now share. Dead `.nz-*` CSS removed.
+- 🟠 **GRAPH-TECH-2** [Leaderboard] — the leaderboard bar chart (`lb-svg`, in the leaderboard render) is still hand-rolled inline SVG. It's a CATEGORICAL horizontal-bar ranking (one bar per athlete), not an x/y series, so the time/linear pan-zoom engine doesn't fit it cleanly — converting is a real refactor (the engine would need a categorical-bar mode) or a deliberate "not worth it". Decide before touching; the owner's "all graphs" rule applies, but this one is a different shape.
 
 ### POSE — leftover dead handlers after the 3-D/pose engine was warehoused (b.2.8.187)
 The visual pose editor was warehoused (`warehouse/2026-06-10-pose-3d-engine/`) and its three.js + frames dropped, but the *handlers* that drove it remain in `main.ts` as dead code — they reference `.pose-ctl` / `.pose-scrub` / `.ex-var-pose` / `.pose-photo` containers that are emitted NOWHERE (the driving UI was removed earlier). They compile and never fire.

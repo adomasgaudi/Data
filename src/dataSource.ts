@@ -86,11 +86,13 @@ export async function fetchFromSupabase(): Promise<LoadedData | null> {
   }
 }
 
-/** Raw URL of the live ud.csv on the deploy branch. The site is rebuilt from this
- * same file, but the Refresh-data Action can commit a newer CSV a minute before the
- * rebuild finishes — so fetching it lets the dashboard show fresh numbers sooner. */
+/** Raw URL of the live ud.csv on the DEPLOY branch (opus-4.8 — the authoritative branch
+ * the site is built from). Must match the deploy branch, or the fetched CSV ALWAYS differs
+ * from the bundled one and the "new data" bar shows on every load (it was pointed at the
+ * deprecated SdAlT branch). The Refresh-data Action can commit a newer CSV a minute before
+ * the rebuild finishes — fetching it lets the dashboard show fresh numbers sooner. */
 const GITHUB_CSV_URL =
-  "https://raw.githubusercontent.com/adomasgaudi/Data/claude/strength-training-dashboard-SdAlT/src/data/ud.csv";
+  "https://raw.githubusercontent.com/adomasgaudi/Data/opus-4.8/src/data/ud.csv";
 
 /** Fetch the latest ud.csv from GitHub. Returns the text, or null on any failure
  * (offline, private repo, timeout, non-CSV) so the caller silently keeps the bundled

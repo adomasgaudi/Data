@@ -12,7 +12,7 @@
  * The pure axis maths (calendar gridlines, nice y ticks) live in chartAxis.ts and
  * are unit-tested; this module is the rendering + interaction shell.
  */
-import { timeBands, niceTicks, buildCompactor, type TimeCompactor } from "./chartAxis";
+import { timeBands, timeLevel, niceTicks, buildCompactor, type TimeCompactor } from "./chartAxis";
 
 /* "Compacted time" is a single app-wide preference: flip it on any time chart and
  * every time chart follows, so the axis mode is consistent everywhere. Stored on
@@ -39,11 +39,23 @@ export const setTimeCompact = (on: boolean): void => setCompactPref(on);
  * device; subscribers redraw on change. */
 const FAINT_KEY = "colosseum.faintLines.v1";
 const TAGS_KEY = "colosseum.dataTags.v1";
+const STEM_KEY = "colosseum.e1rmStems.v1";
 let faintLines = (() => { try { return localStorage.getItem(FAINT_KEY) === "1"; } catch { return false; } })();
 let dataTags = (() => { try { return localStorage.getItem(TAGS_KEY) === "1"; } catch { return false; } })();
+/** Thin weight→1RM stems on scatter dots (the 1RM view). Default on; off in Settings. */
+let stemLines = (() => { try { return localStorage.getItem(STEM_KEY) !== "0"; } catch { return true; } })();
 const styleSubs = new Set<() => void>();
 function setFaintLines(on: boolean): void { if (on === faintLines) return; faintLines = on; try { localStorage.setItem(FAINT_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
 function setDataTags(on: boolean): void { if (on === dataTags) return; dataTags = on; try { localStorage.setItem(TAGS_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
+export const getE1rmStems = (): boolean => stemLines;
+export function setE1rmStems(on: boolean): void { if (on === stemLines) return; stemLines = on; try { localStorage.setItem(STEM_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
+
+/** Dedup key for on-chart exercise names — one label per lift, not per metric series. */
+function seriesLabelKey(name: string): string {
+  const parts = name.split(" · ");
+  if (parts.length >= 3) return parts[1]!; // Athlete · Exercise · Type
+  return parts[0]!;
+}
 
 /** Blend a #rrggbb colour toward its own grey (luma) by `amt` (0..1) → #rrggbb. */
 function grayify(hex: string, amt: number): string {
@@ -62,7 +74,7 @@ export type SvgShape = "circle" | "diamond" | "square" | "triangle" | "ring" | "
 export interface SvgPoint {
   x: number;
   y?: number; // line / bars
-  lo?: number; // range bottom
+  lo?: number; // range bottom, or scatter stem bottom (weight used → 1RM bubble)
   hi?: number; // range top
   /** For range bars: split the line into exactly this many dashes (e.g. reps). */
   dashes?: number;
@@ -75,6 +87,9 @@ export interface SvgPoint {
   /** Full per-point detail for the click-to-pin popup, one fact per line (e.g.
    * date, weight×reps, 1RM, RIR, notes). Falls back to value+meta when absent. */
   detail?: string;
+  /** Source exercise this point came from — when set (and cfg.onPointHistory is given)
+   * the pinned popup shows a "→ in history" link that jumps to that exercise. */
+  histEx?: string;
   /** A failed attempt (note contained "fail") — drawn as an ✕ in the series colour. */
   fail?: boolean;
   /** A new record (running-max) set — drawn as a diamond instead of a dot. */
@@ -85,6 +100,12 @@ export interface SvgPoint {
    * none): a combined/comparison lift shapes each member-origin differently, same
    * colour, so the mixed sources are tellable apart. */
   shape?: SvgShape;
+  /** Per-POINT scatter fill-opacity override (0..1). Used to FADE old sets and keep
+   * recent ones solid (recency emphasis). Falls back to the default when absent. */
+  op?: number;
+  /** Per-POINT glow — a soft halo behind the scatter marker, for a VERY recent set so it
+   * "shines" (e.g. logged in the last 2 weeks). */
+  glow?: boolean;
 }
 export interface SvgSeries {
   name: string;
@@ -109,6 +130,12 @@ export interface SvgSeries {
    * projections (e.g. Predicted Strength) whose tail extends past the real data.
    * The axis stays anchored to the logged data and the projection is clipped. */
   noExtendX?: boolean;
+  /** Draw this line dashed even outside "faint" mode — marks a series as a FORECAST
+   * (the projection / Predicted Strength), so it never reads as logged data. */
+  dashed?: boolean;
+  /** Line series only: don't draw the per-point dots (just the connecting line) — for
+   * same-day session connectors where a separate scatter series owns the dots. */
+  noDots?: boolean;
   /** Vertical shift for THIS series only, as a fraction of the plot height
    * (+ = up, − = down). A pure visual reposition — moves the whole series (bars
    * move with their baseline) without changing its values; used to lift the
@@ -118,6 +145,14 @@ export interface SvgSeries {
 export interface SvgChartConfig {
   series: SvgSeries[];
   height?: number;
+  /** Override the left margin (px) — narrow it when the y-tick labels are short (e.g.
+   * 2-digit reps) so the plot fills more width. Outer-label charts only; default 46. */
+  leftMargin?: number;
+  /** Pin the X axis to this exact range on (re)fit, instead of auto-fitting to the data —
+   * used by the reps×weight view so paging 2-week windows (or dragging the fit) keeps a
+   * STABLE frame (the points move within it) instead of re-fitting and jumping. Pass
+   * undefined to clear (PB-8 — set it explicitly per render). */
+  forceXRange?: { min: number; max: number } | undefined;
   /** Force the (left) y-axis to include 0. */
   yBeginAtZero?: boolean;
   /** Pin the left y-axis to this exact range on (re)fit, instead of auto-fitting to
@@ -157,6 +192,10 @@ export interface SvgChartConfig {
   formatTipX?: (x: number) => string;
   /** Draw axis values inside the plot (wider) vs in outer margins. */
   insideLabels?: boolean;
+  /** Axis TITLES (e.g. "weight (kg)" / "reps"). Outer-label charts only; they widen
+   *  the bottom/left margins to make room. Ignored when insideLabels is on. */
+  xTitle?: string;
+  yTitle?: string;
   /** Allow pan/zoom (default true). */
   interactive?: boolean;
   /** "xy" (default) = free 2-D pan/zoom; "x" = horizontal only (y stays put). */
@@ -175,7 +214,43 @@ export interface SvgChartConfig {
   /** Horizontal background bands on the LEFT axis (value zones), e.g. shade the
    * region as you approach a target. Drawn behind everything. */
   yBands?: { from: number; to?: number; fill: string }[] | undefined;
+  /** Filled ribbon(s) between two y-curves over x (left axis), e.g. the "hard sets"
+   * zone under the Nuzzo failure line. Each point gives the band's top & bottom y at
+   * that x; drawn behind the series. An optional label floats inside the band. */
+  areaBands?: { points: { x: number; yTop: number; yBot: number }[]; fill: string; label?: string; labelColor?: string }[] | undefined;
+  /** Vertical background bands on the X axis (value zones), e.g. the 3–6RM / 6–12RM
+   * load zones. Drawn behind the series; an optional label floats at the top. */
+  xBands?: { from: number; to: number; fill: string; label?: string; labelColor?: string }[] | undefined;
+  /** Draggable VERTICAL markers in x (data) space — e.g. the projection fit-window
+   * start/end lines. Each draws a labelled line + grab handle; dragging one calls
+   * onMarkerDrag with its committed x. Inert (no extra interaction) when absent. */
+  xMarkers?: { id: string; x: number; color?: string; label?: string }[] | undefined;
+  /** STATIC vertical reference lines in x (data) space — non-draggable, no grip, thin.
+   * E.g. a "today" marker on a time chart. Skipped when its x falls outside the view. */
+  xRefLines?: { x: number; color?: string; label?: string }[] | undefined;
+  /** Called on release after a marker drag, with the marker id and its new x value. */
+  onMarkerDrag?: ((id: string, x: number) => void) | undefined;
+  /** Draggable HORIZONTAL markers in y (LEFT-axis data) space — e.g. the projection's
+   * ceiling line the strength curve flattens toward. Each draws a labelled line + grab
+   * handle spanning the plot width; dragging one calls onYMarkerDrag with its committed y.
+   * Inert (no extra interaction) when absent. */
+  yMarkers?: { id: string; y: number; color?: string; label?: string }[] | undefined;
+  /** Called on release after a horizontal-marker drag, with the marker id + new y value. */
+  onYMarkerDrag?: ((id: string, y: number) => void) | undefined;
+  /** Restore a previously-saved pan/zoom view ON MOUNT instead of auto-fitting to the
+   * data — lets the dashboard remember each bubble's view across switches / refresh.
+   * Read once at mount (inert on update()); invalid / absent → normal auto-fit. */
+  initialView?: ViewBox | null | undefined;
+  /** Fired (debounced) when the USER pans/zooms — with the new view to persist; fired
+   * with null when the user RE-FITS (double-tap / Fit) so the caller drops the saved
+   * view. NOT fired for programmatic fits (mount / series update / compact toggle). */
+  onViewChange?: ((view: ViewBox | null) => void) | undefined;
+  /** Given a point's `histEx`, jump to that exercise's logged history (the pinned
+   * popup shows a "→ in history" link when this and the point's histEx are set). */
+  onPointHistory?: ((ex: string) => void) | undefined;
 }
+/** The chart's pan/zoom window in DATA space (x = time ms or weight; y = the left axis). */
+export type ViewBox = { xMin: number; xMax: number; yMin: number; yMax: number };
 export interface SvgChart {
   update(cfg: Partial<SvgChartConfig>): void;
 }
@@ -266,7 +341,9 @@ function yExtent(series: SvgSeries[], beginAtZero?: boolean) {
   let yMin = Infinity, yMax = -Infinity;
   for (const s of series) {
     for (const p of s.points) {
-      const ys = s.type === "range" ? [p.lo ?? 0, p.hi ?? 0] : [p.y ?? 0];
+      const ys = s.type === "range" ? [p.lo ?? 0, p.hi ?? 0]
+        : s.type === "scatter" && p.lo != null ? [p.y ?? 0, p.lo]
+        : [p.y ?? 0];
       if (s.type === "bars") ys.push(0);
       for (const y of ys) {
         if (y < yMin) yMin = y;
@@ -357,6 +434,12 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   const tipEl = container.querySelector<HTMLElement>(".svgc-tip")!;
   const clipId = `svgc-clip-${Math.random().toString(36).slice(2, 8)}`;
   const glowId = `svgc-glow-${Math.random().toString(36).slice(2, 8)}`;
+  // Draggable x-markers: their last-drawn pixel x (viewBox units) for hit-testing, and
+  // the in-flight drag. Empty/null unless cfg.xMarkers is set (inert for every other chart).
+  let markerPx: { id: string; px: number }[] = [];
+  // Horizontal (y) markers' last-drawn pixel y, for the ceiling-line drag (mirrors markerPx).
+  let markerPy: { id: string; py: number }[] = [];
+  let mkDrag: { id: string; axis: "x" | "y"; startX: number; startY: number; origPx: number; origPy: number; g: SVGGElement | null; newX: number; newY: number } | null = null;
 
   // View: x + left-y pan/zoom. The right-y scale is fixed to its data range.
   let view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 };
@@ -384,6 +467,29 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   // metric) keeps the current view instead of re-fitting, so adding/removing metrics
   // no longer resets the pan/zoom. Cleared by resetView (fitView / double-tap / mount).
   let userAdjusted = false;
+  // Persist the user's pan/zoom (the dashboard remembers a bubble's view across switches /
+  // refresh). Debounced so a pan/zoom stream writes once it settles, not every frame.
+  let viewCommitTimer = 0;
+  const finiteBox = (v: ViewBox | null | undefined): v is ViewBox =>
+    !!v && [v.xMin, v.xMax, v.yMin, v.yMax].every((n) => Number.isFinite(n)) && v.xMax > v.xMin && v.yMax > v.yMin;
+  const commitView = () => {
+    if (!cfg.onViewChange) return; // opt-in: zero cost for charts that don't persist
+    if (viewCommitTimer) clearTimeout(viewCommitTimer);
+    viewCommitTimer = window.setTimeout(() => {
+      viewCommitTimer = 0;
+      cfg.onViewChange?.({ xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax });
+    }, 250);
+  };
+  // PB-39: persist the pan/zoom IMMEDIATELY when the gesture ENDS (pointer-up), not only on
+  // the 250ms debounce. The dashboard re-mounts the chart on incidental re-renders; a re-mount
+  // landing in the debounce window restored the PREVIOUS saved view (showing the auto-fit)
+  // before the just-finished pan ever committed — so the pan "didn't persist". Flushing on
+  // release saves the new view before any re-mount can read a stale one.
+  const flushView = () => {
+    if (!cfg.onViewChange || !viewCommitTimer) return;
+    clearTimeout(viewCommitTimer); viewCommitTimer = 0;
+    cfg.onViewChange?.({ xMin: view.xMin, xMax: view.xMax, yMin: view.yMin, yMax: view.yMax });
+  };
   let lastTap: { t: number; x: number } | null = null; // for double-tap-to-reset
   // Click-to-pin: every drawn datapoint's pixel box (in SVG user units), rebuilt
   // each draw, so a tap can hit-test the nearest one and pin a sticky detail popup.
@@ -391,8 +497,17 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   let hitPoints: HitPoint[] = [];
   let pinned = false; // the detail popup is pinned to a point (stays until dismissed)
   /** Re-fit the view to the data (undo any pan/zoom). */
-  const fitView = () => { rebuildCompactor(); resetView(); hideTip(); draw(); };
-  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
+  const fitView = () => {
+    rebuildCompactor(); resetView(); hideTip(); draw();
+    if (viewCommitTimer) { clearTimeout(viewCommitTimer); viewCommitTimer = 0; }
+    cfg.onViewChange?.(null); // user re-fit (double-tap / Fit) → drop any saved view
+  };
+  // Axis TITLES sit INLINE at the axis ends (y-title top-left, x-title bottom-right) in
+  // the EXISTING tick margins — they no longer widen l/b, so the plot stays big (owner).
+  // PB-33: axis titles sit INLINE in the existing tick margins (y-title top-left above
+  // the value column, x-title bottom-right after the last tick) — NO extra reserved
+  // space (owner: "the axis names take up too much space, keep them inline").
+  const margins = () => (inside() ? { l: 6, r: 6, t: 8, b: 6 } : { l: cfg.leftMargin ?? 46, r: hasRight() ? 40 : 14, t: 12, b: 26 });
   const widthOf = () => Math.max(260, Math.round(plotEl.clientWidth || container.clientWidth || 320));
 
   function resetView() {
@@ -403,17 +518,24 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const xe = useCompact()
       ? xExtent(geomSeries().filter(visible))
       : dataXExtent(geomSeries());
-    if (!Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
+    const fx = cfg.forceXRange;
+    if (!fx && !Number.isFinite(xe.xMin)) { view = { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }; ry = { yMin: 0, yMax: 1 }; return; }
+    // Small domain breathing only; the ~10px visible side margin is added at the
+    // transform (xPix, PB-23) so it holds on EVERY view, not just this fit.
     const xPad = (xe.xMax - xe.xMin) * 0.02 || 1;
+    // Pinned X range (reps×weight): use the caller's bounds verbatim so window/fit changes
+    // don't re-scale the frame; else the data extent + a little breathing room.
+    const xMin0 = fx ? fx.min : xe.xMin - xPad;
+    const xMax0 = fx ? fx.max : xe.xMax + xPad;
     const le = yExtent(leftSeries(), cfg.yBeginAtZero);
     if (cfg.forceLeftRange) {
       // Pinned left axis (per-bodyweight): use the caller's range verbatim.
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: cfg.forceLeftRange.min, yMax: cfg.forceLeftRange.max };
+      view = { xMin: xMin0, xMax: xMax0, yMin: cfg.forceLeftRange.min, yMax: cfg.forceLeftRange.max };
     } else if (Number.isFinite(le.yMin)) {
       const yPad = (le.yMax - le.yMin) * 0.08 || 1;
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
+      view = { xMin: xMin0, xMax: xMax0, yMin: le.yMin - (cfg.yBeginAtZero ? 0 : yPad), yMax: le.yMax + yPad };
     } else {
-      view = { xMin: xe.xMin - xPad, xMax: xe.xMax + xPad, yMin: 0, yMax: 1 };
+      view = { xMin: xMin0, xMax: xMax0, yMin: 0, yMax: 1 };
     }
     fitRight();
   }
@@ -447,7 +569,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const M = margins();
     const plotW = W - M.l - M.r;
     const plotH = h - M.t - M.b;
-    const xPix = (x: number) => M.l + ((x - view.xMin) / (view.xMax - view.xMin)) * plotW;
+    // PB-23: the data area is inset ~10px from the left/right frame so edge dots (the
+    // first/last points & trend-line ends) are never jammed against the side — on EVERY
+    // view (fit, pan, zoom, pagination), because the margin lives in the transform, not
+    // in any one view-setter. Inverse transforms (tooltip / pan-zoom) use the same xL/xW.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    const xPix = (x: number) => xL + ((x - view.xMin) / (view.xMax - view.xMin)) * xW;
     // "Potential (log)" axis mode: position values via tY (−ln(ceiling − value)); niceTicks
     // still makes nice kg ticks, yL just places them non-linearly. Identity when off.
     const yL = (y: number) => {
@@ -500,6 +628,27 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const bot = Math.min(h - M.b, Math.max(yTop, yBot));
       if (bot - top > 0.5) bands += `<rect x="${M.l}" y="${top.toFixed(1)}" width="${plotW.toFixed(1)}" height="${(bot - top).toFixed(1)}" fill="${b.fill}"/>`;
     }
+    // Filled ribbons between two y-curves (e.g. the "hard sets" zone under the failure
+    // line): top edge left→right, then bottom edge right→left, closed. Left-axis y.
+    for (const ab of cfg.areaBands ?? []) {
+      const ps = ab.points;
+      if (ps.length < 2) continue;
+      const top = ps.map((p) => `${xPix(p.x).toFixed(1)},${yL(p.yTop).toFixed(1)}`);
+      const bot = ps.map((p) => `${xPix(p.x).toFixed(1)},${yL(p.yBot).toFixed(1)}`).reverse();
+      bands += `<polygon points="${top.concat(bot).join(" ")}" fill="${ab.fill}" stroke="none"/>`;
+      if (ab.label) {
+        const mid = ps[Math.floor(ps.length / 2)]!;
+        bands += `<text class="svgc-areaband-lbl" x="${xPix(mid.x).toFixed(1)}" y="${yL((mid.yTop + mid.yBot) / 2).toFixed(1)}" font-size="10" fill="${ab.labelColor ?? "#9c463a"}" text-anchor="middle">${esc(ab.label)}</text>`;
+      }
+    }
+    // Vertical value-zone bands on the X axis (e.g. the 3–6RM / 6–12RM load zones).
+    for (const xb of cfg.xBands ?? []) {
+      const x0 = xPix(Math.min(xb.from, xb.to)), x1 = xPix(Math.max(xb.from, xb.to));
+      const left = Math.max(M.l, Math.min(x0, x1)), right = Math.min(W - M.r, Math.max(x0, x1));
+      if (right - left <= 0.5) continue;
+      bands += `<rect x="${left.toFixed(1)}" y="${M.t}" width="${(right - left).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" fill="${xb.fill}"/>`;
+      if (xb.label) bands += `<text class="svgc-areaband-lbl" x="${((left + right) / 2).toFixed(1)}" y="${(M.t + 11).toFixed(1)}" font-size="10" fill="${xb.labelColor ?? "#9c463a"}" text-anchor="middle">${esc(xb.label)}</text>`;
+    }
     // x bands + gridlines + thinned labels.
     let xLabels = "";
     const clampX = (px: number) => Math.max(M.l, Math.min(W - M.r, px));
@@ -516,16 +665,29 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       const realMax = useCompact() ? compactor.from(view.xMax) : view.xMax;
       const toView = (realT: number) => (useCompact() ? compactor.to(realT) : realT);
       let lastLabelPx = -Infinity;
+      // Show BOTH period levels at once (owner): alternating MONTHS as a very-light-blue
+      // wash + alternating WEEKS as very-light-gray stripes over it. Weeks too thin to
+      // see (wide zoom) are skipped, so it degrades to month blocks gracefully.
+      const bandRect = (b: { start: number; end: number; shade: boolean }, cls: string, minW: number): string => {
+        const x0 = xPix(toView(b.start)), x1 = xPix(toView(b.end));
+        if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) return "";
+        const cx0 = clampX(x0), cx1 = clampX(x1);
+        return (b.shade && cx1 - cx0 > minW)
+          ? `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="${cls}"/>`
+          : "";
+      };
+      for (const b of timeBands(realMin, realMax, "month")) bands += bandRect(b, "svgc-band-month", 0.5);
+      for (const b of timeBands(realMin, realMax, "week")) bands += bandRect(b, "svgc-band", 3);
+      // Gridlines + labels follow the auto level (sensible label density per zoom).
+      // Boundary lines ONLY at the year level (owner): week/month dividers are noise —
+      // the alternating bands already show the period — but year boundaries stay marked.
+      const showGrid = timeLevel(realMax - realMin) === "year";
       for (const b of timeBands(realMin, realMax)) {
         const x0 = xPix(toView(b.start));
-        const x1 = xPix(toView(b.end));
-        if (x1 < M.l - 0.5 || x0 > W - M.r + 0.5) continue;
-        const cx0 = clampX(x0);
-        const cx1 = clampX(x1);
-        if (b.shade && cx1 - cx0 > 0.5)
-          bands += `<rect x="${cx0.toFixed(1)}" y="${M.t}" width="${(cx1 - cx0).toFixed(1)}" height="${(h - M.b - M.t).toFixed(1)}" class="svgc-band"/>`;
-        // gridline at the band boundary
-        if (x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
+        const cx0 = clampX(x0), cx1 = clampX(xPix(toView(b.end)));
+        if (cx1 < M.l - 0.5 || cx0 > W - M.r + 0.5) continue;
+        // gridline at the band boundary (years only)
+        if (showGrid && x0 >= M.l - 0.5 && x0 <= W - M.r + 0.5)
           grid += `<line x1="${x0.toFixed(1)}" y1="${M.t}" x2="${x0.toFixed(1)}" y2="${h - M.b}" class="svgc-grid" stroke-width="1"/>`;
         // label centred in the visible part of the band, thinned if crowded
         const mid = (cx0 + cx1) / 2;
@@ -557,9 +719,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // shouldn't be hide-able into a blank chart).
     const legendCount = cfg.series.filter((s) => !s.noLegend).length;
     const toggleable = legendCount >= 2;
-    // Bar series are drawn SIDE BY SIDE (grouped) within each x-slot, not stacked
-    // on top of each other — so when several volume/count bars share a bucket you
-    // can read each one's height. Each visible bar series gets its own lane.
+    // Bar series share each x-slot at FULL width (a month bar stays month-wide no
+    // matter how many lifts are shown); extra series are slid slightly right so they
+    // overlap "one on top of another" with a rightward slant (see the bars branch).
     const visBars = geomSeries().filter((s) => s.type === "bars" && visible(s));
     const barN = Math.max(1, visBars.length);
     // Direct labels: floating series names next to their last record (collected in
@@ -594,8 +756,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         const faint = !!cfg.styleToggles && faintLines;
         const col = faint ? grayify(s.color, 0.55) : s.color;
         const d = s.points.map((p) => `${xPix(p.x).toFixed(1)},${ymap(p.y ?? 0).toFixed(1)}`).join(" ");
-        body += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="${faint ? 1 : 2}" stroke-opacity="${faint ? 0.4 : 0.9}"${faint ? ` stroke-dasharray="3 3"` : ""}/>`;
-        const dotR = faint ? 1.3 : 2.4;
+        // A forecast series (s.dashed) draws dashed + slightly translucent even when
+        // not in faint mode, so the projection never looks like logged data.
+        const dash = faint ? ` stroke-dasharray="3 3"` : s.dashed ? ` stroke-dasharray="5 4"` : "";
+        body += `<polyline points="${d}" fill="none" stroke="${col}" stroke-width="${faint ? 1 : 2}" stroke-opacity="${faint ? 0.4 : s.dashed ? 0.7 : 0.9}"${dash}/>`;
+        const dotR = faint ? 1.3 : (s.dashed || s.noDots) ? 0 : 2.4;
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
           body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${dotR}" fill="${col}" fill-opacity="${faint ? 0.35 : 0.6}"/>`;
@@ -605,8 +770,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // Dots only, no connecting line — for values that jump around (e.g. a
         // day's est-1RM) where a line would imply a trend that isn't there. Slight
         // transparency so overlapping same-day sets read as a denser blob (depth).
+        // Optional lo → y stems (the 1RM view): a thin solid line from the weight
+        // used up to the bubble — unlike the weight-range bars, not segmented.
+        for (const p of s.points) {
+          if (stemLines && p.lo != null && p.y != null && Math.abs(p.y - p.lo) > 0.05) {
+            const cx = xPix(p.x), yTop = ymap(p.y), yBot = ymap(p.lo);
+            body += `<line x1="${cx.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${s.color}" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.28"/>`;
+          }
+        }
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          const yStemTop = p.y != null ? ymap(p.y) : cy;
+          const yStemBot = p.lo != null ? ymap(p.lo) : cy;
           if (p.fail) {
             // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
@@ -618,7 +793,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // shape, just bigger + more solid so it still pops.
             const shp = s.shape ?? p.shape!;
             const r = p.rir != null ? Math.min(3.2, Math.max(1.6, 3.2 - 0.22 * p.rir)) : 3.0;
-            body += shapeMarker(shp, cx, cy, r, s.color, 0.62, !!p.pr);
+            const mk = shapeMarker(shp, cx, cy, r, s.color, p.op ?? 0.62, !!p.pr);
+            body += p.glow ? `<g filter="url(#${glowId})">${mk}</g>` : mk;
           } else if (p.pr) {
             // A new record → a diamond (≈ the dot's size, so records stand out
             // without dominating the scatter).
@@ -628,9 +804,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             // Plain set → a dot sized by effort: higher RIR (easier) draws smaller;
             // the hardest (low / no RIR) keep the previous biggest size (3.2).
             const r = p.rir != null ? Math.min(3.2, Math.max(1.5, 3.2 - 0.22 * p.rir)) : 3.2;
-            body += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="0.55"/>`;
+            const dot = `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="${(p.op ?? 0.55).toFixed(2)}"/>`;
+            body += p.glow ? `<g filter="url(#${glowId})">${dot}</g>` : dot;
           }
-          hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
+          hitPoints.push({ px: cx, py: cy, yTop: Math.min(yStemTop, yStemBot), yBot: Math.max(yStemTop, yStemBot), s, p });
         }
       } else if (s.type === "range") {
         const bars: { px: number; yTop: number; yBot: number }[] = [];
@@ -687,7 +864,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // series — a single bucket, or a few far-apart ones — can't blow up into one
         // giant bar that paints a whole shaded band across the chart (the old
         // Infinity-step fallback used the entire plot width).
-        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * plotW : plotW / 24;
+        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * xW : xW / 24;
         const girth = cfg.barGirth ?? 1; // user width knob (grouped lanes get thin, so allow fattening)
         const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth); // ~30% thinner than a step, capped, ×girth
         // Baseline = the (possibly shifted) zero line. Both the baseline and each
@@ -695,17 +872,25 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // rigid and just clips at the floor/ceiling instead of stretching.
         const base = ymap(0);
         const clampY = (y: number) => Math.min(h - M.b, Math.max(M.t, y));
-        // Split the histogram slot into one lane per visible bar series and offset
-        // THIS series into its lane, so the bars sit side by side (centred on x as a
-        // group) instead of overlapping. One series → full-width bar as before.
-        const lane = bw / barN;
+        // Multiple bar series: keep EVERY bar the SAME full width (a month-wide
+        // bar stays month-wide no matter how many lifts are shown) and OFFSET each
+        // extra series a little to the RIGHT, so they overlap "one on top of
+        // another" with a slight rightward slant instead of splitting the slot into
+        // thin side-by-side lanes that shrink as you add lifts. One series → a plain
+        // full-width bar centred on its bucket, as before.
         const bi = Math.max(0, visBars.indexOf(s));
-        const laneCenter = (bi - (barN - 1) / 2) * lane;
-        const rectW = barN > 1 ? Math.max(1.2, lane * 0.86) : bw; // small gap between lanes
+        const rightShift = Math.min(bw * 0.3, 10); // per-series rightward slant
+        const laneCenter = bi * rightShift;
+        const rectW = bw; // same width for every series, regardless of how many
+        // Overlapping bars need SOME translucency so the one behind still shows, but
+        // the owner wants them solid-ish ("not too transparent") — floor the fill so
+        // a low opacity slider can't wash the overlap into mud when 2+ bars stack.
+        const baseOp = s.fillOpacity ?? 1;
+        const fillOp = barN > 1 ? Math.max(baseOp, 0.78) : baseOp;
         // Bars can be outline-only or a translucent fill so they don't hide other series.
         const paint = s.outline
           ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
-          : `fill="${s.color}" fill-opacity="${s.fillOpacity ?? 1}"`;
+          : `fill="${s.color}" fill-opacity="${fillOp}"`;
         for (const p of s.points) {
           const x = xPix(p.x) + laneCenter;
           if (x < M.l - bw || x > W - M.r + bw) continue;
@@ -722,39 +907,42 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // for legibility over a busy chart; flips to the left near the right edge.
       // Tag annotation: find this SCATTER series' DENSEST cluster of points (where
       // it's most concentrated, not a random end) and mark it with a brace + name.
-      if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12 && !tagged.has(s.name)) {
-        tagged.add(s.name);
-        const px = s.points
-          .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
-          .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
-        if (px.length >= 3) {
-          // Densest point = the one with the most neighbours within R px.
-          const R2 = 22 * 22;
-          let best = px[0]!, bestC = -1;
-          for (const a of px) {
-            let c = 0;
-            for (const b of px) { const dx = a.x - b.x, dy = a.y - b.y; if (dx * dx + dy * dy <= R2) c++; }
-            if (c > bestC) { bestC = c; best = a; }
-          }
-          // Skip if a cluster was already tagged right here (don't stack labels).
-          if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
-            tagSpots.push(best);
-            const parts = s.name.split(" · ");
-            const lbl = parts.length >= 3 ? parts[1]! : parts[0]!; // the exercise segment
-            const col = grayify(s.color, 0.12); // keep most of the athlete hue
-            const right = best.x < W - M.r - 56;
-            const lx = best.x + (right ? 16 : -16);
-            const ly = Math.max(M.t + 8, best.y - 13);
-            tagAnnotations.push(
-              `<text x="${best.x.toFixed(1)}" y="${(best.y + 4).toFixed(1)}" font-size="13" text-anchor="middle" fill="${col}" fill-opacity="0.9">${right ? "{" : "}"}</text>` +
-                `<line x1="${(best.x + (right ? 5 : -5)).toFixed(1)}" y1="${best.y.toFixed(1)}" x2="${(lx - (right ? 3 : -3)).toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.6"/>` +
-                `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" font-size="9" text-anchor="${right ? "start" : "end"}" paint-order="stroke" stroke="#fff" stroke-width="2.2" stroke-opacity="0.9" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
-            );
+      if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12) {
+        const lbl = seriesLabelKey(s.name);
+        if (!tagged.has(lbl)) {
+          tagged.add(lbl);
+          const px = s.points
+            .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
+            .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
+          if (px.length >= 3) {
+            // Densest point = the one with the most neighbours within R px.
+            const R2 = 22 * 22;
+            let best = px[0]!, bestC = -1;
+            for (const a of px) {
+              let c = 0;
+              for (const b of px) { const dx = a.x - b.x, dy = a.y - b.y; if (dx * dx + dy * dy <= R2) c++; }
+              if (c > bestC) { bestC = c; best = a; }
+            }
+            // Skip if a cluster was already tagged right here (don't stack labels).
+            if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
+              tagSpots.push(best);
+              const col = grayify(s.color, 0.12); // keep most of the athlete hue
+              const right = best.x < W - M.r - 56;
+              const lx = best.x + (right ? 16 : -16);
+              const ly = Math.max(M.t + 8, best.y - 13);
+              tagAnnotations.push(
+                `<text x="${best.x.toFixed(1)}" y="${(best.y + 4).toFixed(1)}" font-size="13" text-anchor="middle" fill="${col}" fill-opacity="0.9">${right ? "{" : "}"}</text>` +
+                  `<line x1="${(best.x + (right ? 5 : -5)).toFixed(1)}" y1="${best.y.toFixed(1)}" x2="${(lx - (right ? 3 : -3)).toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.6"/>` +
+                  `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" font-size="9" text-anchor="${right ? "start" : "end"}" paint-order="stroke" stroke="#fff" stroke-width="2.2" stroke-opacity="0.9" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
+              );
+            }
           }
         }
       }
-      if (cfg.directLabels && (s.type === "scatter" || s.type === "line") && s.points.length) {
-        const label = s.name.split(" · ")[0]!;
+      // Floating name at the series end — only when ⟨⟩ line-tags are OFF (they name the
+      // densest cluster instead; both at once duplicated every lift — owner screenshot).
+      if (cfg.directLabels && !wantTags && (s.type === "scatter" || s.type === "line") && s.points.length) {
+        const label = seriesLabelKey(s.name);
         if (!labeled.has(label)) {
           const last = s.points[s.points.length - 1]!;
           const cx = xPix(last.x), cy = ymap(last.y ?? 0);
@@ -774,6 +962,61 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     body += directLabels.join("");
     body += tagAnnotations.join("");
 
+    // Draggable vertical fit-window markers (e.g. the projection's include-from/to lines):
+    // a coloured dashed line top-to-bottom + a grip tab at the top + a fat transparent
+    // hit-line. Their pixel x is cached for pointer hit-testing.
+    // STATIC x reference lines (e.g. "today"): a thin line, no grip, no hit-target. Drawn
+    // before the draggable markers so those sit on top. Skipped when off the visible plot.
+    if (cfg.xRefLines && cfg.xRefLines.length) {
+      for (const rl of cfg.xRefLines) {
+        const px = xPix(rl.x);
+        if (px < M.l - 0.5 || px > W - M.r + 0.5) continue; // outside the view → don't draw
+        const col = rl.color ?? "#cf5a4a";
+        const lbl = rl.label ? `<text class="svgc-xref-lbl" x="${(px + 3).toFixed(1)}" y="${(h - M.b - 3).toFixed(1)}" font-size="9" fill="${col}" fill-opacity="0.8">${esc(rl.label)}</text>` : "";
+        body +=
+          `<g class="svgc-xref">` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="3 3" stroke-opacity="0.7"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
+    markerPx = [];
+    if (cfg.xMarkers && cfg.xMarkers.length) {
+      for (const mk of cfg.xMarkers) {
+        const px = xPix(mk.x);
+        markerPx.push({ id: mk.id, px });
+        const col = mk.color ?? "#2f8f88";
+        const lbl = mk.label ? `<text class="svgc-xmk-lbl" x="${(px + 4).toFixed(1)}" y="${(M.t + 11).toFixed(1)}" font-size="10" fill="${col}">${esc(mk.label)}</text>` : "";
+        body +=
+          `<g class="svgc-xmk" data-mk="${esc(mk.id)}" style="cursor:ew-resize">` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.9"/>` +
+          `<rect x="${(px - 5).toFixed(1)}" y="${M.t}" width="10" height="14" rx="2" fill="${col}"/>` +
+          `<line x1="${px.toFixed(1)}" y1="${M.t}" x2="${px.toFixed(1)}" y2="${(h - M.b).toFixed(1)}" stroke="transparent" stroke-width="18"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
+    // Draggable HORIZONTAL markers (e.g. the projection ceiling the curve flattens toward):
+    // a dashed line spanning the plot width + a grip tab at the left + a fat transparent
+    // hit-line. Pixel y cached for pointer hit-testing. Uses the LEFT-axis mapper (yL).
+    markerPy = [];
+    if (cfg.yMarkers && cfg.yMarkers.length) {
+      for (const mk of cfg.yMarkers) {
+        const py = yL(mk.y);
+        if (py < M.t - 0.5 || py > h - M.b + 0.5) continue; // off-plot → skip (still draggable in range)
+        markerPy.push({ id: mk.id, py });
+        const col = mk.color ?? "#9c5a86";
+        const lbl = mk.label ? `<text class="svgc-ymk-lbl" x="${(W - M.r - 4).toFixed(1)}" y="${(py - 4).toFixed(1)}" text-anchor="end" font-size="10" fill="${col}">${esc(mk.label)}</text>` : "";
+        body +=
+          `<g class="svgc-ymk" data-mk="${esc(mk.id)}" style="cursor:ns-resize">` +
+          `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${(W - M.r).toFixed(1)}" y2="${py.toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-dasharray="4 3" stroke-opacity="0.9"/>` +
+          `<rect x="${M.l.toFixed(1)}" y="${(py - 7).toFixed(1)}" width="14" height="14" rx="2" fill="${col}"/>` +
+          `<line x1="${M.l}" y1="${py.toFixed(1)}" x2="${(W - M.r).toFixed(1)}" y2="${py.toFixed(1)}" stroke="transparent" stroke-width="18"/>` +
+          lbl +
+          `</g>`;
+      }
+    }
+
     const frame = inside()
       ? `<rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}" fill="none" class="svgc-frame" stroke-width="1"/>`
       : `<line x1="${M.l}" y1="${M.t}" x2="${M.l}" y2="${h - M.b}" class="svgc-frame" stroke-width="1"/>` +
@@ -790,7 +1033,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // Two tiny style toggles (opt-in): faint trend lines + line tags.
     const styleBtns = cfg.styleToggles
       ? `<button type="button" class="svgc-style-btn${faintLines ? " is-on" : ""}" data-stylebtn="faint" aria-pressed="${faintLines}" title="${faintLines ? "Trend lines are thin/dashed/grey — tap for bold lines." : "Make the trend lines thin, dashed & grey so the data dots stand out."}">〰</button>` +
-        `<button type="button" class="svgc-style-btn${dataTags ? " is-on" : ""}" data-stylebtn="tags" aria-pressed="${dataTags}" title="${dataTags ? "Line tags shown — tap to hide." : "Tag each line with a leader-brace label naming it."}">⟨ ⟩</button>`
+        `<button type="button" class="svgc-style-btn${dataTags ? " is-on" : ""}" data-stylebtn="tags" aria-pressed="${dataTags}" title="${dataTags ? "Line tags shown — tap to hide." : "Tag each line with a leader-brace label naming it."}">⟨ ⟩</button>` +
+        `<button type="button" class="svgc-style-btn${stemLines ? " is-on" : ""}" data-stylebtn="stems" aria-pressed="${stemLines}" title="${stemLines ? "1RM stems shown — tap to hide." : "Show thin weight→1RM lines on each bubble."}">│</button>`
       : "";
     // Many keys get cramped in an inline row, so past a handful collapse them into
     // a floating "Legend" dropdown (overlay — doesn't grow the chart). The compact
@@ -867,6 +1111,16 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     });
     noteEl.textContent = cfg.note ?? "";
     noteEl.hidden = !cfg.note;
+    // Axis titles (outer-label charts only) — tucked INLINE at the axis ends so they cost
+    // no extra margin (owner: "names move inline with numbers so they don't take up space"):
+    // PB-33: axis titles INLINE in the existing margins — y-title top-left above the
+    // value column, x-title bottom-right after the last tick number — so they read as
+    // axis names without stealing plot space (just made dark+bold so they're visible).
+    let axisTitles = "";
+    if (!inside()) {
+      if (cfg.yTitle) axisTitles += `<text x="${M.l.toFixed(1)}" y="${(M.t - 3).toFixed(1)}" text-anchor="start" class="svgc-axistitle">${esc(cfg.yTitle)}</text>`;
+      if (cfg.xTitle) axisTitles += `<text x="${(W - M.r).toFixed(1)}" y="${(h - 4).toFixed(1)}" text-anchor="end" class="svgc-axistitle">${esc(cfg.xTitle)}</text>`;
+    }
     plotEl.innerHTML =
       `<svg class="svgc-svg" width="100%" height="${h}" viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" role="img">` +
       `<defs><clipPath id="${clipId}"><rect x="${M.l}" y="${M.t}" width="${plotW}" height="${plotH}"/></clipPath>` +
@@ -874,6 +1128,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       `<g clip-path="url(#${clipId})">${bands}${grid}${body}${inside() ? xLabels + yLabels : ""}</g>` +
       frame +
       (inside() ? "" : xLabels + yLabels) +
+      axisTitles +
       `</svg>`;
   }
 
@@ -886,7 +1141,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const M = margins();
     const plotW = W - M.l - M.r;
     const localX = ((clientX - rect.left) / rect.width) * W;
-    const xVal = view.xMin + ((localX - M.l) / plotW) * (view.xMax - view.xMin);
+    // PB-23: match the xL/xW inset used by xPix so hit-testing aligns with the dots.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    const xVal = view.xMin + ((localX - xL) / xW) * (view.xMax - view.xMin);
     const gs = geomSeries();
     let best: { p: SvgPoint; dx: number } | null = null;
     for (const s of gs) {
@@ -912,7 +1170,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       .join("");
     tipEl.innerHTML = `<div class="svgc-tip-hd">${esc(fmtTipX(xv))}</div>${rows}`;
     tipEl.hidden = false;
-    const px = M.l + ((xv - view.xMin) / (view.xMax - view.xMin)) * plotW;
+    const px = xL + ((xv - view.xMin) / (view.xMax - view.xMin)) * xW;
     tipEl.style.left = `${Math.min(Math.max(px, 8), (plotEl.clientWidth || W) - tipEl.offsetWidth - 8)}px`;
     tipEl.style.top = `4px`;
   }
@@ -960,8 +1218,11 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if (p.fail) badges.push(`<span class="svgc-tip-badge fail">✕ fail</span>`);
     const head = `<div class="svgc-tip-hd">${legendDot(s)}${esc(s.name)}</div>`;
     const body = lines.map((l, i) => `<div class="svgc-tip-line${i === 0 ? " is-first" : ""}">${l}</div>`).join("");
+    const histLink = p.histEx && cfg.onPointHistory
+      ? `<button type="button" class="svgc-tip-hist" data-histex="${esc(p.histEx)}">→ in history</button>`
+      : "";
     return `<button type="button" class="svgc-tip-x" aria-label="Close">✕</button>${head}${body}` +
-      (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "");
+      (badges.length ? `<div class="svgc-tip-badges">${badges.join("")}</div>` : "") + histLink;
   }
   /** Pin the sticky detail popup beside a datapoint; it stays until dismissed. */
   function pinDetail(hp: HitPoint) {
@@ -988,7 +1249,9 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
   }
   // The ✕ on a pinned popup closes it (the popup gets pointer-events when pinned).
   tipEl.addEventListener("click", (e) => {
-    if ((e.target as HTMLElement).closest(".svgc-tip-x")) { e.stopPropagation(); hideTip(); }
+    if ((e.target as HTMLElement).closest(".svgc-tip-x")) { e.stopPropagation(); hideTip(); return; }
+    const hist = (e.target as HTMLElement).closest<HTMLElement>(".svgc-tip-hist");
+    if (hist?.dataset.histex && cfg.onPointHistory) { e.stopPropagation(); cfg.onPointHistory(hist.dataset.histex); hideTip(); }
   });
 
   // ---- interactions: 1 finger / mouse = pan, 2 fingers = pinch-zoom, wheel = zoom ----
@@ -1003,7 +1266,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     const plotH = h - M.t - M.b;
     const lx = ((clientX - rect.left) / rect.width) * W;
     const ly = ((clientY - rect.top) / rect.height) * h;
-    return { fx: view.xMin + ((lx - M.l) / plotW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / plotH };
+    // PB-23: same xL/xW inset as xPix so pan/zoom anchor on the pointer, not 10px off.
+    const padX = plotW > 80 ? 10 : 0;
+    const xL = M.l + padX, xW = plotW - 2 * padX;
+    return { fx: view.xMin + ((lx - xL) / xW) * (view.xMax - view.xMin), vfrac: (ly - M.t) / plotH };
   }
   /** Zoom by independent factors per axis (>1 = out): x about fx, y about the
    * screen-fraction `vfrac` so BOTH the left and right y-axes scale together. */
@@ -1018,6 +1284,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     }
     view = { xMin, xMax, yMin, yMax };
     userAdjusted = true; // remember the user's pan/zoom across series updates
+    commitView(); // persist (covers wheel zoom + pinch zoom)
   }
 
   const SPREAD = 26; // min finger spread (px) on an axis before that axis stretches
@@ -1071,6 +1338,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       view = { xMin: pan.v.xMin - dx, xMax: pan.v.xMax - dx, yMin: py.yMin, yMax: py.yMax };
       if (!panX()) { const rr = pan.r.yMax - pan.r.yMin; ry = { yMin: pan.r.yMin + fracY * rr, yMax: pan.r.yMax + fracY * rr }; }
       userAdjusted = true; // remember the user's pan across series updates
+      commitView(); // persist the user's pan (1-finger / mouse drag)
       hideTip();
       draw();
     }
@@ -1101,8 +1369,32 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           if (hp) pinDetail(hp);
           else { hideTip(); showTip(e.clientX); }
         }
+      } else {
+        flushView(); // PB-39: a real pan/zoom just ended → persist it NOW, before any re-mount
       }
     }
+  };
+  // Pointer x in viewBox units (same space as markerPx), for marker hit-testing.
+  function pointerLocalX(clientX: number): number {
+    const svg = plotEl.querySelector("svg");
+    const rect = svg ? svg.getBoundingClientRect() : plotEl.getBoundingClientRect();
+    return ((clientX - rect.left) / rect.width) * widthOf();
+  }
+  // Live marker drag: move the grabbed marker's <g> horizontally and stash the new data
+  // x; commit on release via cfg.onMarkerDrag (so the heavy fit recompute runs once).
+  const onMkMove = (e: PointerEvent) => {
+    if (!mkDrag) return;
+    e.preventDefault();
+    const lx = pointerLocalX(e.clientX);
+    if (mkDrag.g) mkDrag.g.setAttribute("transform", `translate(${(lx - mkDrag.origPx).toFixed(1)},0)`);
+    mkDrag.newX = pixInfo(e.clientX, 0).fx;
+  };
+  const onMkUp = () => {
+    window.removeEventListener("pointermove", onMkMove);
+    window.removeEventListener("pointerup", onMkUp);
+    window.removeEventListener("pointercancel", onMkUp);
+    const d = mkDrag; mkDrag = null;
+    if (d) cfg.onMarkerDrag?.(d.id, d.newX);
   };
   plotEl.addEventListener("pointerdown", (e) => {
     if (!interactive()) {
@@ -1110,6 +1402,22 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       if (hp) pinDetail(hp);
       else { hideTip(); showTip(e.clientX); }
       return;
+    }
+    // A press near a draggable marker grabs it (instead of panning the chart).
+    if (cfg.onMarkerDrag && markerPx.length && pts.size === 0) {
+      const lx = pointerLocalX(e.clientX);
+      let near: { id: string; px: number } | null = null;
+      for (const m of markerPx) if (!near || Math.abs(m.px - lx) < Math.abs(near.px - lx)) near = m;
+      if (near && Math.abs(near.px - lx) <= 16) {
+        const g = plotEl.querySelector<SVGGElement>(`.svgc-xmk[data-mk="${CSS.escape(near.id)}"]`);
+        mkDrag = { id: near.id, axis: "x", startX: e.clientX, startY: 0, origPx: near.px, origPy: 0, g, newX: pixInfo(e.clientX, 0).fx, newY: 0 };
+        window.addEventListener("pointermove", onMkMove);
+        window.addEventListener("pointerup", onMkUp);
+        window.addEventListener("pointercancel", onMkUp);
+        try { plotEl.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+        e.preventDefault();
+        return;
+      }
     }
     if (pts.size === 0) {
       window.addEventListener("pointermove", onMove);
@@ -1190,7 +1498,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if ((e.target as HTMLElement).closest(".svgc-center")) { e.stopPropagation(); if (interactive()) fitView(); return; }
     if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
     const sb = (e.target as HTMLElement).closest<HTMLElement>(".svgc-style-btn");
-    if (sb?.dataset.stylebtn) { e.stopPropagation(); if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines); else setDataTags(!dataTags); return; }
+    if (sb?.dataset.stylebtn) {
+      e.stopPropagation();
+      if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines);
+      else if (sb.dataset.stylebtn === "tags") setDataTags(!dataTags);
+      else setE1rmStems(!stemLines);
+      return;
+    }
     const grp = (e.target as HTMLElement).closest<HTMLElement>(".svgc-grp-chip");
     if (grp?.dataset.grouppos !== undefined && grp.dataset.groupval !== undefined) {
       e.stopPropagation(); toggleGroup(Number(grp.dataset.grouppos), grp.dataset.groupval); return;
@@ -1236,6 +1550,10 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
 
   rebuildCompactor();
   resetView();
+  // Restore a saved pan/zoom instead of the auto-fit (dashboard "remember my view"). Treat
+  // it as a user adjustment so a later series update keeps it (double-tap re-fits). ry (the
+  // dependent right axis) stays freshly fitted by resetView above.
+  if (finiteBox(cfg.initialView)) { view = { ...cfg.initialView }; userAdjusted = true; }
   draw();
 
   return {
@@ -1253,7 +1571,19 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       // Re-fit the whole view only if the user hasn't panned/zoomed; but ALWAYS re-fit
       // the right axis to the (possibly new) bar metric, so its bars never overflow a
       // stale right-axis scale left over from a different metric.
-      if (seriesChanged) { rebuildCompactor(); if (!userAdjusted) resetView(); else fitRight(); }
+      // PB-39 ROOT FIX: the dashboard sends a fresh series every render (seriesChanged always
+      // true), so a reused chart used to resetView() to the data fit on EVERY re-render —
+      // discarding the saved pan/zoom, because update() ignored cfg.initialView (it was only
+      // honored on a fresh mount). Now the update path HONORS the saved view too: keep the live
+      // pan if the user is mid-adjust (fitRight only); else restore the saved initialView if one
+      // is supplied; else fall back to the data fit. So "remember my view" holds across the
+      // same-bubble re-renders the stage-reuse fix routes through update().
+      if (seriesChanged) {
+        rebuildCompactor();
+        if (userAdjusted) fitRight();
+        else if (finiteBox(cfg.initialView)) { view = { ...cfg.initialView }; userAdjusted = true; fitRight(); }
+        else resetView();
+      }
       hideTip();
       draw();
     },

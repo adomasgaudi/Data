@@ -86,13 +86,40 @@ export function hardSetWeight(
   };
 }
 
+/** Warm-up scheme (owner): quick (2 sets) · standard (4) · heavy / pyramid (6). */
+export type WarmupPlan = "quick" | "standard" | "heavy";
+export const WARMUP_PLANS: WarmupPlan[] = ["quick", "standard", "heavy"];
+export const WARMUP_PLAN_SETS: Record<WarmupPlan, number> = { quick: 2, standard: 4, heavy: 6 };
+
 export interface WarmupSet {
-  /** "general" = light high-rep primer; "ramp" = grooving set toward the load. */
+  /** "general" = light high-rep primer (<60% 1RM); "ramp" = grooving set toward the load. */
   kind: "general" | "ramp";
+  /** This set's load as a % of 1RM (whole number). For the primer this is the band MIDPOINT
+   * (see pctLabel for the displayed 30–60% band). */
+  pctOf1RM: number;
+  /** Exact (unrounded) target = 1RM × pct, 1 dp — shown small/grey. */
+  exactKg: number;
+  /** Exact rounded to the NEAREST loadable increment — the headline weight. */
   weightKg: number;
+  /** Exact rounded DOWN / UP to the increment — a small load range to pick within. */
+  downKg: number;
+  upKg: number;
   reps: number;
-  /** This set's load as a % of the WORKING weight (whole number). */
-  pctOfWorking: number;
+  /** Max reps achievable at this load (to FAILURE), per the 1RM curve — the ramp's `reps`
+   * is ⅓ of this. Shown as an "NRM" next to the %1RM so you see why ⅓ is e.g. 3 reps.
+   * Only set for the precise RAMP sets (the flexible primer shows its own rep band). */
+  maxReps?: number;
+  /** The NRM shown beside the %1RM as a BAND across this row's zone — e.g. the primer's
+   * "20–40" (max reps you could do across 30→60%) or a ramp step's "9–20". When present it
+   * replaces the single `maxReps` in the display. The ramp's prescribed `reps` (⅓ of max)
+   * stays the concrete number to actually do. */
+  maxRepsLabel?: string;
+  /** Display override for the %1RM column — e.g. the primer's "30–60%" band. Falls back
+   * to `pctOf1RM%` when absent (the ramp sets, which are precise). */
+  pctLabel?: string;
+  /** Display override for the reps column — e.g. the primer's "10–20". Falls back to
+   * `reps` when absent. */
+  repsLabel?: string;
 }
 
 export interface WarmupOptions {
@@ -100,16 +127,14 @@ export interface WarmupOptions {
   workingWeightKg: number;
   formula?: OneRepMaxFormula;
   increment?: number;
+  plan?: WarmupPlan;
+  /** Bodyweight share of the load (coeff × bodyweight) for a calisthenics lift, in kg.
+   * Default 0 (a plain barbell lift). When > 0 the ramp runs on the EFFECTIVE load
+   * (added + bodyweight, always positive) and each row's displayed ADDED weight is the
+   * effective load minus this share — so an ASSISTED lift (negative added weight) gets a
+   * real warm-up instead of an empty one, and the assistance eases off toward the work set. */
+  bodyweightLoad?: number;
 }
-
-/**
- * General-phase primers: light sets in the 30–60% (of working weight) band at
- * 10–20 reps (owner's spec). Two sets, getting a little heavier and shorter.
- */
-const GENERAL_PHASE: ReadonlyArray<{ pct: number; reps: number }> = [
-  { pct: 0.3, reps: 20 },
-  { pct: 0.5, reps: 12 },
-];
 
 /**
  * The number of RAMP sets between 60% and the working weight. Owner: "the
@@ -123,49 +148,119 @@ export function rampSetCount(intensity: number): number {
 
 /**
  * A warmup ramp up to a working weight, per the owner's scheme:
- *   • General: 30–60% of working weight, 10–20 reps (light primer).
- *   • Ramp: from 60% up to ~90% of working weight, each set doing ⅓ of the reps
- *     the client COULD do at that load (⅓ of predicted max reps) — submaximal
- *     grooving, never to failure.
- *   • Pyramid: heavier working weight → more ramp sets (see rampSetCount).
+ *   • ONE light PRIMER: 30–60% of 1RM, 10–20 reps — shown as a BAND (a primer is
+ *     flexible, not a precise load), so its row reads "30–60%" / "× 10–20".
+ *   • RAMP sets: 60% up to ~90% of 1RM, each doing ⅓ of the reps the client COULD
+ *     do at that load (⅓ of predicted max reps) — submaximal grooving, never to
+ *     failure. Precise loads (their %1RM and reps are concrete numbers).
+ *   • Pyramid: a heavier PLAN adds more ramp steps (the plan's total set count,
+ *     minus the one primer).
  * The working weight itself is the WORK set and is not included here.
  * Weights are rounded to the loadable increment, kept strictly increasing and
  * below the working weight. Returns [] on invalid input.
  */
 export function warmupRamp(opts: WarmupOptions): WarmupSet[] {
-  const { oneRepMax, workingWeightKg } = opts;
   const formula = opts.formula ?? "epley";
   const increment = opts.increment ?? 2.5;
-  if (!(oneRepMax > 0) || !(workingWeightKg > 0)) return [];
+  const plan = opts.plan ?? "standard";
+  // Ramp in EFFECTIVE-load terms so a calisthenics lift works even when the ADDED weight
+  // is negative (assisted). bwl = 0 for a barbell lift, making eff* identical to the
+  // added values below — so plain lifts are byte-for-byte unchanged. The %1RM and the
+  // strictly-increasing/just-below-work checks all run on the (always-positive) effective
+  // load; only the DISPLAYED weightKg is peeled back to the added weight (eff − bwl).
+  const bwl = opts.bodyweightLoad ?? 0;
+  const eff1rm = opts.oneRepMax + bwl;
+  const effWork = opts.workingWeightKg + bwl;
+  if (!(eff1rm > 0) || !(effWork > 0)) return [];
 
+  const workPct = effWork / eff1rm;
+  const n = WARMUP_PLAN_SETS[plan];
   const sets: WarmupSet[] = [];
-  let last = 0;
-  const push = (kind: WarmupSet["kind"], pctOfWorking: number, reps: number): void => {
-    const weightKg = roundToIncrement(workingWeightKg * pctOfWorking, increment);
-    // Keep strictly increasing and strictly below the working weight.
-    if (weightKg <= last || weightKg >= workingWeightKg) return;
-    sets.push({
-      kind,
-      weightKg,
-      reps: Math.max(1, Math.round(reps)),
-      pctOfWorking: Math.round(pctOfWorking * 100),
-    });
-    last = weightKg;
+  const eps = increment * 1e-6;
+  // The DISPLAYED ADDED-weight plate-rounding band (down/up to the increment) at a %1RM.
+  // Rounds the ADDED (loadable bar) weight, not the effective load — so a non-plate
+  // bodyweight share (e.g. 0.6×97.1) still yields real plate weights. For a barbell lift
+  // (bwl=0) the added weight equals the effective load.
+  const band = (pct: number) => {
+    const added = eff1rm * pct - bwl;
+    return {
+      down: Math.round(Math.floor(added / increment + eps) * increment * 100) / 100,
+      up: Math.round(Math.ceil(added / increment - eps) * increment * 100) / 100,
+    };
   };
 
-  // General primers (30–60%, 10–20 reps).
-  for (const g of GENERAL_PHASE) push("general", g.pct, g.reps);
+  // 1) LIGHT PRIMER (owner): a flexible 30–60% / 10–20-rep set, shown as BANDS — a primer
+  //    is "just do some light high-rep reps", not a spuriously precise single load. Clamped
+  //    strictly below the work set so even a light work day still gets a lighter primer.
+  // Max reps achievable at a %1RM, clamped to a sane ceiling (rep-max models blow up at
+  // light loads — epley says ~70 reps at 30% — so cap the DISPLAYED NRM at 40). Used to
+  // show each zone's max-rep band beside its %1RM.
+  const maxRepsAt = (pct: number): number => {
+    const r = repsForWeight(eff1rm, eff1rm * pct, formula);
+    return r === null ? 1 : Math.min(40, Math.max(1, Math.round(r)));
+  };
+  const floor5 = (pct: number) => Math.floor((pct * 100) / 5) * 5;
+  const ceil5 = (pct: number) => Math.ceil((pct * 100) / 5) * 5;
+  const pHiPct = Math.max(0.1, Math.min(0.6, workPct - 0.07));
+  const pLoPct = Math.max(0.05, Math.min(0.3, pHiPct - 0.05));
+  const pMidPct = (pLoPct + pHiPct) / 2;
+  const pMidEff = roundToIncrement(eff1rm * pMidPct, increment); // effective load, for ordering
+  sets.push({
+    kind: "general",
+    pctOf1RM: Math.round(pMidPct * 100),
+    exactKg: Math.round((eff1rm * pMidPct - bwl) * 10) / 10,
+    weightKg: roundToIncrement(eff1rm * pMidPct - bwl, increment),
+    downKg: band(pLoPct).down,
+    upKg: band(pHiPct).up,
+    reps: 15, // representative; the column shows the 10–20 band
+    pctLabel: `${Math.round(pLoPct * 100)}–${Math.round(pHiPct * 100)}%`,
+    repsLabel: "10–20",
+    // NRM band: heavier edge (pHi) = fewer reps, lighter edge (pLo) = more → "20–40".
+    maxRepsLabel: `${maxRepsAt(pHiPct)}–${maxRepsAt(pLoPct)}`,
+  });
 
-  // Ramp 60% → ~90%, ⅓ of achievable reps at each step; more steps when heavy.
-  const intensity = workingWeightKg / oneRepMax;
-  const count = rampSetCount(intensity);
-  for (let i = 0; i < count; i++) {
-    const pct = count === 1 ? 0.8 : 0.6 + (0.9 - 0.6) * (i / (count - 1));
-    const rampWeight = roundToIncrement(workingWeightKg * pct, increment);
-    const achievable = repsForWeight(oneRepMax, rampWeight, formula);
-    const reps = achievable === null ? 5 : achievable / 3;
-    push("ramp", pct, reps);
+  // 2) RAMP SETS (owner): from 60% up to just below the work set, each doing ⅓ of the reps
+  //    you COULD hit at that load (submaximal grooving, never to failure). Count = the plan
+  //    total minus the one primer, so heavier plans add more ramp steps (pyramid). Kept
+  //    strictly increasing and below the work set; degenerate light-work cases self-trim.
+  //    The %1RM + NRM show as a ZONE BAND (owner: "78% should read 60–80%") spanning the
+  //    previous step up to this one; the weight + ⅓-reps stay the concrete set to perform.
+  const rampN = Math.max(1, n - 1);
+  const rampFloor = 0.6;
+  const rampTop = Math.min(0.9, workPct - 0.05); // a touch below the work set, capped at 90%
+  let lastEff = pMidEff; // ramps must climb above the primer
+  let prevPct = rampFloor; // the previous zone boundary (starts at the ramp floor / primer top)
+  for (let i = 0; i < rampN; i++) {
+    const pct = rampTop <= rampFloor ? rampFloor : rampFloor + (rampTop - rampFloor) * (rampN === 1 ? 1 : i / (rampN - 1));
+    const exactEff = eff1rm * pct;
+    const effRounded = roundToIncrement(exactEff, increment);
+    if (effRounded <= lastEff || effRounded >= effWork) continue; // strictly increasing, below work
+    const achievable = repsForWeight(eff1rm, effRounded, formula);
+    const loPct = Math.min(floor5(prevPct), floor5(pct)); // guard: never an inverted band
+    const hiPct = Math.max(ceil5(pct), loPct + 5);
+    // The WEIGHT must span the SAME zone the %1RM shows (owner: "the weight isn't what the
+    // percent is") — so the band is loPct→hiPct of 1RM, not the plate-rounding of one load.
+    const wLo = band(loPct / 100).down;
+    const wHi = band(hiPct / 100).up;
+    // Reps = ⅓ of the achievable band (owner: "9–20RM ⇒ 3–6, not just 3"), floored so a
+    // warm-up never over-reaches; collapses to a single number when the ⅓ ends coincide.
+    const loReps = Math.max(1, Math.floor(maxRepsAt(pct) / 3));
+    const hiReps = Math.max(1, Math.floor(maxRepsAt(prevPct) / 3));
+    sets.push({
+      kind: "ramp",
+      pctOf1RM: Math.round(pct * 100),
+      exactKg: Math.round((exactEff - bwl) * 10) / 10,
+      weightKg: roundToIncrement(exactEff - bwl, increment),
+      downKg: wLo,
+      upKg: wHi,
+      reps: achievable === null ? 8 : Math.max(1, Math.round(achievable / 3)),
+      ...(achievable === null ? {} : { maxReps: Math.max(1, Math.round(achievable)) }),
+      pctLabel: `${loPct}–${hiPct}%`,
+      maxRepsLabel: `${maxRepsAt(pct)}–${maxRepsAt(prevPct)}`,
+      repsLabel: loReps === hiReps ? `${loReps}` : `${loReps}–${hiReps}`,
+    });
+    lastEff = effRounded;
+    prevPct = pct;
   }
-
   return sets;
 }

@@ -101,6 +101,11 @@ export const EXERCISE_JOINTS: Record<string, readonly Joint[]> = {
   "Bicep Curl": ["Elbow", "Radioulnar"],
   "Tricep Pushdown": ["Elbow"],
   "Calf Raise": ["Talocrural (Ankle)", "Subtalar"],
+  // Lever — forearm rotation at the radioulnar joint, wrist deviation at the wrist.
+  "Lever Pronation": ["Radioulnar"],
+  "Lever Supination": ["Radioulnar"],
+  "Lever Abduction": ["Wrist"],
+  "Lever Adduction": ["Wrist"],
 };
 export const EXERCISE_MOVEMENTS: Record<string, readonly Movement[]> = {
   "Squat": ["Flexion", "Extension"],
@@ -115,6 +120,10 @@ export const EXERCISE_MOVEMENTS: Record<string, readonly Movement[]> = {
   "Bicep Curl": ["Flexion", "Supination"],
   "Tricep Pushdown": ["Extension"],
   "Calf Raise": ["Plantar Flexion"],
+  "Lever Pronation": ["Pronation"],
+  "Lever Supination": ["Supination"],
+  "Lever Abduction": ["Abduction"],
+  "Lever Adduction": ["Adduction"],
 };
 /** Which plane(s) each MOVEMENT happens in (TASK 22). Exercises inherit planes
  * through their movements; this is the single source so a plane is never stored
@@ -174,6 +183,10 @@ export const EXERCISE_LATERALITY: Record<string, readonly Laterality[]> = {
   "Bulgarian Split Squat": ["Unilateral"],
   "Single Leg Romanian Deadlift": ["Unilateral"],
   "Lunge": ["Unilateral"],
+  "Lever Pronation": ["Unilateral"],
+  "Lever Supination": ["Unilateral"],
+  "Lever Abduction": ["Unilateral"],
+  "Lever Adduction": ["Unilateral"],
 };
 export const EXERCISE_DIFFICULTY: Record<string, readonly Difficulty[]> = {
   "Squat": ["Intermediate"],

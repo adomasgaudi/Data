@@ -205,16 +205,30 @@ export const EXERCISE_BW_COEFF: Record<string, number> = {
   "Decline Sit Up": 0.3,
   "Roman Chair Side Bend": 0.3,
   "Hip Abduction": 0,
+  "Knee Raise": 0.35,
+  "Knee Raises": 0.35,
+  "Hanging Knee Raise": 0.35,
+  "Hanging Knee Raises": 0.35,
+  "L Sit": 0.35,
+  "L-Sit": 0.35,
+  "L Sits": 0.35,
+  "Pike L-Sit": 0.35,
+  "Pike L Sit": 0.35,
+  "Cross-Legged Squats": 0.6,
+  "Cross-Legged Squat": 0.6,
 };
 
-/** Exercises with no match contribute no bodyweight (treated as pure load). */
-export const DEFAULT_BW_COEFF = 0;
 
 /** True for bar pull-up / chin-up / dip movements, where a *negative* logged weight
  * means assistance from a machine (not added load). Excludes pulldowns, pull
- * overs and other cable "pull" work, which are always loaded positively. */
+ * overs and other cable "pull" work, which are always loaded positively. A bare
+ * "Pull" / "Chin" (the owner's combined pull-up + chin-up lift) counts too — matched
+ * as the WHOLE name so "Pulldown" / "Pullover" / "Face Pull" stay excluded. */
 export function isAssistablePullup(exerciseName: string): boolean {
-  return /pull[\s-]?ups?|chin[\s-]?ups?|dips?/.test(exerciseName.toLowerCase());
+  const n = exerciseName.toLowerCase();
+  const bare = n.replace(/[^a-z]/g, "");
+  if (bare === "pull" || bare === "pulls" || bare === "chin" || bare === "chins") return true;
+  return /pull[\s-]?ups?|chin[\s-]?ups?|dips?/.test(n);
 }
 
 /**
@@ -238,9 +252,9 @@ export function realPullupWeight(exerciseName: string, weight: number | null): n
  * (a machine counterweight that reads ~2× the real help), it's halved; otherwise
  * the value passes through. Keeps the override logic out here so it's unit-tested.
  */
-export function assistedRealWeight(weight: number | null, assisted: boolean): number | null {
+export function assistedRealWeight(weight: number | null, assisted: boolean, divisor = 2): number | null {
   if (weight === null || weight >= 0) return weight;
-  return assisted ? weight / 2 : weight;
+  return assisted ? weight / (divisor > 0 ? divisor : 2) : weight;
 }
 
 /**
@@ -338,10 +352,12 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
   // as its own muscle rather than being lumped into the glutes.
   { id: "muscle.abductors", kind: "muscle-group", label: "Abductors",
     why: "Hip abduction — driving the leg out to the side: hip-abduction machine, cable/band abductions, clamshells.",
-    keywords: ["hip abduction", "abduction", "abductor", "clamshell", "clam shell"] },
+    keywords: ["hip abduction", "abduction", "abductor", "clamshell", "clam shell"],
+    exclude: ["Lever Abduction"] }, // wrist abduction (radial deviation) → Forearms, not the hip
   { id: "muscle.adductors", kind: "muscle-group", label: "Adductors",
     why: "Hip adduction — drawing the leg in toward the midline: adductor machine, cable/band adductions, Copenhagen plank.",
-    keywords: ["hip adduction", "adduction", "adductor", "copenhagen"] },
+    keywords: ["hip adduction", "adduction", "adductor", "copenhagen"],
+    exclude: ["Lever Adduction"] }, // wrist adduction (ulnar deviation) → Forearms, not the hip
   { id: "muscle.glutes", kind: "muscle-group", label: "Glutes",
     why: "Hip-extension dominant: thrusts, bridges, hip extension.",
     keywords: ["hip thrust", "glute", "hip extension", "bridge"] },
@@ -355,8 +371,9 @@ export const MUSCLE_GROUP_TAGS: RegistryTag[] = [
     why: "Elbow-extension: pushdowns, skulls, JM press, close-grip bench. Before chest so close-grip bench reads triceps.",
     keywords: ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip bench", "close-grip bench"] },
   { id: "muscle.forearms", kind: "muscle-group", label: "Forearms",
-    why: "Grip & wrist work: wrist curls, dead hangs, farmer's carries, pinch/finger and forearm work. Before biceps so a 'wrist curl' isn't read as a biceps curl.",
-    keywords: ["forearm", "wrist", "grip", "dead hang", "farmer", "suitcase", "pinch", "finger", "reverse curl"] },
+    why: "Grip & wrist work: wrist curls, dead hangs, farmer's carries, pinch/finger and forearm work, plus the Lever wrist/forearm rotations. Before biceps so a 'wrist curl' isn't read as a biceps curl.",
+    keywords: ["forearm", "wrist", "grip", "dead hang", "farmer", "suitcase", "pinch", "finger", "reverse curl", "pronation", "supination"],
+    include: ["Lever Pronation", "Lever Supination", "Lever Abduction", "Lever Adduction"] },
   { id: "muscle.biceps", kind: "muscle-group", label: "Biceps",
     why: "Elbow-flexion: curls, preacher, hammer.",
     keywords: ["curl", "preacher", "hammer"] },
@@ -639,6 +656,14 @@ export function categoryOverride(n: string): TrainingCategory | null {
   return null;
 }
 
+/** Shared keyword lists (DUP-1): extracted so the SAME list isn't copy-pasted across
+ * the category/muscle/discipline guessers and silently drift apart when one is edited.
+ * LEG_KW_ALL = everything leg-ish; LEG_KW_BIG3 = just quads/glutes/hams (no calves /
+ * abductors / Olympic); CHEST_KW = the chest/push pressers. */
+const LEG_KW_ALL = ["squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"];
+const LEG_KW_BIG3 = ["squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "nordic", "wall sit"];
+const CHEST_KW = ["bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"];
+
 /**
  * Best-guess muscle/movement category for an exercise, by keyword — so the athlete
  * page can show what someone has actually been training. Order matters: skills and
@@ -664,11 +689,11 @@ export function exerciseCategory(exerciseName: string): TrainingCategory {
     return "Shoulders";
   if (has("curl", "tricep", "triceps", "pushdown", "preacher", "hammer", "wrist", "forearm", "finger", "skull", "jm press", "kickback"))
     return "Arms";
-  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up"))
+  if (has(...CHEST_KW))
     return "Chest";
   if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "lower back", "erector"))
     return "Back";
-  if (has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell"))
+  if (has(...LEG_KW_ALL))
     return "Legs";
   return "Other";
 }
@@ -732,48 +757,6 @@ export function exerciseDisciplines(exerciseName: string): Discipline[] {
   const n = exerciseName.toLowerCase();
   if (/wall climb|wall run|run ?up|vault|\bkong\b|cat leap|precision jump|parkour|rag wall/.test(n) && !out.includes("Parkour"))
     out.push("Parkour");
-  return out;
-}
-
-/**
- * JOINT MOVEMENTS — the biomechanical action(s) a lift trains, used by the Index
- * "Joint movement" grouping. Multi-membership: a squat is hip + knee extension, a
- * bench is shoulder horizontal adduction + elbow extension. Keyword-based; a lift
- * with no match simply doesn't appear under this grouping.
- */
-export const JOINT_MOVEMENTS: string[] = [
-  "Shoulder horizontal adduction", "Shoulder horizontal abduction", "Shoulder abduction",
-  "Shoulder flexion", "Shoulder extension", "Elbow flexion", "Elbow extension",
-  "Hip extension", "Hip flexion", "Hip abduction", "Hip adduction",
-  "Knee extension", "Knee flexion", "Spinal flexion", "Spinal extension",
-  "Trunk rotation", "Anti-rotation / anti-extension", "Ankle plantarflexion",
-];
-const JOINT_KEYWORDS: [string, string[]][] = [
-  ["Shoulder horizontal adduction", ["bench", "chest press", "chest fly", "pec fly", "pec deck", "push up", "pushup", "push-up", "pushups", "press up", "fly", "dip"]],
-  ["Shoulder horizontal abduction", ["row", "rear delt", "reverse fly", "face pull", "inverted row", "seal row"]],
-  ["Shoulder abduction", ["lateral raise", "side raise", "upright row"]],
-  ["Shoulder flexion", ["front raise", "shoulder press", "overhead press", "military", "ohp", "handstand push"]],
-  ["Shoulder extension", ["pullover", "pull over", "straight arm", "pulldown", "lat pull", "pull up", "pullup", "pull-up", "chin up", "chinup"]],
-  ["Elbow flexion", ["curl", "chin up", "chinup", "preacher", "hammer"]],
-  ["Elbow extension", ["tricep", "triceps", "pushdown", "skull", "jm press", "close grip", "close-grip", "dip", "bench", "overhead press", "shoulder press", "military", "press up", "push up", "pushup"]],
-  ["Hip extension", ["squat", "deadlift", "hip thrust", "glute", "lunge", "rdl", "romanian", "good morning", "step up", "step-up", "bridge", "hyperextension", "back extension", "kettlebell swing"]],
-  ["Hip flexion", ["leg raise", "legs raise", "knee raise", "knee tuck", "hanging", "l-sit", "l sit", "lsit", "sit up", "situp", "sit-up"]],
-  ["Hip abduction", ["hip abduction", "abduction", "abductor"]],
-  ["Hip adduction", ["hip adduction", "adduction", "adductor"]],
-  ["Knee extension", ["squat", "leg extension", "leg press", "lunge", "step up", "step-up", "sissy", "hack", "pistol", "wall sit"]],
-  ["Knee flexion", ["leg curl", "hamstring", "ham ", "nordic"]],
-  ["Spinal flexion", ["crunch", "sit up", "situp", "sit-up"]],
-  ["Spinal extension", ["back extension", "hyperextension", "reverse hyper", "superman", "good morning"]],
-  ["Trunk rotation", ["twist", "woodchop", "russian twist", "oblique", "bicycle"]],
-  ["Anti-rotation / anti-extension", ["plank", "pallof", "hollow", "ab wheel", "rollout", "l-sit", "l sit", "lsit", "front lever", "planche", "dragon flag"]],
-  ["Ankle plantarflexion", ["calf", "calves"]],
-];
-/** Every joint movement an exercise trains (one or more), by keyword. */
-export function jointMovements(exerciseName: string): string[] {
-  const n = exerciseName.toLowerCase();
-  const out: string[] = [];
-  for (const [bucket, kws] of JOINT_KEYWORDS)
-    if (kws.some((k) => n.includes(k)) && !out.includes(bucket)) out.push(bucket);
   return out;
 }
 
@@ -921,13 +904,13 @@ export function exerciseCategories(exerciseName: string): string[] {
   if (tagMatches(n, pattern("pattern.deadlift-accessory"))) add("Deadlift accessory");
 
   // Leg splits: broad (everything leg-ish) vs the big three quads/glutes/hams.
-  const legBroad = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "calf", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "hip abduction", "hip adduction", "abductor", "adductor", "nordic", "wall sit", "clean", "snatch", "kettlebell");
+  const legBroad = has(...LEG_KW_ALL);
   if (legBroad) add("Legs (all)");
-  const legBig = has("squat", "deadlift", "lunge", "leg press", "leg curl", "leg extension", "hip thrust", "glute", "rdl", "romanian", "good morning", "hamstring", "ham ", "quad", "pistol", "step up", "step-up", "hack", "belt squat", "cossack", "sissy", "nordic", "wall sit");
+  const legBig = has(...LEG_KW_BIG3);
   if (legBig) add("Legs (quads/glutes/hams)");
 
   // Muscle groups — independent keyword sets, so big compounds match several.
-  if (has("bench", "chest", "push up", "pushup", "push-up", "pushups", "fly", "pec", "dip", "press up")) add("Chest");
+  if (has(...CHEST_KW)) add("Chest");
   if (has("row", "pulldown", "pull up", "pullup", "pull-up", "chin up", "chinup", "lat ", "lat pull", "pull over", "pullover", "face pull", "inverted row", "scapular", "back extension", "hyperextension", "reverse hyper", "deadlift", "shrug", "rack pull", "good morning", "lower back", "erector"))
     add("Back");
   if (has("shoulder press", "overhead press", "lateral raise", "front raise", "rear delt", "upright row", "military press", "behind the neck", "arnold", "shrug", "delt", "handstand push"))

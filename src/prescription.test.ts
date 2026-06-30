@@ -110,6 +110,52 @@ describe("warmupRamp", () => {
     expect(heavy.length).toBeGreaterThanOrEqual(light.length);
   });
 
+  it("sets are % of 1RM with a plate-round range; the plan drives the set count", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, increment: 2.5, plan: "standard" });
+    expect(sets.length).toBeGreaterThan(0);
+    for (const s of sets) {
+      expect(s.pctOf1RM).toBeGreaterThanOrEqual(40);
+      expect(s.exactKg).toBeGreaterThan(0);
+      expect(s.downKg).toBeLessThanOrEqual(s.weightKg);
+      expect(s.upKg).toBeGreaterThanOrEqual(s.weightKg);
+    }
+    const quick = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, plan: "quick" });
+    const heavy = warmupRamp({ oneRepMax: 100, workingWeightKg: 90, plan: "heavy" });
+    expect(heavy.length).toBeGreaterThan(quick.length);
+  });
+
+  it("first set is a light primer shown as a 30–60% / 10–20-rep band with an NRM band", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
+    const primer = sets[0]!;
+    expect(primer.kind).toBe("general");
+    expect(primer.repsLabel).toBe("10–20");
+    expect(primer.pctLabel).toBe("30–60%");
+    // the band's load range spans ~30%→60% of the 1RM (not a single point)
+    expect(primer.upKg).toBeGreaterThan(primer.downKg);
+    // the primer carries an NRM BAND (e.g. "20–40") and no single maxReps
+    expect(primer.maxRepsLabel).toMatch(/^\d+–\d+$/);
+    expect(primer.maxReps).toBeUndefined();
+  });
+
+  it("a ramp set reads as a ZONE band: weight, %1RM, NRM and reps all span the zone", () => {
+    const sets = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, plan: "quick" });
+    const ramp = sets.find((s) => s.kind === "ramp")!;
+    // owner: the single ramp step reads "60–80%", not a bare "78%"
+    expect(ramp.pctLabel).toMatch(/^\d+–\d+%$/);
+    expect(ramp.pctLabel!.startsWith("60–")).toBe(true);
+    // the WEIGHT band must match that %1RM zone (owner: "the weight isn't what the % is").
+    // For a 100 1RM the band edges equal the zone %s in kg (e.g. 60–75%), plate-rounded —
+    // NOT a single ~75% load (which would make down==up).
+    const [loPct, hiPct] = ramp.pctLabel!.replace("%", "").split("–").map(Number);
+    expect(ramp.downKg).toBeLessThanOrEqual(loPct! + 2.5);
+    expect(ramp.upKg).toBeGreaterThanOrEqual(hiPct! - 2.5);
+    expect(ramp.upKg).toBeGreaterThan(ramp.downKg); // a real band, not a point
+    // reps are a ⅓-of-max BAND (owner: "9–20RM ⇒ 3–6, not just 3"), not a single number
+    expect(ramp.repsLabel).toMatch(/^\d+–\d+$/);
+    expect(ramp.maxRepsLabel).toMatch(/^\d+–\d+$/);
+    expect(ramp.maxReps).toBeGreaterThan(0);
+  });
+
   it("returns [] on invalid input", () => {
     expect(warmupRamp({ oneRepMax: 0, workingWeightKg: 80 })).toEqual([]);
     expect(warmupRamp({ oneRepMax: 100, workingWeightKg: 0 })).toEqual([]);
@@ -134,5 +180,45 @@ describe("warmupRamp", () => {
         },
       ),
     );
+  });
+
+  it("bodyweightLoad=0 is identical to omitting it (barbell unchanged)", () => {
+    const a = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, increment: 2.5, plan: "standard" });
+    const b = warmupRamp({ oneRepMax: 100, workingWeightKg: 80, increment: 2.5, plan: "standard", bodyweightLoad: 0 });
+    expect(b).toEqual(a);
+  });
+
+  it("assisted calisthenics (negative added weight) still gets a warm-up", () => {
+    // Dips at -5 kg added, with ~94 kg bodyweight share: the ADDED working weight is
+    // negative but the EFFECTIVE load is positive, so the ramp should produce sets.
+    const sets = warmupRamp({ oneRepMax: 56, workingWeightKg: -5, bodyweightLoad: 94, increment: 2.5 });
+    expect(sets.length).toBeGreaterThan(0);
+    // Displayed (added) weights climb toward the work set and stay strictly below it;
+    // early sets are MORE assisted (more negative) than the -5 kg work set.
+    let prev = -Infinity;
+    for (const s of sets) {
+      expect(s.weightKg).toBeLessThan(-5);
+      expect(s.weightKg).toBeGreaterThan(prev);
+      prev = s.weightKg;
+    }
+    expect(sets[0]!.weightKg).toBeLessThan(0); // first warm-up is assisted
+  });
+
+  it("still returns [] when even the effective load is non-positive", () => {
+    expect(warmupRamp({ oneRepMax: -10, workingWeightKg: -20, bodyweightLoad: 5 })).toEqual([]);
+  });
+
+  it("displayed bar weights are plate-rounded even with a non-plate bodyweight share", () => {
+    // Squat: 1RM 151.3 added, work 120, bodyweight share 0.6×97.1 = 58.26 (NOT a plate
+    // multiple). Before the fix the effective load was plate-rounded then 58.26 subtracted,
+    // giving messy bar weights (24.24–26.74 kg). Now the ADDED weight rounds to the plate.
+    const sets = warmupRamp({ oneRepMax: 151.3, workingWeightKg: 120, bodyweightLoad: 58.26, increment: 2.5, plan: "heavy" });
+    expect(sets.length).toBeGreaterThan(0);
+    const onGrid = (v: number) => expect(Math.abs(v / 2.5 - Math.round(v / 2.5))).toBeLessThan(1e-6);
+    for (const s of sets) {
+      onGrid(s.weightKg);
+      onGrid(s.downKg);
+      onGrid(s.upKg);
+    }
   });
 });

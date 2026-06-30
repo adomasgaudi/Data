@@ -4,6 +4,10 @@
 > types `#ui <control>` (or asks you to rework / place / style any control). Distilled
 > from the whole version history (commits, changelog notes, persistent-bugs). It's the
 > "how the owner thinks about UI" so a control lands right the FIRST time.
+>
+> **Pairs with `docs/ui-rubric.md`** — the space-efficiency rubric you SCORE a screenshot
+> against (viewport-fit, proportion, no atomic-token wrapping, content gets the room). This
+> file is *taste*; that file is the *scored checklist*. Run both on every UI change.
 
 ## The one-line instinct
 **Maximal density, but finger-friendly, flat, and obviously tappable.** Small footprint

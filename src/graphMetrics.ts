@@ -6,8 +6,9 @@
  * future work can reference them) but not computed yet.
  */
 import type { SetRecord } from "./domain";
-import { addedWeight1RM, decayedStrengthSeries } from "./aggregate";
-import { setVolume, linearFit, type OneRepMaxFormula } from "./metrics";
+import { addedWeight1RM, effectiveE1RM, decayedStrengthSeries } from "./aggregate";
+import { setVolume, type OneRepMaxFormula } from "./metrics";
+import { fitLog, fitCeiling, sampleProjection } from "./projection";
 import type { GraphConfig } from "./graphConfig";
 
 const DAY = 86_400_000;
@@ -27,6 +28,7 @@ export interface GraphPoint {
   bands?: number[];
   meta?: string; // tooltip text
   detail?: string; // full per-set facts for the click-to-pin popup (one per line)
+  histEx?: string; // source exercise → powers the popup's "→ in history" link
   fail?: boolean; // the set's note contained "fail" — drawn as an ✕ in the series colour
   pr?: boolean; // a new running-max (a record at the time) — drawn as a diamond
   rir?: number; // the set's reps-in-reserve — scales the dot (higher RIR = smaller)
@@ -131,6 +133,7 @@ function perSet(
   sel: (r: SetRecord) => number | null | undefined,
   metaOf?: (r: SetRecord) => string,
   cfg?: GraphConfig,
+  loOf?: (r: SetRecord) => number | null | undefined,
 ): GraphPoint[] {
   const times = setTimes(records, cfg?.spread);
   const origins = distinctOrigins(records); // >1 → a combined/comparison lift
@@ -140,8 +143,13 @@ function perSet(
     if (y != null && Number.isFinite(y)) {
       const x = times.get(r) ?? ts(r.date);
       const p: GraphPoint = { x, y };
+      if (loOf) {
+        const lo = loOf(r);
+        if (lo != null && Number.isFinite(lo)) p.lo = r1(lo);
+      }
       if (metaOf) p.meta = metaOf(r);
       p.detail = setDetail(r, cfg);
+      p.histEx = r.originalExerciseName ?? r.exerciseName;
       if (isFail(r)) p.fail = true;
       const rir = cfg?.rirOf?.(r); // size the dot by effort, when a resolver is given
       if (rir != null && Number.isFinite(rir)) p.rir = rir;
@@ -162,9 +170,41 @@ function perSet(
   return out;
 }
 
-/** est. 1RM points for an exercise under the configured formula. */
-function e1rmPoints(records: readonly SetRecord[], formula: OneRepMaxFormula): { x: number; y: number }[] {
-  return perSet(records, (r) => addedWeight1RM(r, formula)).map((p) => ({ x: p.x, y: p.y! }));
+/** est. 1RM points for an exercise under the configured formula.
+ * Pass `cfg` to include RIR values — used by the adaptive decay series (strengthDecay). */
+function e1rmPoints(
+  records: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  cfg?: GraphConfig,
+): { x: number; y: number; rir?: number }[] {
+  return perSet(records, (r) => addedWeight1RM(r, formula), undefined, cfg).map((p) => ({
+    x: p.x,
+    y: p.y!,
+    ...(p.rir != null ? { rir: p.rir } : {}),
+  }));
+}
+
+/** EFFECTIVE-1RM points for the decay/growth model (rule 58): the fade + the growth cap must
+ * run on the FULL effective load (bodyweight folded in), not the peeled added weight. Returns
+ * the effective points + a representative bodyweight SHARE (the most-recent comparable set's
+ * effective − added) for the caller to peel back so the plotted line stays the ADDED weight
+ * (rule 49). For bar-only lifts (coeff 0) the share is 0, so this is a no-op. */
+export function effectiveDecayInput(
+  records: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  cfg?: GraphConfig,
+): { pts: { x: number; y: number; rir?: number }[]; offset: number } {
+  const pts = perSet(records, (r) => effectiveE1RM(r, formula), undefined, cfg).map((p) => ({
+    x: p.x,
+    y: p.y!,
+    ...(p.rir != null ? { rir: p.rir } : {}),
+  }));
+  const dated = records
+    .filter((r) => r.date && effectiveE1RM(r, formula) != null)
+    .sort((a, b) => Date.parse(b.date) - Date.parse(a.date));
+  const last = dated[0];
+  const offset = last ? (effectiveE1RM(last, formula)! - (addedWeight1RM(last, formula) ?? 0)) : 0;
+  return { pts, offset };
 }
 
 /** Running maximum — the legacy "Strength Score" line that never drops. */
@@ -173,23 +213,95 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
   return pts.map((p) => ({ x: p.x, y: r1((m = Math.max(m, p.y))) }));
 }
 
-/** Logarithmic projection (a + b·ln(day+1)) over the data span extended by the
- * horizon. Returns [] when there are too few points to fit (missing-data state). */
-function predict(pts: { x: number; y: number }[], horizonDays: number): GraphPoint[] {
-  if (pts.length < 3) return [];
-  const t0 = pts[0]!.x;
-  const dayOf = (x: number) => (x - t0) / DAY;
-  const fit = linearFit(pts.map((p) => ({ x: Math.log(dayOf(p.x) + 1), y: p.y })));
-  if (!fit) return [];
-  const lastDay = dayOf(pts[pts.length - 1]!.x);
-  const end = lastDay + Math.max(0, horizonDays);
-  const out: GraphPoint[] = [];
-  const N = 24;
-  for (let i = 0; i <= N; i++) {
-    const d = (end * i) / N;
-    out.push({ x: t0 + d * DAY, y: r1(fit.intercept + fit.slope * Math.log(d + 1)) });
+/** Strength as the best top set within a rolling WINDOW: at each point, the max y over a
+ * trailing span of calendar DAYS. `undefined`/`Infinity` falls back to the all-time runningMax.
+ * `pts` must be sorted ascending by x (e1rmPoints already is). Unlike runningMax this line CAN
+ * drop — it reflects "best in the last window", not the lifetime peak.
+ *
+ * Compared by calendar DAY, not raw ms: logged sets are day-granular (a date, no clock time)
+ * and same-day sets are FANNED across the day for visual separation, so a raw-ms window let an
+ * early-in-day point swallow the WHOLE previous day — the "1d line never drops" bug (owner: the
+ * curve should jump on 1d view). We instead look back (windowDays − 1) whole days, so "1d" = the
+ * SAME calendar day only, "1w" = today + 6 prior days, etc.; the line then drops between periods. */
+function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
+  let raw: GraphPoint[];
+  if (windowMs == null || !Number.isFinite(windowMs)) {
+    raw = runningMax(pts);
+  } else {
+    const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
+    const dayOf = (x: number) => Math.floor(x / DAY);
+    raw = pts.map((p, i) => {
+      const di = dayOf(p.x);
+      let m = p.y;
+      for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
+      return { x: p.x, y: r1(m) };
+    });
   }
+  return keepLevelCorners(raw);
+}
+
+/** Drop the strength-line vertices that DON'T change the level — a weaker set sitting in the
+ * shadow of a stronger recent one keeps the windowed max flat, so it added a confusing dot at
+ * a value that isn't your real strength (owner: "don't add data points for the strength line
+ * when weaker sets are done, it confuses which one is real"). Keep only the CORNERS (a point
+ * whose y differs from a neighbour → where the level actually steps up or dips) plus the two
+ * endpoints, so the line keeps its flat-then-step shape and the genuine lull-dips (CHART-217)
+ * but loses the weak-set dots. Does not touch the per-set 1RM scatter — that's a separate metric. */
+function keepLevelCorners(pts: GraphPoint[]): GraphPoint[] {
+  if (pts.length <= 2) return pts;
+  const out: GraphPoint[] = [pts[0]!];
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (pts[i]!.y !== pts[i - 1]!.y || pts[i]!.y !== pts[i + 1]!.y) out.push(pts[i]!);
+  }
+  out.push(pts[pts.length - 1]!);
   return out;
+}
+
+/** Select the points that feed the projection fit, per the configured basis.
+ * Warm-ups (clearly submaximal: RIR ≥ 6 when effort is known) are ALWAYS dropped;
+ * "hard" keeps only near-failure sets (RIR < 3), "records" reduces to the running
+ * max, and "all" keeps every working set. */
+function projectionBasisPoints(records: readonly SetRecord[], cfg: GraphConfig): { x: number; y: number }[] {
+  const basis = cfg.projectionBasis ?? "records";
+  const rirOf = cfg.rirOf;
+  const kept = records.filter((r) => {
+    if (!rirOf) return true; // no effort signal → can't tell warm-ups apart, keep all
+    const rir = rirOf(r);
+    if (rir == null || !Number.isFinite(rir)) return true; // unknown effort → keep
+    if (rir >= 6) return false; // clear warm-up — never projected
+    if (basis === "hard") return rir < 3; // near-failure only
+    return true;
+  });
+  const pts = e1rmPoints(kept, cfg.formula).filter(
+    (p) => (cfg.projectionFrom == null || p.x >= cfg.projectionFrom) && (cfg.projectionTo == null || p.x <= cfg.projectionTo),
+  );
+  return basis === "records" ? runningMax(pts).map((p) => ({ x: p.x, y: p.y! })) : pts;
+}
+
+/** Strength projection over the data span extended by the horizon. When a CEILING
+ * is known (the user's Potential ceiling, else the world record) the curve is the
+ * ceiling-approach fit y = ceiling − e^(m·t+b) — steep early, flattening toward the
+ * ceiling (the owner's ask). Otherwise it falls back to the plain log fit
+ * y = c + b·ln(t + a). Returns [] when there are too few points to fit. */
+function predict(pts: { x: number; y: number }[], horizonDays: number, ceiling: number | null): GraphPoint[] {
+  if (pts.length < 3) return [];
+  // Ceiling must sit ABOVE the latest point, else there's nothing to approach.
+  const last = pts[pts.length - 1]!.y;
+  const usedCeiling = ceiling != null && ceiling > last;
+  const fit = (usedCeiling ? fitCeiling(pts, ceiling!) : null) ?? fitLog(pts);
+  if (!fit) return [];
+  const t0 = pts[0]!.x;
+  const end = pts[pts.length - 1]!.x + Math.max(0, horizonDays) * DAY;
+  // #max-debug (PB-40): surface the projection fit on the on-screen dbg console so the
+  // owner can SEE whether the curve actually passes through the current strength and
+  // approaches the ceiling. `fit@cur` should ≈ `cur` now that fitCeiling anchors there.
+  const dbg = (globalThis as { dbg?: (m: string) => void }).dbg;
+  if (dbg) {
+    const lastX = pts[pts.length - 1]!.x;
+    const at = (x: number) => { const v = fit.predict(x); return v == null ? "–" : Math.round(v); };
+    dbg(`proj n=${pts.length} ceil=${usedCeiling ? Math.round(ceiling!) : "log"} cur=${Math.round(last)} fit@cur=${at(lastX)} fit@end=${at(end)}`);
+  }
+  return sampleProjection(fit, t0, end, 24).map((p) => ({ x: p.x, y: r1(p.y) }));
 }
 
 const WEEK = 7 * DAY;
@@ -200,13 +312,30 @@ const WEEK = 7 * DAY;
  * 1st. The value is also a stable per-bucket key for grouping. */
 function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
   if (interval === "day") return Math.floor(t / DAY) * DAY + DAY / 2;
-  if (interval === "month") {
+  // Calendar month-multiples: month (1) · quarter (3) · half-year (6) · year (12). Each set
+  // floors to its block start (aligned to January) so the longer-range volume bars are stable.
+  const monthSpan = interval === "month" ? 1 : interval === "quarter" ? 3 : interval === "halfyear" ? 6 : interval === "year" ? 12 : 0;
+  if (monthSpan) {
     const d = new Date(t);
-    const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
-    const next = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+    const startMo = Math.floor(d.getUTCMonth() / monthSpan) * monthSpan;
+    const start = Date.UTC(d.getUTCFullYear(), startMo, 1);
+    const next = Date.UTC(d.getUTCFullYear(), startMo + monthSpan, 1);
     return (start + next) / 2;
   }
-  return Math.floor(t / WEEK) * WEEK + WEEK / 2; // week
+  // WEEK buckets start on MONDAY (matching the workout history + heatmap), NOT the raw
+  // epoch week (floor(t/WEEK) starts THURSDAY, since epoch day 0 is a Thursday) — else a
+  // set lands in a different week than the history shows it ("days don't match"). Shift the
+  // epoch-day to the Monday on/before: Monday-as-0 index = (dayOfEpoch + 3) % 7.
+  const day = Math.floor(t / DAY);
+  const mondayDay = day - ((day + 3) % 7);
+  if (interval === "biweek") {
+    // 2-week buckets anchored to a fixed Monday (epoch day −3 is a Monday), so pairs of
+    // Monday-weeks group consistently; centre = the bucket's midpoint (+7 days).
+    const ANCHOR = -3;
+    const startDay = ANCHOR + Math.floor((day - ANCHOR) / 14) * 14;
+    return (startDay + 7) * DAY;
+  }
+  return mondayDay * DAY + WEEK / 2; // week (Monday-anchored)
 }
 /** Sum a per-set value into one point per time bucket (volume / reps "by date").
  * Buckets by the configured interval — week by default — so the count/volume bars
@@ -236,7 +365,7 @@ function sessionsPerWeek(records: readonly SetRecord[]): GraphPoint[] {
   }
   const weeks = new Map<number, Set<number>>();
   for (const d of days) {
-    const wk = Math.floor((d * DAY) / (7 * DAY)) * (7 * DAY);
+    const wk = (d - ((d + 3) % 7)) * DAY + WEEK / 2; // Monday-anchored week centre (matches bucketCenter)
     (weeks.get(wk) ?? weeks.set(wk, new Set()).get(wk)!).add(d);
   }
   return [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([x, set]) => ({ x, y: set.size }));
@@ -268,7 +397,7 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
           const v = addedWeight1RM({ ...r, reps: k }, cfg.formula);
           if (v != null) bands.push(r1(v));
         }
-        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM`, detail: setDetail(r, cfg) });
+        out.push({ x: times.get(r) ?? ts(r.date), lo, hi, ...(bands.length >= 2 ? { bands } : {}), meta: `${r1(lo)}kg × ${r.reps ?? "?"} → ${r1(hi)} 1RM`, detail: setDetail(r, cfg), histEx: r.originalExerciseName ?? r.exerciseName });
       }
       return out.sort((a, b) => a.x - b.x);
     },
@@ -277,20 +406,47 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
     id: "e1rm",
     label: "1RM",
     type: "scatter",
-    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`, cfg),
+    compute: (rs, cfg) => perSet(rs, (r) => addedWeight1RM(r, cfg.formula), (r) => `${r1(addedWeight1RM(r, cfg.formula) ?? 0)} 1RM`, cfg, (r) => added(r) ?? 0),
   },
   // "% of world record" — computed specially in analyticsGraph (needs the athlete's
   // sex + bodyweight + the per-exercise record); carries no compute. Shown as a
   // FRACTION of the record (1.0 = world record), so it shares the left value axis.
   { id: "pctWR", label: "WR%", type: "scatter" },
-  { id: "strength", label: "Strength", compute: (rs, cfg) => runningMax(e1rmPoints(rs, cfg.formula)) },
-  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => decayedStrengthSeries(e1rmPoints(rs, cfg.formula), Date.now()) },
-  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(e1rmPoints(rs, cfg.formula), cfg.predictionDays) },
+  // "% of your top performance" — each set's added-weight 1RM as a FRACTION of the best
+  // 1RM in view (the peak = 1.0 = 100%). Self-contained (no WR/sex/bodyweight needed), so
+  // unlike pctWR it carries a real compute. A fraction (0–1), shares the left value axis;
+  // analyticsGraph skips the per-bodyweight divide for it (it's already relative).
+  {
+    id: "pctBest",
+    label: "Best%",
+    type: "scatter",
+    compute: (rs, cfg) => {
+      const pts = perSet(rs, (r) => addedWeight1RM(r, cfg.formula), undefined, cfg);
+      let peak = -Infinity;
+      for (const p of pts) if (p.y != null && p.y > peak) peak = p.y;
+      if (!Number.isFinite(peak) || peak <= 0) return [];
+      return pts.map((p) =>
+        p.y == null ? p : { ...p, y: Math.round((p.y / peak) * 1000) / 1000, meta: `${Math.round((p.y / peak) * 100)}% of best (${r1(p.y)} 1RM)` },
+      );
+    },
+  },
+  { id: "strength", label: "Strength", compute: (rs, cfg) => windowedMax(e1rmPoints(rs, cfg.formula), cfg.strengthWindow) },
+  { id: "strengthDecay", label: "Strength Decay", compute: (rs, cfg) => {
+      // EFF-1 (rule 58): run the fade + growth cap on the EFFECTIVE 1RM, then peel the
+      // bodyweight share back so the plotted line is the ADDED weight (rule 49).
+      const { pts, offset } = effectiveDecayInput(rs, cfg.formula, cfg);
+      const wr = cfg.decayParams?.level === 4 ? (cfg.ceilingOf?.(rs) ?? null) : null;
+      return decayedStrengthSeries(pts, Date.now(), 4, cfg.decayParams, wr, offset);
+    } },
+  { id: "predicted", label: "Predicted Strength", compute: (rs, cfg) => predict(projectionBasisPoints(rs, cfg), cfg.predictionDays, cfg.potentialCeiling ?? cfg.ceilingOf?.(rs) ?? null) },
   // Volume / count metrics live on the RIGHT axis so they don't distort the kg
   // scale when shown alongside weight/1RM (TASK 42). They bucket by the configured
   // Interval — WEEK by default — and read as bars (a column per bucket); switch
   // Interval to Day for daily columns. Only Frequency is a smoothed cadence (line).
-  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(r.weight, r.reps)), cfg.interval) },
+  // Volume = added (bar) weight × reps — the SAME basis as the workout-history weekly
+  // summary, so the bars match it. (Was r.weight = bodyweight-inclusive effective load,
+  // which double-counted bodyweight lifts like Hip Thrust — graph 12k vs history 6k.)
+  { id: "volume", label: "Volume", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
   { id: "volumeLoad", label: "Volume Load", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => (r.notComparable ? null : setVolume(added(r), r.reps)), cfg.interval) },
   { id: "reps", label: "Reps", type: "bars", axis: "right", compute: (rs, cfg) => byBucketSum(rs, (r) => r.reps, cfg.interval) },
   { id: "sets", label: "Sets", type: "bars", axis: "right", compute: (rs, cfg) => setsPerBucket(rs, cfg.interval) },

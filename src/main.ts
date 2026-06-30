@@ -5,11 +5,12 @@
  */
 import { niceTicks } from "./chartAxis";
 import {
-  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, relativeDayLabel,
+  fmt, pct, bwMult, wr, MONTH_ABBR, shortDate, relativeDayLabel, dayHeaderParts,
   isoWeekNumber, todayIso, trainingDuration,
 } from "./format";
 import { hashHueHex, cellBgColor, cellBgGradient, heatLevel } from "./colorScale";
 import { escapeHtml } from "./html";
+import { resolveEquip, type Equipment, type EquipSettings } from "./equipment";
 // Tasks & roadmap (Settings overlay) are shown straight from the docs/ markdown,
 // imported as raw text so the panel is always a projection of the files and can
 // never drift from them (single source of truth).
@@ -18,7 +19,7 @@ import roadmapMd from "../docs/roadmap.md?raw";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
-import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
+import { mountSvgChart, getTimeCompact, setTimeCompact, getE1rmStems, setE1rmStems, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, buildLoaded, fetchLatestCsv, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -38,6 +39,7 @@ import {
   exerciseProgressByWeek,
   addedWeight1RM,
   effectiveE1RM,
+  filterCardLiftRecords,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -59,6 +61,9 @@ import {
   benchPctForReps,
   benchRepsAtPct,
   BENCH_REPS_STUDY,
+  nuzzoRepMaxes,
+  nuzzoAddedWeightForReps,
+  bestFitNuzzo1RM,
   estimate1RM,
   weightForReps,
   repsForWeight,
@@ -71,14 +76,29 @@ import {
   strengthRetention,
   grownStability,
   STRENGTH_DECAY,
+  DEFAULT_DECAY_PARAMS,
+  type DecayParams,
+  type DecayLevel,
   type OneRepMaxFormula,
 } from "./metrics";
-import { hardSetWeight, warmupRamp, type HardSetTarget } from "./prescription";
+import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec, offersPctRomTag, showsPctRomPill, usesLegPctRom } from "./variationConfig";
+import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
+  DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
+  leanCanonicalCm, leanCanonicalFromBlock, handPointOffsetCm,
+  leanFingertipCmFromReading, leanLevelKey,
+  cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
+  type HandPoint, type YogaBlockSide } from "./handstandLean";
+import {
+  dimUsesCmCurve, splitCmDimLevels,
+  namedUnitCm as defaultNamedUnitCm, parseCmLevel,
+  defaultCmCurveFormula, cmCurveFormulaMult, cmCurveFormulaSamples,
+  type CmCurveFormula,
+} from "./cmDimEdit";
 import { HSPU_BLUE_PHOTO } from "./hspuBlueImg";
-import { isUnilateral as isUnilateralBase, sideValues, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
+import { isUnilateral as isUnilateralBase, sideValues, resolveSides, sidesDiffer, divergenceEmpty, setUnits, explodeSides, type SideDivergence, type BothSides } from "./unilateral";
 import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 // The visual pose editor (3-D three.js scene, 2-D drawn figure, photo frames) was
 // warehoused on 2026-06-10 — it is DORMANT (no .pose3d/.pose-draw/.pose-photo-scrub
@@ -88,12 +108,36 @@ import { frontMuscles, backMuscles, type MusclePath } from "./muscleMapData";
 // rebuild, restore from warehouse/2026-06-10-pose-3d-engine/ (see its manifest.json).
 import type { SetRecord } from "./domain";
 import { exerciseIdentity, type ExerciseIdentity } from "./domain";
+import { testMockRecords } from "./mockData";
+import {
+  pairEdge, resolvePairGrade, setPairGrade as applyPairGrade,
+  stripWildcards, stripWildcardsPersonal,
+  type PairMap, type PersonalPairMap,
+} from "./pairing";
 import { FILTER_DIMS, FILTER_DIM_LABELS, filterExercises, type ExerciseFilterDim } from "./exerciseFilter";
 import { exerciseMetaValues, movementDisplay, equipmentForExercise, JOINTS, MOVEMENTS, PLANES, type UserAssignments } from "./exerciseMeta";
+import { pairPracticalityScore, pairPracticalityHint } from "./practicality";
 import { classifyMixed, GRAVITY_MULT, type MachineMode, type MachineVerdict } from "./machine";
-import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES } from "./graphMetrics";
-import { initI18n, getLang, setLang, type Lang } from "./i18n";
+import { GRAPH_METRICS, graphCompatibilityNotes, ORIGIN_SHAPES, effectiveDecayInput } from "./graphMetrics";
+import { adjustedSetWeight, type MachineWeightSetAdjust } from "./machineWeightShift";
+import { getLang, initI18n, setLang, type Lang } from "./i18n";
 import { renderAnalyticsGraph, harmoniousColor } from "./analyticsGraph";
+import {
+  loadDashboardFor, saveDashboardFor, defaultDashboard, activeTab, addTab, removeTab, renameTab, duplicateTab, setActiveTab,
+  addBubble, removeBubble, duplicateBubble, cycleBubbleType, cycleBubbleView, updateBubble, setBubbleView,
+  setTempGraphTab,
+  type GraphDashboard, type GraphBubble,
+} from "./graphDash";
+import {
+  loadExInfoBubble, patchExInfoBubble, cycleExInfoBubbleType,
+} from "./exInfoGraph";
+import {
+  loadHistoryDashboardFor, saveHistoryDashboardFor, defaultHistoryDashboard,
+  activeHistoryTab, addHistoryTab, removeHistoryTab,
+  renameHistoryTab, duplicateHistoryTab, setActiveHistoryTab, setHistoryTabConfig,
+  setTempHistoryTab, HISTORY_DASH_KEY_V2,
+  type HistoryDashboard, type HistoryTabConfig, type HistorySortMode,
+} from "./historyDash";
 import { WORLD_RECORDS_SEED, scaleWr, type WrRef } from "./worldRecords";
 import { duplicateAudit, relationshipAudit, type RelationshipDef } from "./exerciseAudit";
 import { DEFAULT_GRAPH_CONFIG, type GraphConfig } from "./graphConfig";
@@ -126,6 +170,7 @@ import {
   defaultBwCoeff,
   assistedRealWeight,
   isAssistablePullup,
+  isIsometric,
   exerciseCategory,
   exerciseCategories,
   muscleGroup,
@@ -153,14 +198,18 @@ import {
   RECORDS_AS_OF, RECORDS_PROVISIONAL, weightClassFor, recordFor, percentOfRecord,
   type PowerLift,
 } from "./records";
+import { curveFor, percentileFor, hasStandards, PERCENTILES, POPULATION_LABEL, type Population, type Sex } from "./strengthStandards";
+import { benchKey, benchmarkKg, sortBenchmarks, topMet, cleanStore, type Benchmark, type BenchmarkStore } from "./benchmarks";
 import { DEFAULT_FORMULA } from "./config";
-import { supabase, upsertSets } from "./supabase";
-import { CHANGELOG, CURRENT_VERSION, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
+import { supabase, upsertSets, fetchKv, upsertKv } from "./supabase";
+import { isSyncable, merge3, sameStored, SYNC_BASE_KEY } from "./cacheSync";
+import { CHANGELOG, CURRENT_VERSION, RELEASES, WEBSITE_SP, WEBSITE_EXACT_SP, TOTAL_LOG_SP, PROJECT_COST_EUR, costForNode, modelsUnder, COMPONENTS, fibSp, countReleases, buildSpTimeline, categoryBreakdown, type Release } from "./changelog";
 import { versionParts, displayVersion } from "./versionName";
 import { modelLabelFor } from "./modelName";
 // __BUILD_BRANCH__ (baked in by vite.config's define) names the MODEL working this
 // branch (opus-4.8 → "Opus 4.8") for the title tag — declared in build-env.d.ts.
 import { collectBackup, parseBackup, applyBackup, backupToText, backupFilename, clearCache } from "./backup";
+import { exerciseDailyVolumes, exerciseOverreach, sorenessSusceptibility, type Overreach } from "./soreness";
 import defaultCache from "./data/defaultCache.json";
 
 // Bundled "global cache" — the owner's baseline setup (overrides, world records,
@@ -186,10 +235,14 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
+  e1rmStemsBtn: $<HTMLButtonElement>("e1rmStemsBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
   syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
   syncDownBtn: $<HTMLButtonElement>("syncDownBtn"),
+  dbgToggleBtn: $<HTMLButtonElement>("dbgToggleBtn"),
+  inspectToggleBtn: document.getElementById("inspectToggleBtn") as HTMLButtonElement | null,
+  publicProfileToggle: $<HTMLButtonElement>("publicProfileToggle"),
   syncStatus: $("syncStatus"),
   sAnalysis: $("sAnalysis"),
   settingsPanel: $("settingsPanel"),
@@ -221,10 +274,12 @@ const els = {
   backupClose: $<HTMLButtonElement>("backupClose"),
   changelog: $("changelog"),
   backlog: $("backlog"),
-  planWorkoutBtn: $<HTMLButtonElement>("planWorkoutBtn"),
-  planPage: $("planPage"),
-  planClose: $<HTMLButtonElement>("planClose"),
   planBody: $("planBody"),
+  formulasBtn: $<HTMLButtonElement>("formulasBtn"),
+  formulasPage: $("formulasPage"),
+  formulasClose: $<HTMLButtonElement>("formulasClose"),
+  statseditPage: $("statseditPage"),
+  statseditClose: $<HTMLButtonElement>("statseditClose"),
   exInfoPage: $("exInfoPage"),
   exInfoTitle: $("exInfoTitle"),
   exInfoBack: $<HTMLButtonElement>("exInfoBack"),
@@ -233,6 +288,7 @@ const els = {
   exInfoGotoAnl: $<HTMLButtonElement>("exInfoGotoAnl"),
   exInfoBody: $("exInfoBody"),
   athlete: $<HTMLSelectElement>("athlete"),
+  topAthlete: $("topAthlete"),
   athleteChips: $("athleteChips"),
   athleteSexFilter: $("athleteSexFilter"),
   athleteProfile: $("athleteProfile"),
@@ -286,9 +342,12 @@ const els = {
   workoutGrouping: $<HTMLSelectElement>("workoutGrouping"),
   workoutsPageBtn: $<HTMLButtonElement>("workoutsPageBtn"),
   workoutRmCycle: $<HTMLButtonElement>("workoutRmCycle"),
+  prioSortToggle: $<HTMLButtonElement>("prioSortToggle"),
   restToggle: $<HTMLButtonElement>("restToggle"),
   addSetsToggle: $<HTMLButtonElement>("addSetsToggle"),
   variantToggle: $<HTMLButtonElement>("variantToggle"),
+  scaleModeToggle: $<HTMLButtonElement>("scaleModeToggle"),
+  machineRealToggle: $<HTMLButtonElement>("machineRealToggle"),
   aloneTagToggle: $<HTMLButtonElement>("aloneTagToggle"),
   woShowAllToggle: $<HTMLButtonElement>("woShowAllToggle"),
   aloneFilter: $<HTMLButtonElement>("aloneFilter"),
@@ -310,17 +369,8 @@ const els = {
   decayCurveNote: $("decayCurveNote"),
   testAthlete: $<HTMLSelectElement>("testAthlete"),
   testExercise: $<HTMLSelectElement>("testExercise"),
-  testPickHint: $("testPickHint"),
   calcTabs: $("calcTabs"),
-  rxModeBtn: $<HTMLButtonElement>("rxModeBtn"),
-  rxOrm: $<HTMLInputElement>("rxOrm"),
-  rxReps: $<HTMLInputElement>("rxReps"),
-  rxRir: $<HTMLInputElement>("rxRir"),
-  rxPct: $<HTMLInputElement>("rxPct"),
-  rxRepsField: $("rxRepsField"),
-  rxRirField: $("rxRirField"),
-  rxPctField: $("rxPctField"),
-  rxFormula: $<HTMLSelectElement>("rxFormula"),
+  calcOrm: $("calcOrm"),
   rxInc: $<HTMLSelectElement>("rxInc"),
   rxOut: $("rxOut"),
   dataTableWrap: $("dataTableWrap"),
@@ -341,6 +391,11 @@ let decayCurveSvg: SvgChart | null = null; // Test-tab strength-fade diagram (SV
 let compareSvg: SvgChart | null = null; // Exercises list multi-exercise overlay (SVG engine)
 const compareSelected = new Set<string>(); // exercises ticked for the overlay graph
 let compareChipQuery = ""; // search box text filtering the compare chips
+let prioAddQuery = ""; // Focus-lifts "Add another" picker search (Tier 2 picker)
+let prioAddOpen = false; // "Add another" dropdown open state (closed by default; rule 24 keeps it across re-renders)
+// PB-23: refill ONLY the Add-another suggestion pills as you type (set by renderWorkoutPlan,
+// captures the current data) — so the search no longer rebuilds the whole plan per keystroke.
+let planAddChipsRefill: ((query: string) => void) | null = null;
 let compareView: "trend" | "perset" = "trend"; // 1RM-trend lines vs per-set weight→1RM bars
 
 const PAGE_SIZE = 50; // List & stats page size
@@ -383,12 +438,18 @@ function isAdminRole(): boolean { return actualRole === "admin"; }
 let viewUser: string | null = (() => {
   try { return localStorage.getItem("colosseum.viewUser.v1"); } catch { return null; }
 })();
+/** A non-admin viewing SOMEONE ELSE via a ?u= link: the read-only spectate target.
+ * URL-driven ONLY (never persisted) — the URL is the source of truth, so the browser
+ * never "remembers" it; a reload re-derives it from the link. Admin leaves this null
+ * (admin opens any account fully). null = not spectating another user. */
+let spectateUser: string | null = null;
 /** Top-tab panels a non-admin is allowed to see; everything else in the "Other"
  * sheet is hidden for them, leaving just the Guide. */
 // Tabs a non-admin (locked user / spectator) may stay on — the Clients section of
-// the More menu: both analysis pages, the athlete view, plus Live, Colosseum,
-// Stats view (groups) and World records. (Coach pages bounce back to analysis.)
-const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records"]);
+// the More menu: both analysis pages, the athlete view, the Index (exercise reference),
+// plus Live, Colosseum, Stats view (groups) and World records. (Coach pages bounce back
+// to analysis.)
+const USER_VIEW_TABS = new Set(["analysis", "s-analysis", "athlete", "guide", "leaderboards", "groups", "records", "bwparts", "handstands"]);
 /** Which analysis page the bottom "Analysis" button opens: simplified S-ANL when the
  * Simplified-view toggle is on, else the full ANL. */
 function analysisTabName(): string {
@@ -407,6 +468,7 @@ const LOCAL_PASSWORDS: Record<string, string> = { admin: "ag" };
 function showLoginPage(): void {
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = false;
+  document.documentElement.classList.remove("signed-in"); // un-reveal the app (DATA-24)
   document.body.classList.add("locked");
   const err = document.getElementById("loginErr") as HTMLElement | null;
   if (err) { err.hidden = true; err.textContent = ""; }
@@ -415,6 +477,7 @@ function showLoginPage(): void {
 function hideLoginPage(): void {
   const gate = document.getElementById("loginGate");
   if (gate) gate.hidden = true;
+  document.documentElement.classList.add("signed-in"); // reveal the app (DATA-24)
   document.body.classList.remove("locked");
   try { localStorage.setItem("colosseum.signedIn", "1"); } catch { /* ignore */ }
 }
@@ -448,11 +511,19 @@ function signIn(): void {
   hideLoginPage();
 }
 
-function viewAsSpectator(): void { setActualRole("spectator"); hideLoginPage(); setViewMode("loggedout"); }
 
 function setViewMode(mode: ViewMode) {
+  const prev = viewMode;
   viewMode = mode;
   try { localStorage.setItem("colosseum.viewMode", mode); } catch { /* ignore */ }
+  // The admin-only "test" sandbox's mock sets live in data.records ONLY in admin view —
+  // rebuild + re-render when crossing the admin boundary so they appear/vanish with it
+  // (and never linger in a user/spectator view or the leaderboards).
+  if ((prev === "admin") !== (mode === "admin") && loadedRecords.length) {
+    mergeManualSets();
+    if (typeof renderAll === "function") renderAll();
+  }
+  rebuildAthleteRosters(); // the roster differs by view (admin-only "test" sandbox user)
   const locked = lockedUsername(); // null in admin, else the locked athlete
   // The mode toggle in the header shows the current view; the Settings dropdown +
   // auth button mirror it.
@@ -470,7 +541,9 @@ function setViewMode(mode: ViewMode) {
   // Outside admin, lock the athlete to the locked user (only their chip is
   // pressable, see syncAthleteChips) and force the selection there.
   if (mode !== "admin") {
-    if (locked && els.athlete.value !== locked) { els.athlete.value = locked; renderAthlete(); }
+    // Lock the selection to the locked user — UNLESS you're spectating a public athlete
+    // (allowed: read-only), which must not snap back to yourself.
+    if (locked && els.athlete.value !== locked && !isPublicProfile(els.athlete.value) && els.athlete.value !== spectateUser) { els.athlete.value = locked; renderAthlete(); }
     // If we entered a restricted view from an admin-only panel, drop back to the
     // athlete (Workouts) view so nothing restricted stays on screen.
     const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
@@ -501,11 +574,23 @@ function placeVersionLine(): void {
   }
 }
 
-/** Switch the Simplified ⇄ Advanced detail level (the analysis home + bottom-nav
- * label), keep the header quick switcher in sync. */
-function setSimplified(on: boolean): void {
-  simplifiedView = on;
-  try { localStorage.setItem("colosseum.simplifiedView", on ? "1" : "0"); } catch { /* ignore */ }
+/** Switch the detail TIER (simple-1 · simple-2 · advanced) — the analysis home + bottom-nav
+ * label — and keep the header quick switcher in sync. */
+/** Reflect the active view tier onto <body> so CSS can simplify the s2 view (hide a lot
+ * of advanced chrome — owner). One class per tier; s2 is the one the s2 rules target. */
+function applyViewTierClass(): void {
+  document.body.classList.toggle("view-s1", viewTier === "s1");
+  document.body.classList.toggle("view-s2", viewTier === "s2");
+  document.body.classList.toggle("view-adv", viewTier === "adv");
+}
+function setViewTier(tier: ViewTier): void {
+  viewTier = tier;
+  simplifiedView = tier === "s1";
+  applyViewTierClass();
+  try {
+    localStorage.setItem(VIEW_TIER_KEY, tier);
+    localStorage.setItem("colosseum.simplifiedView", simplifiedView ? "1" : "0"); // keep the old flag in step
+  } catch { /* ignore */ }
   const current = (document.querySelector<HTMLElement>(".tab-panel:not([hidden])")?.id ?? "").replace(/^tab-/, "");
   if (current === "analysis" || current === "s-analysis") switchTopTab(analysisTabName());
   updateBottomNav();
@@ -518,14 +603,18 @@ function setSimplified(on: boolean): void {
 function renderViewSwitch(): void {
   const box = document.getElementById("viewSwitch");
   if (!box) return;
-  const modeLabel = viewMode === "admin" ? "Admin" : viewMode === "user" ? "User" : "Spec";
-  const detailLabel = simplifiedView ? "Simple" : "Adv";
+  // Spectating = a locked (non-admin) view whose SELECTED athlete isn't your own — the
+  // pill flips User → Spec so you can tell at a glance you're peeking at someone else.
+  const own = lockedUsername();
+  const spectating = viewMode !== "admin" && own !== null && els.athlete.value !== own;
+  const modeLabel = viewMode === "admin" ? "Admin" : spectating ? "Spec" : viewMode === "user" ? "User" : "Spec";
+  const detailLabel = viewTier === "s1" ? "s1" : viewTier === "s2" ? "s2" : "adv";
   // Only a REAL admin gets the Admin/User/Spectator switch — a logged-in user or
   // spectator is locked to their view (no toggle). The detail (Simple/Adv) toggle
   // stays for everyone.
   box.innerHTML =
     (isAdminRole() ? `<button type="button" class="vs-toggle" data-vcycle="mode" title="Switch view: Admin · User · Spectator">${modeLabel}</button>` : "") +
-    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: Simplified · Advanced">${detailLabel}</button>`;
+    `<button type="button" class="vs-toggle" data-vcycle="detail" title="Switch detail: simple 1 · simple 2 · advanced">${detailLabel}</button>`;
 }
 
 /** The "Colosseum" title acts as a Back-to-home button (jumps to the analysis
@@ -546,11 +635,8 @@ function setupViewSwitch(): void {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>(".vs-toggle");
     if (!b) return;
     if (b.dataset.vcycle === "detail") {
-      // Decide from the page ACTUALLY shown (not the saved flag, which can drift),
-      // so one tap always flips simplified ⇄ full — never a wasted first tap.
-      const onSimplified = document.getElementById("tab-s-analysis")?.hidden === false;
-      const onFull = document.getElementById("tab-analysis")?.hidden === false;
-      setSimplified(onSimplified ? false : onFull ? true : !simplifiedView);
+      // Cycle the detail tier: simple 1 → simple 2 → advanced → simple 1.
+      setViewTier(viewTier === "s1" ? "s2" : viewTier === "s2" ? "adv" : "s1");
       return;
     }
     // Mode toggle cycles admin → user → spectator → admin.
@@ -636,6 +722,10 @@ function canEditGlobalMeta(): boolean {
 function canEditCurrentAthlete(): boolean {
   return canEditAthlete(els.athlete.value);
 }
+/** Show the inline + set / + exercise affordances? Only when the device pref is on AND
+ * you can edit this athlete — viewing someone else's profile is a read-only spectate
+ * view (owner), so the add buttons (and the rest of the edit chrome) are hidden. */
+function showAddSetsNow(): boolean { return S.showAddSets && canEditCurrentAthlete(); }
 
 /* ---- Real auth via Supabase magic-link ----------------------------------------
  * Select a username + password. Admin gets the full admin view;
@@ -773,7 +863,82 @@ function saveCoeffs() {
   }
 }
 
-// ---- Metadata overrides: Category / Muscle group / Tier, editable + saved ----
+// ---- Default range of motion (ROM): per-exercise, editable + saved + synced ----
+// Every exercise is ASSUMED to be trained at a partial range — 90% by default —
+// and that default is customisable per exercise (owner: "every exercise should be
+// assumed to have a range of motion, set a custom default per exercise, assume
+// 90%"). Stored as a percentage (full ROM = 100). This is a TRACKED/displayed
+// default only — it does NOT rescale strength numbers (effort scaling is a
+// separate, opt-in follow-up so existing 1RMs never shift unexpectedly).
+const ROM_DEFAULT_KEY = "colosseum.exerciseRomDefaults.v1";
+const ROM_DEFAULT_PCT = 90;
+const exerciseRomDefaults: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(ROM_DEFAULT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** The per-exercise default ROM % — the owner's pin, else the global 90% assumption. */
+function romDefaultFor(exerciseName: string): number {
+  const v = exerciseRomDefaults[exerciseName];
+  return Number.isFinite(v) ? v! : ROM_DEFAULT_PCT;
+}
+function setRomDefault(exerciseName: string, value: number) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
+  let v = Math.round(value);
+  if (!Number.isFinite(v)) v = ROM_DEFAULT_PCT;
+  v = Math.min(100, Math.max(10, v));
+  exerciseRomDefaults[exerciseName] = v;
+  try { localStorage.setItem(ROM_DEFAULT_KEY, JSON.stringify(exerciseRomDefaults)); } catch { /* private mode */ }
+}
+
+// ---- Machine base weight: per-exercise, editable + saved ---------------------
+// Some machines carry a base resistance the dialed plate doesn't show — a leg
+// extension's lever/stack adds ~20 kg even at the lowest pin (owner). This per-
+// exercise "machine weight" (kg) is FOLDED INTO THE EFFECTIVE LOAD for strength /
+// 1RM (like the bodyweight share), so a set logged at 30 kg computes as 30 + base.
+// The DISPLAYED weight stays what you dialed (origWeight), and volume — which reads
+// the dialed/added weight — is unchanged. Editable on EVERY exercise in the Index;
+// 0 = a normal machine/free weight with no hidden base. Layered like the coeff/ROM:
+// a built-in default, the owner's per-lift edit wins.
+const MACHINE_WEIGHT_KEY = "colosseum.machineWeights.v1";
+const MACHINE_WEIGHT_DEFAULTS: Record<string, number> = { "Leg Extension": 20 };
+const machineWeightOverrides: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(MACHINE_WEIGHT_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+})();
+/** The per-exercise machine base weight (kg) folded into the effective load — the
+ * owner's pin, else the built-in default, else 0. */
+function machineWeightFor(exerciseName: string): number {
+  if (Object.prototype.hasOwnProperty.call(machineWeightOverrides, exerciseName)) {
+    const v = machineWeightOverrides[exerciseName]!;
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  }
+  return MACHINE_WEIGHT_DEFAULTS[exerciseName] ?? 0;
+}
+/** Display prefix for a machine-weight lift: "base+" (e.g. "20+") so the shown weight reads
+ * "20+30" — the hidden machine base plus the dialed value (the only editable part). Empty
+ * when the lift has no machine base. */
+/** Set-aware "base+" prefix — reads the SET's stamped equipment (Phase 3), else the default. */
+function machineWeightPrefixForSet(r: SetRecord): string {
+  const mw = equipmentSettingsForSet(r).kgBase;
+  return mw > 0 ? `${fmt(mw)}+` : "";
+}
+/** Set (or clear, with null/blank) a lift's machine base weight. Admin-only metadata. */
+function setMachineWeight(exerciseName: string, value: number | null) {
+  if (!canEditGlobalMeta()) return; // app-wide metadata — admin only
+  if (value === null || !Number.isFinite(value)) delete machineWeightOverrides[exerciseName];
+  else machineWeightOverrides[exerciseName] = Math.max(0, value);
+  try { localStorage.setItem(MACHINE_WEIGHT_KEY, JSON.stringify(machineWeightOverrides)); } catch { /* private mode */ }
+}
+
+
 // Same layering as the coefficient: profile.ts derives a default from the lift's
 // name; the owner's per-lift edits are stored here and win. catFor/mgFor/tierFor
 // are the read points used across the app so an edit shows everywhere.
@@ -927,6 +1092,15 @@ function discsFor(name: string): Discipline[] {
 function catFor(name: string): TrainingCategory { return catsFor(name)[0]!; }
 function mgFor(name: string): MuscleGroup { return mgsFor(name)[0]!; }
 function tierFor(name: string): ExerciseTier { return tiersFor(name)[0]!; }
+// Lower-body / lower-back muscle groups — the "legs / lower / erectors" that hold more reps
+// back, so the Phase-1 decay model assumes a higher RIR for them when none is logged.
+const LOWER_BODY_MG = new Set<MuscleGroup>(["Quads", "Hamstrings", "Glutes", "Abductors", "Adductors", "Calves", "Lower back"] as MuscleGroup[]);
+/** Assumed reps-in-reserve for an un-graded set in the Phase-1 decay model: the per-region
+ * default (3 upper / 6 lower) from the decay params. */
+function assumedPhase1Rir(exerciseName: string): number {
+  const dp = waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS;
+  return LOWER_BODY_MG.has(mgFor(exerciseName)) ? dp.phase1RirLower : dp.phase1RirUpper;
+}
 /** The auto-default value for a dimension (used when seeding a fresh toggle). */
 function metaDefault(kind: MetaKind, name: string): string {
   // Tier's default is the RECENCY-aware autoTier (what the UI actually shows), not the
@@ -1127,9 +1301,14 @@ let nameMode: NameMode = (() => {
 })();
 /** The default name mode before any explicit pick: full names for a user/spectator
  * view, compact short codes for admin. */
-function defaultNameMode(): NameMode { return viewMode === "admin" ? "short" : "full"; }
-/** The GLOBAL effective name mode: an explicit pick wins, else the view-aware default. */
-function effectiveNameMode(): NameMode { return nameModeExplicit ? nameMode : defaultNameMode(); }
+function defaultNameMode(): NameMode { return viewMode === "admin" && viewTier === "adv" ? "short" : "full"; }
+/** The GLOBAL effective name mode: an explicit pick wins, else the view-aware default.
+ * The simplified views (s1/s2) always show FULL names and never the code names (owner):
+ * the default is full and a saved "code" pick is coerced to full there. */
+function effectiveNameMode(): NameMode {
+  const m = nameModeExplicit ? nameMode : defaultNameMode();
+  return viewTier !== "adv" && m === "code" ? "full" : m;
+}
 // Per-area (graph / hist) local overrides. Empty → every area follows the global.
 const nameModeByScope: Partial<Record<SelScope, NameMode>> = (() => {
   try {
@@ -1186,7 +1365,7 @@ function applyNameModeChange(): void {
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
-  window.scrollTo(0, y);
+  restoreScrollY(y);
 }
 /** Light up the active name-mode button in the Settings picker. */
 function syncNameModeButtons(): void {
@@ -1279,6 +1458,14 @@ function levelCm(dim: LevelDim, value: number): number {
   const t = INCLINE_TOOLS[dim];
   return Math.round((t.anchorCm + (value - t.anchorLevel) * inclineCmPerStep(dim)) * 10) / 10;
 }
+/** Inverse of levelCm: the value in `dim`'s own units for a given cm hand-height —
+ * used to CONVERT when the incline picker switches unit (so SQ5 ⇄ 60cm ⇄ Smith… keep
+ * the same height). cm is rounded to a whole cm; the notch/hole units to a half-step. */
+function cmToLevel(dim: LevelDim, cm: number): number {
+  if (dim === "cm") return Math.round(cm);
+  const t = INCLINE_TOOLS[dim];
+  return Math.round((t.anchorLevel + (cm - t.anchorCm) / inclineCmPerStep(dim)) * 2) / 2;
+}
 // The cm→× curve is a handful of editable anchor heights; in between we interpolate,
 // so SQ/Smith (any cm) read off the same curve. An anchor defaults to the formula.
 const CM_ANCHORS = [0, 15, 30, 45, 60, 75, 90];
@@ -1341,6 +1528,9 @@ function setLevelScale(key: string, value: number) {
  * defaulting to ×1, so they compose instead of one replacing the others). */
 function scaleForRecord(r: SetRecord): number {
   const o = setOverrides[setId(r)];
+  // A custom ABSOLUTE multiplier REPLACES the whole computed total (owner: "override the total");
+  // it wins over the tags + the multiply-on-top per-set scale.
+  if (o?.scaleAbs != null && Number.isFinite(o.scaleAbs)) return o.scaleAbs;
   const perSet = o?.scale ?? 1;
   const level = r.levelDim !== undefined && r.levelValue !== undefined ? levelScaleFor(r.exerciseName, r.levelDim, r.levelValue) : 1;
   return perSet * level * noteVariationScale(r);
@@ -1554,7 +1744,9 @@ function famLevels(family: string, dim: string): Record<string, number> {
 /** Lean's effect depends on support (back- vs front-to-wall differ), so a
  * "lean:<support>" override wins over the shared base lean. */
 function leanFactorFor(family: string, support: string, level: string): number {
-  return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
+  const sup = famLevels(family, `lean:${support}`);
+  const base = famLevels(family, "lean");
+  return sup[level] ?? base[level] ?? interpCmFactor(sup, level) ?? interpCmFactor(base, level) ?? 1;
 }
 function saveFamFactors(): void {
   saveJson(FAM_FACTORS_KEY, famFactorOverrides);
@@ -1576,16 +1768,171 @@ function setFamFactor(family: string, dim: string, level: string, value: number)
   saveFamFactors();
 }
 
+// ---- Per-dim named-unit cm (blue block, wall…) + yoga-block side heights ----.
+// Named units are UNPREDICTABLE fixed references (owner: "blue", "yoga small") — each
+// maps to one cm height; the ×difficulty comes from the cm→× curve at that height.
+// Yoga-block S/M/L are PREDICTABLE unit types (editable cm per side, shared by ROM/lean pickers).
+const FAM_NAMED_CM_KEY = "colosseum.famNamedCm.v1";
+const famNamedCmOverrides = loadJsonObject<Record<string, Record<string, Record<string, number>>>>(FAM_NAMED_CM_KEY);
+function saveFamNamedCm(): void { saveJson(FAM_NAMED_CM_KEY, famNamedCmOverrides); }
+function getNamedUnitCm(family: string, dim: string, key: string): number | undefined {
+  const ov = famNamedCmOverrides[family]?.[dim]?.[key];
+  if (ov !== undefined) return ov;
+  return defaultNamedUnitCm(key);
+}
+function setNamedUnitCm(family: string, dim: string, key: string, cm: number): void {
+  const fam = (famNamedCmOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  const def = defaultNamedUnitCm(key);
+  if (def !== undefined && Math.abs(cm - def) < 1e-6) delete d[key];
+  else d[key] = cm;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famNamedCmOverrides[family];
+  saveFamNamedCm();
+}
+const YOGA_BLOCK_CM_KEY = "colosseum.yogaBlockCm.v1";
+const yogaBlockCmOverrides = loadJsonObject<Partial<Record<YogaBlockSide, number>>>(YOGA_BLOCK_CM_KEY);
+function saveYogaBlockCm(): void { saveJson(YOGA_BLOCK_CM_KEY, yogaBlockCmOverrides); }
+function yogaBlockCm(side: YogaBlockSide): number {
+  return yogaBlockCmOverrides[side] ?? YOGA_BLOCK_CM[side];
+}
+function setYogaBlockCm(side: YogaBlockSide, cm: number): void {
+  if (Math.abs(cm - YOGA_BLOCK_CM[side]) < 1e-6) delete yogaBlockCmOverrides[side];
+  else yogaBlockCmOverrides[side] = cm;
+  saveYogaBlockCm();
+}
+// ---- Parametric cm→× curve formula (ROM / lean / shoulder gap…) — NOT anchor rows ----.
+// × at any cm comes from editable slopes + clamp (0cm = ×1). Named units map to cm
+// and read off the same formula; yoga-block / cm-step tune the picker intervals.
+const CM_CURVE_FORMULA_KEY = "colosseum.cmCurveFormula.v1";
+const cmCurveFormulaOverrides = loadJsonObject<Record<string, Record<string, CmCurveFormula>>>(CM_CURVE_FORMULA_KEY);
+function saveCmCurveFormula(): void { saveJson(CM_CURVE_FORMULA_KEY, cmCurveFormulaOverrides); }
+function cmCurveFormula(family: string, dim: string): CmCurveFormula {
+  return cmCurveFormulaOverrides[family]?.[dim] ?? defaultCmCurveFormula(cmCurveBaseLevels(family, dim));
+}
+function setCmCurveFormulaField(family: string, dim: string, field: keyof CmCurveFormula, value: number): void {
+  if (!Number.isFinite(value)) return;
+  const def = defaultCmCurveFormula(cmCurveBaseLevels(family, dim));
+  const cur = cmCurveFormula(family, dim);
+  const next = { ...cur, [field]: value };
+  const fam = (cmCurveFormulaOverrides[family] ??= {});
+  const same = (Object.keys(def) as (keyof CmCurveFormula)[]).every((k) => Math.abs(next[k] - def[k]) < 1e-9);
+  if (same) delete fam[dim];
+  else fam[dim] = next;
+  if (Object.keys(fam).length === 0) delete cmCurveFormulaOverrides[family];
+  saveCmCurveFormula();
+}
+function cmCurveFactorAt(family: string, dim: string, cm: number): number {
+  return cmCurveFormulaMult(cm, cmCurveFormula(family, dim));
+}
+function cmCurveFactorForLevel(family: string, dim: string, level: string, namedCm?: number): number {
+  const cm = parseCmLevel(level) ?? namedCm;
+  return cm !== undefined ? cmCurveFactorAt(family, dim, cm) : 1;
+}
+const CM_CURVE_STEP_KEY = "colosseum.cmCurveStep.v1";
+const cmCurveStepOverrides = loadJsonObject<Record<string, Record<string, number>>>(CM_CURVE_STEP_KEY);
+const DEFAULT_CM_CURVE_STEP = 1;
+function saveCmCurveStep(): void { saveJson(CM_CURVE_STEP_KEY, cmCurveStepOverrides); }
+function cmCurveStep(family: string, dim: string): number {
+  return cmCurveStepOverrides[family]?.[dim] ?? DEFAULT_CM_CURVE_STEP;
+}
+function setCmCurveStep(family: string, dim: string, step: number): void {
+  const fam = (cmCurveStepOverrides[family] ??= {});
+  if (!Number.isFinite(step) || step <= 0 || Math.abs(step - DEFAULT_CM_CURVE_STEP) < 1e-6) delete fam[dim];
+  else fam[dim] = step;
+  if (Object.keys(fam).length === 0) delete cmCurveStepOverrides[family];
+  saveCmCurveStep();
+}
+function cmCurveBaseLevels(family: string, dim: string): Record<string, number> {
+  return FAMILIES[family]?.dims[dim] ?? {};
+}
+
+// ---- Per-family DEFAULT level + LEVEL LABEL overrides (the tag editor) ----.
+// The owner sets which tag is the DEFAULT for an exercise (e.g. handstand push-up →
+// "back to wall"), and can RENAME a tag — both per family, saved on device + backup.
+// (Multipliers reuse famFactorOverrides / setFamFactor above.)
+const FAM_DEFAULTS_KEY = "colosseum.famDefaults.v1";
+const famDefaultOverrides = loadJsonObject<Record<string, Record<string, string>>>(FAM_DEFAULTS_KEY);
+const FAM_LABELS_KEY = "colosseum.famLabels.v1";
+const famLabelOverrides = loadJsonObject<Record<string, Record<string, Record<string, string>>>>(FAM_LABELS_KEY);
+// ---- USER-CREATED tags (the owner's "＋ new tag") ---------------------------------------------.
+// A brand-new variation DIMENSION the owner adds to a family from the tag palette. Only the dim's
+// EXISTENCE + its display name + its baseline level live here; its OPTION levels/factors/labels/
+// gray flags reuse the SAME stores as built-in dims (famFactorOverrides / famLabelOverrides /
+// famGrayOverrides) — so a user tag behaves identically to a built-in one everywhere, no parallel
+// model (rule 65). `famDimOrder` / `famHasDim` / `dimLabel` (defined by AF_DIM_ORDER) merge these in.
+const FAM_USERDIMS_KEY = "colosseum.famUserDims.v1";
+interface UserDimDef { label: string; base: string }
+const famUserDims = loadJsonObject<Record<string, Record<string, UserDimDef>>>(FAM_USERDIMS_KEY);
+function saveUserDims(): void { saveJson(FAM_USERDIMS_KEY, famUserDims); }
+/** The config's reference default for a family dimension (user baseline / first level if none set). */
+function famBaseDefault(family: string, dim: string): string {
+  return FAMILIES[family]?.defaults[dim] ?? famUserDims[family]?.[dim]?.base ?? Object.keys(famLevels(family, dim))[0] ?? "";
+}
+/** The DEFAULT level for a family dimension — the owner's override, else the config default. */
+function famDefaultLevel(family: string, dim: string): string {
+  return famDefaultOverrides[family]?.[dim] ?? famBaseDefault(family, dim);
+}
+/** Pin (or clear, when set back to the config default) the default level for a dimension. */
+function setFamDefaultLevel(family: string, dim: string, level: string): void {
+  const fam = (famDefaultOverrides[family] ??= {});
+  if (level === famBaseDefault(family, dim)) delete fam[dim];
+  else fam[dim] = level;
+  if (Object.keys(fam).length === 0) delete famDefaultOverrides[family];
+  saveJson(FAM_DEFAULTS_KEY, famDefaultOverrides);
+}
+/** The owner's renamed label for a (family, dim, level), or undefined. */
+function famLabelOf(family: string, dim: string, level: string): string | undefined {
+  return famLabelOverrides[family]?.[dim]?.[level];
+}
+/** Rename a tag (blank clears back to the built-in label). */
+function setFamLabel(family: string, dim: string, level: string, label: string): void {
+  const fam = (famLabelOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  const t = label.trim();
+  if (!t) delete d[level];
+  else d[level] = t;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famLabelOverrides[family];
+  saveJson(FAM_LABELS_KEY, famLabelOverrides);
+}
+// GRAY tags (owner): a "gray" level is HIDDEN from the history (collapsed + expanded) and
+// from the add/edit picker until you ＋reveal it — it shows only while editing. The OBVIOUS
+// baseline (the config reference level, e.g. free / no support / none / 0cm) is gray BY
+// DEFAULT; a meaningful owner-set default that ISN'T the baseline (e.g. back-to-wall) stays
+// visible. The owner can flip any level's gray with the 👁 toggle in the tag editor. Saved.
+const FAM_GRAY_KEY = "colosseum.famGray.v1";
+const famGrayOverrides = loadJsonObject<Record<string, Record<string, Record<string, boolean>>>>(FAM_GRAY_KEY);
+/** Is a (family, dim, level) gray — hidden from history/picker? Defaults to "it's the
+ * obvious config baseline"; an owner toggle overrides that either way. */
+function isGray(family: string, dim: string, level: string): boolean {
+  const ov = famGrayOverrides[family]?.[dim]?.[level];
+  if (ov !== undefined) return ov;
+  return level === famBaseDefault(family, dim);
+}
+/** Flip a level's gray flag (cleared when it matches the implicit baseline default). */
+function setFamGray(family: string, dim: string, level: string, gray: boolean): void {
+  const fam = (famGrayOverrides[family] ??= {});
+  const d = (fam[dim] ??= {});
+  if (gray === (level === famBaseDefault(family, dim))) delete d[level];
+  else d[level] = gray;
+  if (Object.keys(d).length === 0) delete fam[dim];
+  if (Object.keys(fam).length === 0) delete famGrayOverrides[family];
+  saveJson(FAM_GRAY_KEY, famGrayOverrides);
+}
+
 /** The product of a vector's per-dimension factors for a family. */
 function scalarFromVec(family: string, vec: Record<string, string>): number {
+  vec = normalizeStaticLiftVec(family, vec);
   const fam = FAMILIES[family];
-  if (!fam) return 1;
+  if (!fam && !famUserDims[family]) return 1;
   let s = 1;
-  for (const dim of Object.keys(fam.dims)) {
+  for (const dim of famDimOrder(family)) {
     // The ladder grip / height only apply when the support is actually "ladder";
     // ignore any stale value otherwise so they don't skew a non-ladder setup.
     if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") continue;
     if (dim === "shoulderDist" && vec.support !== "back_to_wall") continue; // b2w-only
+    if (dim === "floorHeight" && vec.support !== "on_hands") continue; // on-hands only
     if (dim === "band") continue; // band is a kg subtraction (assistKg), not a multiplier
     if (dim === "lean") {
       // Lean applies to ALL supports (most sets just use 0 = ×1). Its factor is
@@ -1593,7 +1940,20 @@ function scalarFromVec(family: string, vec: Record<string, string>): number {
       s *= leanFactorFor(family, vec.support ?? "free", vec.lean ?? "");
       continue;
     }
-    const f = famLevels(family, dim)[vec[dim] ?? ""];
+    const levels = famLevels(family, dim);
+    const lv = vec[dim] ?? "";
+    if (dim === "floorHeight") {
+      const cm = parseCmLevelKey(lv || "0cm") ?? 0;
+      if (cm > 0) s *= inclineMultForCm(cm);
+      continue;
+    }
+    let f: number;
+    if (dimUsesCmCurve(levels)) {
+      const ncm = parseCmLevel(lv) !== undefined ? undefined : getNamedUnitCm(family, dim, lv);
+      f = cmCurveFactorForLevel(family, dim, lv, ncm);
+    } else {
+      f = levels[lv] ?? interpCmFactor(levels, lv) ?? 1;
+    }
     if (typeof f === "number") s *= f;
   }
   return Math.round(s * 1e6) / 1e6;
@@ -1613,7 +1973,10 @@ function rNote(family: string, note: string) {
  * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
   const fam = familyOf(exerciseName);
-  if (fam) return scalarFromVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+  if (fam) {
+    const vec = normalizeStaticLiftVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
+    return scalarFromVec(fam, vec);
+  }
   return notePin(exerciseName, note) ?? 1;
 }
 /** Whether the owner has reviewed this note: pinned a number (non-model) or picked
@@ -1685,6 +2048,33 @@ function saveAthleteOverrides() {
   saveJson(ATHLETE_STATS_KEY, athleteOverrides);
 }
 
+// Per-athlete HAND LENGTH (fingertips → palm-base, cm) — the ONE measurement that converts a
+// handstand-lean reading taken at any hand point into the canonical palm-base cm (handstandLean.ts).
+// Synced (shared body measurement, like the sets) — keyed by username; default ≈16cm.
+const HAND_LENGTH_KEY = "colosseum.handLength.v1";
+const handLengthOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(HAND_LENGTH_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function handLengthFor(username: string): number {
+  const v = handLengthOverrides[username];
+  return typeof v === "number" && v > 0 ? v : DEFAULT_HAND_LENGTH_CM;
+}
+/** Forward-lean is STORED as the canonical cm from the palm-base (the lever origin),
+ * but the owner reads it from the FINGERTIPS — so the DISPLAYED number subtracts the
+ * fingertips→palm-base offset (this athlete's hand length) and clamps at 0, keeping
+ * 0 = "no lean". Returns the fingertip cm as a number; 0 means "no real lean". Pure
+ * display — the stored level keys and difficulty factors are untouched. */
+function leanFingertipCm(level: string, username: string): number {
+  const n = parseFloat(level);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.round(n - handPointOffsetCm("fingertips", handLengthFor(username))));
+}
+function setHandLength(username: string, cm: number | undefined): void {
+  if (cm === undefined || !(cm > 0)) delete handLengthOverrides[username];
+  else handLengthOverrides[username] = cm;
+  saveJson(HAND_LENGTH_KEY, handLengthOverrides);
+}
+
 // Manually-added athletes (admin "＋ Add athlete"): users who aren't in the scraped
 // StrengthLevel data — so you can set their stats / hand-log sets. Saved on device
 // (and in the backup, under the colosseum.* prefix).
@@ -1693,6 +2083,10 @@ let manualAthletes: { username: string; user: string }[] = (() => {
   try { const a = JSON.parse(localStorage.getItem(MANUAL_ATHLETES_KEY) ?? "[]"); return Array.isArray(a) ? a : []; } catch { return []; }
 })();
 function saveManualAthletes(): void { saveJson(MANUAL_ATHLETES_KEY, manualAthletes); }
+// Built-in athletes that exist ONLY in the admin view (a "test" sandbox user the owner
+// can poke at; never shown to a locked user/spectator, nor when an admin previews them).
+const ADMIN_ONLY_ATHLETES: { username: string; user: string }[] = [{ username: "test", user: "test" }];
+const ADMIN_ONLY_USERNAMES = new Set(ADMIN_ONLY_ATHLETES.map((a) => a.username));
 /** The full athlete roster: everyone in the scraped data PLUS any manually-added
  * users, deduped by username and sorted by display name. The single source of the
  * athlete list for every picker (replaces bare distinctUsers(data.records)). */
@@ -1700,7 +2094,39 @@ function rosterUsers(): { username: string; user: string }[] {
   const map = new Map<string, string>();
   for (const u of distinctUsers(data.records)) map.set(u.username, u.user);
   for (const u of manualAthletes) if (!map.has(u.username)) map.set(u.username, u.user);
+  // Admin-only sandbox users (e.g. "test") show ONLY in the admin view; everywhere else
+  // (locked user/spectator, or an admin previewing them) they're hidden entirely.
+  if (viewMode === "admin") {
+    for (const u of ADMIN_ONLY_ATHLETES) if (!map.has(u.username)) map.set(u.username, u.user);
+  } else {
+    for (const k of ADMIN_ONLY_USERNAMES) map.delete(k);
+  }
   return [...map].map(([username, user]) => ({ username, user })).sort((a, b) => a.user.localeCompare(b.user));
+}
+// ---- PUBLIC PROFILES (spectating) -------------------------------------------------
+// A user can make their profile PUBLIC; every user may then SPECTATE that athlete
+// (read-only — the canEditAthlete write-gates still block edits to anyone but yourself).
+// This relaxes CLAUDE.md rule 21 (locked views showing only yourself) FOR public athletes.
+// SHARED (synced) so the public list is the same for everyone; seeded once with the
+// owner's initial public set (Adomas + Sandra, Simona, Kristina, Indrė, Johan).
+const PUBLIC_PROFILES_KEY = "colosseum.publicProfiles.v1";
+const DEFAULT_PUBLIC = ["adomasgaudi", "sandrakri", "simona", "andromeda94", "indre_ju", "johannesschut"];
+const publicProfiles: Set<string> = (() => {
+  const raw = localStorage.getItem(PUBLIC_PROFILES_KEY);
+  if (raw === null) { saveJson(PUBLIC_PROFILES_KEY, DEFAULT_PUBLIC); return new Set(DEFAULT_PUBLIC); }
+  try { const a = JSON.parse(raw); return new Set(Array.isArray(a) ? a.filter((x): x is string => typeof x === "string") : DEFAULT_PUBLIC); }
+  catch { return new Set(DEFAULT_PUBLIC); }
+})();
+function isPublicProfile(username: string | null | undefined): boolean { return !!username && publicProfiles.has(username); }
+function setPublicProfile(username: string, on: boolean): void {
+  if (on) publicProfiles.add(username); else publicProfiles.delete(username);
+  saveJson(PUBLIC_PROFILES_KEY, [...publicProfiles]);
+}
+/** Whose public flag the Settings toggle controls: the selected athlete in admin, your
+ * OWN athlete in user view (so spectating someone else never flips THEIR flag), none for
+ * a logged-out spectator. */
+function publicToggleTarget(): string | null {
+  return viewMode === "admin" ? els.athlete.value : viewMode === "user" ? userViewUsername() : null;
 }
 
 /** The athlete's natural nFFMI ceiling — their on-device override, else the sex
@@ -1751,6 +2177,41 @@ function saveLastAthlete(username: string) {
     localStorage.setItem(ATHLETE_STORE_KEY, username);
   } catch {
     /* storage may be unavailable — selection still applies this session */
+  }
+}
+
+// ---- Athlete in the URL: ?u=<username> so a user can be bookmarked / shared, or
+// the URL typed/edited to jump straight to someone. replaceState keeps it in sync
+// without spamming history; the hash (view deep-links) is preserved. ----
+const ATHLETE_URL_PARAM = "u";
+
+/** Reflect the shown athlete in the URL (?u=username), preserving everything else. */
+function syncAthleteUrl(username: string): void {
+  try {
+    const url = new URL(window.location.href);
+    if (username) url.searchParams.set(ATHLETE_URL_PARAM, username);
+    else url.searchParams.delete(ATHLETE_URL_PARAM);
+    if (url.toString() !== window.location.href) history.replaceState(history.state, "", url.toString());
+  } catch {
+    /* URL/history API unavailable — selection still applies, just no URL sync */
+  }
+}
+
+/** A username requested via ?u=, matched leniently against the roster (exact
+ * username, then exact display name, then a username prefix — all case-insensitive),
+ * so a typed link like ?u=adomas resolves. Returns the canonical username or null. */
+function athleteFromUrl(users: { username: string; user: string }[]): string | null {
+  try {
+    const raw = new URL(window.location.href).searchParams.get(ATHLETE_URL_PARAM);
+    const q = (raw ?? "").trim().toLowerCase();
+    if (!q) return null;
+    const hit =
+      users.find((u) => u.username.toLowerCase() === q) ??
+      users.find((u) => u.user.toLowerCase() === q) ??
+      users.find((u) => u.username.toLowerCase().startsWith(q));
+    return hit?.username ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -1817,32 +2278,128 @@ function saveAlone() {
 // string like "0.5-1.3"), not a single number, because the owner grades how it
 // FELT and that maps to a band, not an exact rep count.
 //
-// RIR ladder — the single source of truth. `id` is the stored value and also
-// the range shown in the cell; `word` is a one-word feel for the closed picker
-// button; `desc` is the full plain-language feel shown in the open list. Bands
-// run hardest (almost no reps left) → easiest (many reps in reserve).
-// Contiguous, non-overlapping.
-const RIR_BANDS: ReadonlyArray<{ id: string; word: string; desc: string }> = [
-  { id: "0.1–0.3", word: "max", desc: "almost impossible — elite powerlifter grinding ~10s" },
-  { id: "0.3–0.5", word: "brutal", desc: "extremely difficult — trained person, 2–4s grind" },
-  { id: "0.5–1.3", word: "difficult", desc: "difficult — 1–2s grind, a 2nd rep seems improbable" },
-  { id: "1.3–1.5", word: "very hard", desc: "maybe one more rep, but very hard" },
-  { id: "1.5–1.8", word: "hard", desc: "could do another rep, but hard" },
-  { id: "1.8–2.5", word: "1–2 left", desc: "1 RIR for sure, maybe 2" },
-  { id: "2.5–4", word: "2–3 left", desc: "2–3 reps in reserve" },
-  { id: "4–8", word: "easy", desc: "4–8 reps in reserve" },
-  { id: "8–15", word: "very easy", desc: "8–15 reps in reserve" },
-  { id: "15–30", word: "light", desc: "15–30 reps in reserve" },
-  { id: "30–100", word: "warm-up", desc: "30–100 reps in reserve (warm-up light)" },
+// RIR ladder — the single source of truth. `id` is the stored value (a range
+// string like "2.8–4.8"); `label` is the descriptive feel shown BIG in the picker
+// (and on the closed pill); `sub` is the actual rep-range shown tiny + gray under
+// the label (omitted when the label already IS the range); `lo`/`hi` bound the
+// range; `rep` is the representative RIR used in every calculation. The scale is
+// LOGARITHMIC, so `rep` is the GEOMETRIC mean of lo..hi (owner) — except the
+// hardest band, which starts at 0 (no geo-mean) and uses 0.25. Bands run hardest
+// (almost no reps left) → easiest (many in reserve); ranges may OVERLAP now
+// (they're feels, not a contiguous partition), so snapping is by nearest rep.
+const GEO = (lo: number, hi: number) => Math.sqrt(lo * hi);
+const RIR_BANDS: ReadonlyArray<{ id: string; label: string; sub: string; lo: number; hi: number; rep: number }> = [
+  { id: "0–0.5", label: "gun to head", sub: "0–0.5", lo: 0, hi: 0.5, rep: 0.25 },
+  { id: "0.3–1", label: "grind 2+s", sub: "0.3–1", lo: 0.3, hi: 1, rep: GEO(0.3, 1) },
+  { id: "0.8–1.5", label: "maybe 1", sub: "0.8–1.5", lo: 0.8, hi: 1.5, rep: GEO(0.8, 1.5) },
+  { id: "1.3–2", label: "1", sub: "1.3–2", lo: 1.3, hi: 2, rep: GEO(1.3, 2) },
+  { id: "1.8–2.8", label: "1–2", sub: "1.8–2.8", lo: 1.8, hi: 2.8, rep: GEO(1.8, 2.8) },
+  { id: "2.8–4.8", label: "2–4", sub: "2.8–4.8", lo: 2.8, hi: 4.8, rep: GEO(2.8, 4.8) },
+  { id: "4–8", label: "4–8", sub: "", lo: 4, hi: 8, rep: GEO(4, 8) },
+  { id: "8–15", label: "8–15", sub: "", lo: 8, hi: 15, rep: GEO(8, 15) },
+  { id: "15–30", label: "15–30", sub: "", lo: 15, hi: 30, rep: GEO(15, 30) },
+  { id: "30–100", label: "30–100", sub: "", lo: 30, hi: 100, rep: GEO(30, 100) },
 ];
+// Old (pre-log) band ids → the new band they map to, so grades logged on the old
+// scale keep showing once the ranges were redefined. The last four ids are unchanged.
+const RIR_ID_MIGRATE: Record<string, string> = {
+  "0.3–0.5": "0–0.5", "0.5–1.3": "0.3–1", "1.3–1.5": "0.8–1.5",
+  "1.5–1.8": "1.3–2", "1.8–2.5": "1.8–2.8", "2.5–4.5": "2.8–4.8",
+};
 /** Look up a band by its stored id. */
 const rirBand = (id: string | undefined) => RIR_BANDS.find((b) => b.id === id);
-const RIR_IDS = new Set(RIR_BANDS.map((b) => b.id));
-/** Representative RIR for a logged band id ("2.5–4" → 3.25), or null if unknown. */
-function rirBandMid(id: string | undefined): number | null {
-  if (!id) return null;
-  const [lo, hi] = id.split(/[–-]/).map((n) => parseFloat(n));
-  return lo !== undefined && Number.isFinite(lo) ? (hi !== undefined && Number.isFinite(hi) ? (lo + hi) / 2 : lo) : null;
+// A logged RIR grade: ONE or TWO bands (the owner is unsure of the feel → picks two adjacent
+// ones), plus an optional EXACT override (a typed reps-in-reserve that replaces the range's
+// average). Encoded as a STRING in rpeGrades so the persisted/synced store stays a simple
+// Record<string,string>:  "4–8" · "2.8–4.8|4–8" · "4–8=5" · "2.8–4.8|4–8=5".
+type RirGrade = { bands: string[]; exact: number | null };
+/** Parse a stored grade string into bands (known ids, canonical hardest→easiest order, max 2) +
+ * an optional exact override. Null when it carries neither — i.e. ungraded. */
+function parseRirGrade(s: string | undefined): RirGrade | null {
+  if (!s) return null;
+  let body = s; let exact: number | null = null;
+  const eq = s.indexOf("=");
+  if (eq >= 0) { const n = parseFloat(s.slice(eq + 1)); exact = Number.isFinite(n) ? n : null; body = s.slice(0, eq); }
+  const picked = body.split("|");
+  const bands = RIR_BANDS.filter((b) => picked.includes(b.id)).map((b) => b.id).slice(0, 2);
+  return bands.length === 0 && exact === null ? null : { bands, exact };
+}
+function formatRirGrade(g: RirGrade): string {
+  const body = g.bands.join("|");
+  return g.exact !== null ? `${body}=${g.exact}` : body;
+}
+/** Format an RIR number compactly (≤1 decimal, no trailing .0). */
+const fmtRir = (v: number): string => (Math.round(v * 10) / 10).toString();
+/** Toggle a band in a grade (tap to add / remove); capped at TWO — adding a third drops the older
+ * of the existing pair. Returns the new grade, or null when it empties out. */
+function toggleRirBand(g: RirGrade | null, id: string): RirGrade | null {
+  const cur = g ? [...g.bands] : [];
+  const exact = g?.exact ?? null;
+  const next = cur.includes(id) ? cur.filter((b) => b !== id) : cur.length < 2 ? [...cur, id] : [cur[1]!, id];
+  const sorted = RIR_BANDS.filter((b) => next.includes(b.id)).map((b) => b.id);
+  return sorted.length === 0 && exact === null ? null : { bands: sorted, exact: sorted.length ? exact : null };
+}
+/** The representative RIR a grade contributes to EVERY calculation: the exact override if set, else
+ * the GEOMETRIC mean of the combined span of its band(s) — log scale, so two ranges average toward
+ * their overlap (15–30 + 30–100 → ~39, near 30), not the linear midpoint (owner). */
+function rirGradeRep(g: RirGrade): number | null {
+  if (g.exact !== null) return g.exact;
+  const bs = g.bands.map((id) => rirBand(id)).filter((b): b is (typeof RIR_BANDS)[number] => !!b);
+  if (bs.length === 0) return null;
+  const lo = Math.min(...bs.map((b) => b.lo)), hi = Math.max(...bs.map((b) => b.hi));
+  return lo > 0 ? GEO(lo, hi) : (lo + hi) / 2;
+}
+/** The descriptive label for a stored grade (closed pill / read-only cell): the exact value if
+ * specified, else the band label(s) joined ("2–4/4–8"). Falls back to the raw string / "–". */
+function rirLabel(grade: string | undefined): string {
+  if (!grade) return "–";
+  const g = parseRirGrade(grade);
+  if (!g) return grade;
+  if (g.exact !== null) return fmtRir(g.exact);
+  return g.bands.map((id) => rirBand(id)?.label ?? id).join("/") || "–";
+}
+/** Representative RIR for a logged grade — the band's GEOMETRIC mean / combined span / exact
+ * override (the scale is logarithmic, owner). Legacy raw range strings fall back to a parsed
+ * geo-mean. Null if unparseable. (Name kept for the many call sites.) */
+function rirBandMid(grade: string | undefined): number | null {
+  if (!grade) return null;
+  const g = parseRirGrade(grade);
+  if (g) return rirGradeRep(g);
+  const [lo, hi] = grade.split(/[–-]/).map((n) => parseFloat(n));
+  if (lo === undefined || !Number.isFinite(lo)) return null;
+  if (hi === undefined || !Number.isFinite(hi)) return lo;
+  return lo > 0 ? GEO(lo, hi) : (lo + hi) / 2;
+}
+/** The band closest to a numeric RIR, measured in LOG space (matching the log scale) so a
+ * predicted RIR snaps to the band whose representative value is nearest. Replaces the old
+ * contiguous-range lookup now that bands can overlap. */
+function bandContainingRir(rir: number): string {
+  const lr = Math.log(Math.max(rir, 0.05));
+  let best = RIR_BANDS[0]!, bestD = Infinity;
+  for (const b of RIR_BANDS) {
+    const d = Math.abs(Math.log(Math.max(b.rep, 0.05)) - lr);
+    if (d < bestD) { bestD = d; best = b; }
+  }
+  return best.id;
+}
+/** The ASSUMED RIR band for a set the owner hasn't graded (owner: "always add a rir
+ * to sets automatically"). Prefers the set's own predicted RIR (snapped to a band);
+ * with no prediction it falls back to the muscle-group typical — legs 4–8, upper body
+ * the "2–4" band. UPPER body never auto-assumes EASIER than "2–4" (owner: "non-leg-heavy
+ * lifts should auto 2–4, not 4–8") — a too-easy prediction is floored there. The
+ * store (rpeGrades) stays the single source of truth for what's REAL: a graded set has
+ * an entry, an assumed one doesn't, so picking a band turns it real. */
+function assumedRirBandId(exerciseName: string, predRir: number | null): string {
+  const lower = LOWER_BODY_MG.has(mgFor(exerciseName));
+  if (predRir !== null && Number.isFinite(predRir)) {
+    const band = bandContainingRir(predRir);
+    if (lower) return band;
+    // Upper body: floor the assumption at the "2–4" band (RIR_BANDS run hardest→easiest, so a
+    // higher index = easier — clamp any easier band back to it).
+    const floor = RIR_BANDS.findIndex((b) => b.id === "2.8–4.8");
+    return RIR_BANDS.findIndex((b) => b.id === band) > floor ? "2.8–4.8" : band;
+  }
+  return lower ? "4–8" : "2.8–4.8";
 }
 /** Big compound leg lifts (squat / deadlift patterns, leg press) fatigue more, so
  * they get the wider "mid" effort band — see effortClass(). */
@@ -1884,13 +2441,30 @@ const RPE_STORE_KEY = "colosseum.rir.v1";
 let rpeGrades: Record<string, string> = (() => {
   try {
     const o = JSON.parse(localStorage.getItem(RPE_STORE_KEY) ?? "{}");
-    return o && typeof o === "object" ? (o as Record<string, string>) : {};
+    if (!o || typeof o !== "object") return {};
+    const g = o as Record<string, string>;
+    // Migrate grades logged on the OLD (pre-log) RIR scale to the new band ids so they don't
+    // silently read as ungraded after the ranges were redefined.
+    let changed = false;
+    for (const k of Object.keys(g)) {
+      const mapped = RIR_ID_MIGRATE[g[k]!];
+      if (mapped) { g[k] = mapped; changed = true; }
+    }
+    if (changed) { try { localStorage.setItem(RPE_STORE_KEY, JSON.stringify(g)); } catch { /* ignore */ } }
+    return g;
   } catch {
     return {};
   }
 })();
-/** Stable id for one set. */
-const setId = (r: SetRecord): string => `${r.username}|${r.exerciseName}|${r.date}|${r.setNumber}`;
+/** Stable id for one set. Keys off the ORIGINAL source lift, not the displayed name:
+ * a merged-lift view (remapRegistryCombined) relabels member sets to the synthetic
+ * group name (e.g. "SQ mix") but stashes the real lift in `originalExerciseName`. If
+ * the id followed the display name, a set's id would CHANGE in the merged view, so a
+ * delete/override/not-comparable recorded there (id `…|SQ mix|…`) never matched the raw
+ * `data.records` the filters run on (id `…|Smith Squat|…`) — the set was never actually
+ * hidden. Anchoring identity to the source keeps it constant across every projection. */
+const setId = (r: SetRecord): string =>
+  `${r.username}|${r.originalExerciseName ?? r.exerciseName}|${r.date}|${r.setNumber}`;
 const rpeFor = (r: SetRecord): string | undefined => rpeGrades[setId(r)];
 
 // ---- On-device "deleted" (hidden) sets ----. A bad logged set can be hidden
@@ -1909,6 +2483,35 @@ function saveDeletedSets(): void {
 function setDeleted(id: string, on: boolean): void {
   if (on) deletedSets.add(id); else deletedSets.delete(id);
   saveDeletedSets();
+}
+
+// ---- Loading "hydration" indicator (rule 46) --------------------------------
+// A small busy pill shown while a deferred rebuild runs (e.g. after a delete), so
+// a heavy re-render reads as "updating", not frozen. A min-visible window keeps it
+// perceptible even when the synchronous rebuild is sub-frame. (PB-26 part 3.)
+let hydratingShownAt = 0;
+let hydratingTimer: number | null = null;
+function showHydrating(label = "Updating…"): void {
+  let el = document.getElementById("hydratingPill");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "hydratingPill";
+    el.className = "hydrating-pill";
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-live", "polite");
+    document.body.appendChild(el);
+  }
+  el.textContent = label;
+  el.hidden = false;
+  hydratingShownAt = Date.now();
+  if (hydratingTimer) { clearTimeout(hydratingTimer); hydratingTimer = null; }
+}
+function hideHydrating(): void {
+  const el = document.getElementById("hydratingPill");
+  if (!el) return;
+  const wait = Math.max(0, 320 - (Date.now() - hydratingShownAt)); // keep it readable
+  if (hydratingTimer) clearTimeout(hydratingTimer);
+  hydratingTimer = window.setTimeout(() => { el.hidden = true; hydratingTimer = null; }, wait);
 }
 
 // ---- Action log (in the cache) + a 10s undo toast ----------------------------
@@ -1949,7 +2552,38 @@ function deleteSetsWithUndo(ids: string[], label: string): void {
   for (const id of real) deletedSets.add(id);
   saveDeletedSets();
   logAction("delete-sets", `Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`);
-  const rerender = () => { deferRender(renderWorkoutAnalysis); if (document.getElementById("workoutsTable")) renderWorkoutsPage(); };
+  // PB-26 part 2 — TWO-PROCESS feel: phase 1 (instant) hides the deleted set's rows
+  // RIGHT NOW so the tap feels immediate even while phase 2 (the heavy graph/history
+  // rebuild) catches up a frame later. Each set is a `.set-main` row + its optional
+  // `.set-note-row` + hidden `.set-edit-row`; hide the run. The deferred rebuild
+  // replaces the whole DOM, so these inline hides need no cleanup (rule 17 recipe).
+  for (const id of real) {
+    const main = document.querySelector<HTMLElement>(`tr.set-main[data-setid="${CSS.escape(id)}"]`);
+    if (!main) continue;
+    main.style.display = "none";
+    let sib = main.nextElementSibling;
+    while (sib && (sib.classList.contains("set-note-row") || sib.classList.contains("set-edit-row"))) {
+      const next = sib.nextElementSibling;
+      (sib as HTMLElement).style.display = "none";
+      sib = next;
+    }
+  }
+  // PB-26: deleting a set must NOT move you away from the expanded view. The old
+  // rerender ran renderWorkoutsPage() SYNCHRONOUSLY (no scroll restore) and called
+  // renderWorkoutAnalysis WITHOUT reopenSetEdit, so on the Analysis tab the open
+  // set panel was destroyed and the page jumped. Match the established set-edit
+  // idiom: one DEFERRED pass (deferRender restores scrollY across the rebuild),
+  // render only the VISIBLE view, then reopenSetEdit() LAST so the expanded set
+  // survives the rebuild.
+  const rerender = () => {
+    showHydrating(); // PB-26 part 3: a brief "Updating…" pill while the rebuild runs
+    deferRender(() => {
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+      reopenSetEdit();
+      hideHydrating();
+    });
+  };
   rerender();
   showToast(`Deleted ${real.length} set${real.length === 1 ? "" : "s"} of ${label}`, "Undo", () => {
     for (const id of real) deletedSets.delete(id);
@@ -1975,8 +2609,9 @@ function setSetNotComparable(id: string, on: boolean): void {
 }
 function setRpe(id: string, v: string | null) {
   if (!canEditCurrentAthlete()) return;
-  if (v === null || !RIR_IDS.has(v)) delete rpeGrades[id];
-  else rpeGrades[id] = v;
+  const g = v === null ? null : parseRirGrade(v);
+  if (!g) delete rpeGrades[id];
+  else rpeGrades[id] = formatRirGrade(g); // normalise to the canonical encoding
   saveJson(RPE_STORE_KEY, rpeGrades);
 }
 
@@ -1985,7 +2620,7 @@ function setRpe(id: string, v: string | null) {
 // Level data: an override keyed by setId is layered on at load. Bodyweight here
 // is JUST for that set (overrides the profile default); scale is the per-set
 // technique factor (beats the per-hole one). RIR keeps its own store above.
-interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; }
+interface SetOverride { weight?: number; reps?: number; bodyweight?: number; scale?: number; scaleAbs?: number; notes?: string; levelDim?: LevelDim; levelValue?: number; machine?: "cable" | "gravity"; rom?: { unit: "pct" | "cm"; val: number; ref?: string }; }
 const SET_OVR_KEY = "colosseum.setOverrides.v1";
 let setOverrides: Record<string, SetOverride> = (() => {
   try {
@@ -2037,15 +2672,276 @@ function isAssistedMachine(exerciseName: string): boolean {
   const o = assistedHalveOverrides[exerciseName];
   return o === undefined ? isAssistablePullup(exerciseName) : o;
 }
+// Per-exercise MACHINE MULTIPLIER (the ÷ divisor): an assisted machine's dial over-reads
+// the real help by this factor (default 2 → −20 dials as −10 real). Editable per lift in the
+// index card (owner: "I cannot edit the machine multiplier which currently is 2").
+const MACHINE_MULT_KEY = "colosseum.machineMult.v1";
+const machineMultOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(MACHINE_MULT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+function machineMultFor(exerciseName: string): number {
+  const v = machineMultOverrides[exerciseName];
+  return typeof v === "number" && v > 0 ? v : 2;
+}
+function setMachineMult(exerciseName: string, value: number | undefined): void {
+  if (value === undefined || value === 2) delete machineMultOverrides[exerciseName];
+  else machineMultOverrides[exerciseName] = value;
+  saveJson(MACHINE_MULT_KEY, machineMultOverrides);
+  clearMachineCache();
+}
+// Phase 2 of the equipment model (docs/machine-model-plan.md): machine settings are GLOBAL —
+// editing one changes it for EVERY user/exercise on that machine. So apply the change, then
+// offer an Undo toast (owner: "all exercises for all users with this machine has been changed.
+// undo?"). After Phase 3 the wording names the equipment; pre-Phase-3 it's "all users".
+function afterMachineEdit(ex: string): void {
+  if (addModalEl) { refreshAddmSettings(); syncPendingFromModal(); }
+  scheduleRender(() => reopenIndexDetail(ex));
+}
+
+type MachineKgShiftSnap = { id: string; before: number; raw: number | null };
+
+/** Sets whose logged weight should follow a machine-base edit (legacy per-exercise or one named machine). */
+function recordsForMachineKgEdit(ex: string, equipId: string | null): SetRecord[] {
+  return activeRecords().filter((r) => {
+    if (r.weight == null) return false;
+    const stamp = setEquipment[setId(r)];
+    if (equipId) return stamp === equipId;
+    return (r.exerciseName === ex || r.originalExerciseName === ex) && !stamp;
+  });
+}
+
+function shiftSetsForMachineBaseDelta(records: readonly SetRecord[], delta: number): MachineKgShiftSnap[] {
+  const snap: MachineKgShiftSnap[] = [];
+  for (const r of records) {
+    const id = setId(r);
+    const cur = applySetOverride(r).weight;
+    if (cur == null || !Number.isFinite(cur)) continue;
+    const next = adjustedSetWeight(cur, delta, "shift");
+    snap.push({ id, before: cur, raw: r.weight });
+    setSetOverrideField(id, "weight", next);
+  }
+  return snap;
+}
+
+function undoMachineWeightShift(snap: readonly MachineKgShiftSnap[]): void {
+  for (const { id, before, raw } of snap) {
+    if (raw !== null && before === raw) setSetOverrideField(id, "weight", null);
+    else setSetOverrideField(id, "weight", before);
+  }
+}
+
+function uiMachineWeightAdjustChoice(
+  oldBase: number,
+  newBase: number,
+  setCount: number,
+  exLabel: string,
+): Promise<MachineWeightSetAdjust | null> {
+  const delta = newBase - oldBase;
+  const abs = Math.abs(delta);
+  const lt = getLang() === "lt";
+  const shiftLbl = lt
+    ? (delta > 0 ? `Nuo kiekvieno seto atimti ${fmt(abs)} kg` : `Prie kiekvieno seto pridėti ${fmt(abs)} kg`)
+    : (delta > 0 ? `Subtract ${fmt(abs)} kg from each set` : `Add ${fmt(abs)} kg to each set`);
+  const baseMsg = lt
+    ? (newBase > 0
+      ? `${exLabel} mašinos svoris dabar ${fmt(newBase)} kg`
+      : `${exLabel} mašinos svoris išvalytas`)
+    : (newBase > 0
+      ? `Machine weight for ${exLabel} is now ${fmt(newBase)} kg`
+      : `Machine weight for ${exLabel} is cleared`);
+  const setsWord = lt
+    ? (setCount === 1 ? "įrašytas setas" : "įrašyti setai")
+    : (setCount === 1 ? "logged set" : "logged sets");
+  const msg = lt
+    ? `${baseMsg} — turite ${setCount} ${setsWord}. Ar svoriai buvo tik skydelis (ką pasukėte), ar pilnas krūvis su mašinos baze?`
+    : `${baseMsg} — you have ${setCount} logged set${setCount === 1 ? "" : "s"}. Were those logged as the pin only (what you dialed), or as the full load including the machine base?`;
+  const keepLbl = lt ? "Tik skydelis — palikti svorius" : "Pin only — keep weights";
+  return uiChoice<MachineWeightSetAdjust>(msg, [
+    { id: "keep", label: keepLbl, primary: true },
+    { id: "shift", label: shiftLbl },
+  ]);
+}
+
+function writeMachineKgBase(ex: string, equipId: string | null, value: number | null): void {
+  if (equipId && equipmentReg[equipId]) {
+    equipmentReg[equipId]!.kgBase = value ?? 0;
+    saveEquipment();
+  } else setMachineWeight(ex, value);
+  clearMachineCache();
+}
+
+async function applyMachineKgBaseWithSetPrompt(ctx: {
+  ex: string;
+  equipId: string | null;
+  oldBase: number;
+  newBase: number | null;
+  inputEl?: HTMLInputElement;
+  equipName?: string;
+}): Promise<void> {
+  const newB = ctx.newBase ?? 0;
+  if (newB === ctx.oldBase) return;
+  const delta = newB - ctx.oldBase;
+  const recs = recordsForMachineKgEdit(ctx.ex, ctx.equipId);
+  let mode: MachineWeightSetAdjust = "keep";
+  if (recs.length > 0 && delta !== 0) {
+    const label = ctx.equipName ?? displayName(ctx.ex);
+    const choice = await uiMachineWeightAdjustChoice(ctx.oldBase, newB, recs.length, label);
+    if (choice === null) {
+      if (ctx.inputEl) ctx.inputEl.value = ctx.oldBase > 0 ? String(ctx.oldBase) : "";
+      else afterMachineEdit(ctx.ex);
+      return;
+    }
+    mode = choice;
+  }
+  const snap = mode === "shift" ? shiftSetsForMachineBaseDelta(recs, delta) : [];
+  const prevBase = ctx.oldBase;
+  const prevVal = ctx.newBase;
+  writeMachineKgBase(ctx.ex, ctx.equipId, ctx.newBase);
+  afterMachineEdit(ctx.ex);
+  deferRender(() => {
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+    refreshExerciseInfo();
+  });
+  const what = ctx.equipName ?? displayName(ctx.ex);
+  const valStr = prevVal == null ? (getLang() === "lt" ? "nėra" : "none") : `${fmt(newB)} kg`;
+  const toastMsg = getLang() === "lt"
+    ? (mode === "shift" && snap.length
+      ? `${what} mašinos svoris → ${valStr}; pakoreguota ${snap.length} set${snap.length === 1 ? "as" : "ų"}.`
+      : `${what} mašinos svoris → ${valStr}, pakeista visiems naudotojams su šia mašina.`)
+    : (mode === "shift" && snap.length
+      ? `Machine weight for ${what} → ${valStr}; shifted ${snap.length} set${snap.length === 1 ? "" : "s"}.`
+      : `Machine weight for ${what} → ${valStr}, changed for all users with this machine.`);
+  showToast(toastMsg, "Undo", () => {
+    writeMachineKgBase(ctx.ex, ctx.equipId, prevBase > 0 ? prevBase : null);
+    undoMachineWeightShift(snap);
+    afterMachineEdit(ctx.ex);
+    deferRender(() => {
+      renderAll();
+      if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+      if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+      refreshExerciseInfo();
+    });
+  });
+}
+
+function setMachineWeightWithUndo(ex: string, value: number | null): void {
+  const prev = machineWeightFor(ex);
+  const newB = value ?? 0;
+  if (newB === prev) return;
+  void applyMachineKgBaseWithSetPrompt({ ex, equipId: null, oldBase: prev, newBase: value });
+}
+function setMachineMultWithUndo(ex: string, value: number | undefined): void {
+  const prev = machineMultFor(ex);
+  if ((value ?? 2) === prev) return;
+  setMachineMult(ex, value);
+  afterMachineEdit(ex);
+  showToast(`Machine multiplier for ${displayName(ex)} → ÷${fmt(value ?? 2)}, changed for all users with this machine.`, "Undo", () => { setMachineMult(ex, prev); afterMachineEdit(ex); });
+}
+
+// ===== Phase 3: EQUIPMENT entities (docs/machine-model-plan.md) =====
+// A named piece of EQUIPMENT (machine / dumbbell / bar…) shared by exercises, owning the machine
+// settings (kg base, ÷ multiplier, assisted). "Default" = the exercise's own legacy per-exercise
+// settings — NOT in the registry. A user picks WHICH equipment they use for a lift (per-user, the
+// default for NEW sets); each set is STAMPED at log time, so switching equipment never rewrites
+// past sets (owner decision: "only new sets"). ONE resolver feeds BOTH metrics and the display
+// formula, so the shown −20/N can never disagree with the computed 1RM. The stamp→registry→
+// default resolution is the pure `resolveEquip` (src/equipment.ts), unit-tested.
+const EQUIPMENT_KEY = "colosseum.equipment.v1";
+const equipmentReg: Record<string, Equipment> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(EQUIPMENT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveEquipment(): void { saveJson(EQUIPMENT_KEY, equipmentReg); }
+const USER_EX_EQUIP_KEY = "colosseum.userExerciseEquipment.v1";
+const userExerciseEquipment: Record<string, Record<string, string>> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(USER_EX_EQUIP_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveUserExerciseEquipment(): void { saveJson(USER_EX_EQUIP_KEY, userExerciseEquipment); }
+const SET_EQUIP_KEY = "colosseum.setEquipment.v1";
+const setEquipment: Record<string, string> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(SET_EQUIP_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+})();
+function saveSetEquipment(): void { saveJson(SET_EQUIP_KEY, setEquipment); }
+/** The named equipment a user currently uses for a lift (their choice; the default for NEW sets).
+ * null = "Default" (the exercise's legacy per-exercise settings). */
+function currentEquipmentIdFor(ex: string): string | null {
+  return userExerciseEquipment[els.athlete.value || ""]?.[ex] ?? null;
+}
+function setCurrentEquipment(ex: string, id: string | null): void {
+  const u = els.athlete.value || "";
+  if (!u) return;
+  const m = (userExerciseEquipment[u] ??= {});
+  if (id) m[ex] = id; else delete m[ex];
+  saveUserExerciseEquipment();
+  clearMachineCache();
+}
+/** Settings to use for what a NEW set of this lift will be logged on (the current equipment). */
+function legacyEquipSettings(ex: string): EquipSettings {
+  return { kgBase: machineWeightFor(ex), divisor: machineMultFor(ex), assisted: isAssistedMachine(ex) };
+}
+function equipSettingsCurrent(ex: string): EquipSettings {
+  return resolveEquip(currentEquipmentIdFor(ex), equipmentReg, legacyEquipSettings(ex));
+}
+/** Settings for an EXISTING set — its STAMPED equipment, else the exercise's legacy default. This
+ * is the single resolver every metric + the display formula reads, so they always agree. */
+function equipmentSettingsForSet(r: SetRecord): EquipSettings {
+  return resolveEquip(setEquipment[setId(r)], equipmentReg, legacyEquipSettings(r.exerciseName));
+}
+/** A machine set FOR DISPLAY (equipment-aware): a negative weight on assisted equipment. */
+function isMachineSetEq(r: SetRecord): boolean {
+  return r.weight !== null && r.weight < 0 && equipmentSettingsForSet(r).assisted;
+}
+/** Create a new named machine seeded from a lift's current settings, and select it for the lift. */
+function createEquipmentFor(ex: string): string {
+  const base = equipSettingsCurrent(ex);
+  const id = `eq_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 5)}`;
+  const n = Object.keys(equipmentReg).length + 1;
+  equipmentReg[id] = { id, name: `Machine ${n}`, kgBase: base.kgBase, divisor: base.divisor, assisted: base.assisted };
+  saveEquipment();
+  setCurrentEquipment(ex, id);
+  return id;
+}
+/** Edit a named machine's kg-base or ÷ (GLOBAL — every set on it), with an Undo toast (Phase 2+3). */
+function setEquipFieldWithUndo(id: string, field: "kgBase" | "divisor", value: number, ex: string): void {
+  const e = equipmentReg[id];
+  if (!e || e[field] === value) return;
+  if (field === "kgBase") {
+    void applyMachineKgBaseWithSetPrompt({
+      ex, equipId: id, oldBase: e.kgBase, newBase: value, equipName: e.name,
+    });
+    return;
+  }
+  const prev = e[field];
+  e[field] = value; saveEquipment(); clearMachineCache(); afterMachineEdit(ex);
+  showToast(`${e.name} multiplier → ÷${fmt(value)}, changed for all users with this machine.`, "Undo", () => { e[field] = prev; saveEquipment(); clearMachineCache(); afterMachineEdit(ex); });
+}
+// EXPERIMENTAL exercises (owner): a preliminary scratchpad while exploring a movement — log a
+// lot of sets/notes without worrying about precision. Experimental data is EXCLUDED from ALL
+// analysis (1RM, volume, graphs, leaderboards, PRs) by routing it through notComparable in
+// computeRecord; it stays visible in the history as notes. The built-in "Experimentation" lift
+// is always experimental. Synced (shared config) like the other per-exercise overrides.
+const EXPERIMENTATION_EXERCISE = "Experimentation";
+const EXPERIMENTAL_KEY = "colosseum.experimentalExercises.v1";
+const experimentalOverrides: Record<string, boolean> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(EXPERIMENTAL_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+function isExperimental(exerciseName: string): boolean {
+  return exerciseName === EXPERIMENTATION_EXERCISE || experimentalOverrides[exerciseName] === true;
+}
+function setExperimental(exerciseName: string, state: boolean | undefined): void {
+  if (!state) delete experimentalOverrides[exerciseName];
+  else experimentalOverrides[exerciseName] = true;
+  saveJson(EXPERIMENTAL_KEY, experimentalOverrides);
+  clearMachineCache();
+}
 function setAssistedOverride(exerciseName: string, state: boolean | undefined): void {
   if (state === undefined) delete assistedHalveOverrides[exerciseName];
   else assistedHalveOverrides[exerciseName] = state;
   saveJson(ASSIST_HALVE_KEY, assistedHalveOverrides);
   clearMachineCache();
-}
-/** A "machine" set: an assisted lift logged with a NEGATIVE weight (a counterweight). */
-function isMachineSet(exerciseName: string, weight: number | null): boolean {
-  return weight !== null && weight < 0 && isAssistedMachine(exerciseName);
 }
 // Assist-weight VIEW (global): REAL (default) halves a machine set's counterweight
 // (−40 → −20) and uses normal bodyweight — the lifter's true effort. LOGGED keeps the
@@ -2060,23 +2956,19 @@ function setAssistLoggedView(on: boolean): void {
   try { localStorage.setItem(ASSIST_VIEW_KEY, on ? "1" : "0"); } catch { /* ignore */ }
   clearMachineCache();
 }
-/** The weight a machine set is COUNTED/SHOWN as under the current view: logged keeps it
- * as-entered, real halves it. Non-machine weights pass through. */
-function viewAddedWeight(exerciseName: string, weight: number | null): number | null {
-  if (assistLoggedView) return weight;
-  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+/** The weight a machine set is COUNTED/SHOWN as under the given view (default = the
+ * global graph flag): logged keeps it as-entered, real halves it. Non-machine weights
+ * pass through. Pass `logged` explicitly to compute a view INDEPENDENT of the graph
+ * toggle (the history list forces real so the graph's Assist option can't change it). */
+function viewAddedWeight(exerciseName: string, weight: number | null, logged = assistLoggedView): number | null {
+  if (logged) return weight;
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName), machineMultFor(exerciseName));
 }
-/** The REAL (half) assistance for a machine set, IGNORING the view flag — used by the
+/** The REAL (÷ multiplier) assistance for a machine set, IGNORING the view flag — used by the
  * set editor to show "= −12.5 real" beside the dialed counterweight. */
 function realAddedWeight(exerciseName: string, weight: number | null): number | null {
-  return assistedRealWeight(weight, isAssistedMachine(exerciseName));
+  return assistedRealWeight(weight, isAssistedMachine(exerciseName), machineMultFor(exerciseName));
 }
-/** Bodyweight multiplier for the current view: machine sets in LOGGED view fold 2× the
- * bodyweight share (the machine's 2× scale), keeping the logged load = 2× the real one. */
-function viewBwMult(exerciseName: string, weight: number | null): number {
-  return assistLoggedView && isMachineSet(exerciseName, weight) ? 2 : 1;
-}
-
 const SET_SIDES_KEY = "colosseum.setSides.v1";
 const setSidesStore: Record<string, SideDivergence> = (() => {
   try { const o = JSON.parse(localStorage.getItem(SET_SIDES_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
@@ -2302,7 +3194,7 @@ function setSetOverrideNote(id: string, value: string, originalNote: string): vo
   saveSetOverrides();
 }
 /** Set or clear one numeric override field for a set (empty/NaN clears just it). */
-function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale", value: number | null) {
+function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight" | "scale" | "scaleAbs", value: number | null) {
   if (!canEditCurrentAthlete()) return;
   const o = setOverrides[id] ?? {};
   if (value === null || !Number.isFinite(value)) delete o[field];
@@ -2311,6 +3203,53 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
   else setOverrides[id] = o;
   saveSetOverrides();
 }
+/** Set or clear a set's RANGE OF MOTION (a variation, NOT a note — owner: "tags/variations are
+ * never notes; notes are user-only"). Stored as a per-set attribute, shown as a ROM chip. */
+function setSetRom(id: string, rom: { unit: "pct" | "cm"; val: number; ref?: string } | null): void {
+  if (!canEditCurrentAthlete()) return;
+  const o = setOverrides[id] ?? {};
+  if (!rom) delete o.rom; else o.rom = rom;
+  if (Object.keys(o).length === 0) delete setOverrides[id];
+  else setOverrides[id] = o;
+  saveSetOverrides();
+}
+/** A set's ROM as a chip + the note with any LEGACY "ROM…" token stripped out. ROM lives on the
+ * per-set override now; older sets may still carry a "ROM X%"/"ROM Ncm" note from before this
+ * change — we parse it for display so it shows as a chip (a variation), never as a user note. */
+function romOfSet(sid: string, notes: string | undefined): { chip: string; note: string; label: string } {
+  let label = "", tip = "Range of motion for this set", from = "";
+  const o = setOverrides[sid]?.rom;
+  if (o) {
+    label = o.unit === "cm" ? `ROM ${fmt(o.val)}cm${o.ref ? ` ${o.ref}` : ""}` : `ROM ${fmt(o.val)}%`;
+    from = o.unit === "cm" && o.ref ? o.ref : "";
+  } else {
+    const cm = (notes ?? "").match(/\bROM\s*(\d+)\s*cm(?:\s+from\s+([^,·]+))?/i);
+    const pct = (notes ?? "").match(/\bROM\s*(\d+)\s*%/i);
+    if (cm) { label = `ROM ${cm[1]}cm${cm[2] ? ` ${cm[2].trim()}` : ""}`; from = cm[2] ? cm[2].trim() : ""; }
+    else if (pct) label = `ROM ${pct[1]}%`;
+  }
+  if (from) tip += ` — measured from ${from}`;
+  const note = (notes ?? "").replace(/\s*\bROM\s*\d+\s*cm(?:\s+from\s+[^,·]+)?/i, "").replace(/\s*\bROM\s*\d+\s*%/i, "").trim();
+  const chip = label ? `<span class="set-rom" title="${escapeHtml(label + (from ? ` — from ${from}` : ""))}">${escapeHtml(shortRomLabel(label))}</span>` : "";
+  return { chip, note, label };
+}
+/** Compact ROM chip text for the collapsed history (owner: tags must be tiny, but still keep a
+ * 2–4 letter identifier of WHAT they are). Keeps the "ROM" identifier, drops "cm"/keeps "%", and
+ * abbreviates the reference word to its first letter: "ROM 30cm floor" → "ROM 30cm f". The full
+ * label stays in the chip's title + the picker. */
+function shortRomLabel(label: string): string {
+  const m = label.match(/^ROM\s*(\d+(?:\.\d+)?)\s*(cm|%)(?:\s+(.+))?$/i);
+  if (!m) return label;
+  const ref = m[3] ? ` ${m[3].trim()[0]!.toLowerCase()}` : "";
+  return `ROM ${m[1]}${m[2]!.toLowerCase()}${ref}`;
+}
+/** Short 2–4 letter dimension code prefixed to a value-style chip so a bare measurement
+ * (e.g. "30cm") says WHICH dimension it is (owner: "need a 2-4 letter identifier — what kind
+ * of 30cm is it"). Dims whose level label already self-identifies (support b2w, band N, ladder
+ * rung N, position, lean) get no code. */
+const DIM_CHIP_CODE: Record<string, string> = {
+  shoulderDist: "GAP", backrest: "BR", lever: "WD", reach: "HD", forearmSupport: "FA", floorHeight: "FH",
+};
 
 /**
  * Records with the bodyweight-lifted load baked into `weight`, so the existing
@@ -2326,8 +3265,8 @@ function setSetOverrideField(id: string, field: "weight" | "reps" | "bodyweight"
  */
 /** Public computeRecord: the bodyweight-aware compute, then tag the owner's
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
-function computeRecord(r: SetRecord): SetRecord {
-  const base = computeRecordBase(r);
+function computeRecord(r: SetRecord, logged = assistLoggedView): SetRecord {
+  const base = computeRecordBase(r, logged);
   // Stamp the per-NOTE variation difficulty so the 1RM (addedWeight1RM) scales the
   // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
   const mult = noteVariationScale(base);
@@ -2335,11 +3274,12 @@ function computeRecord(r: SetRecord): SetRecord {
   let out = base;
   if (mult !== 1) out = { ...out, difficultyMult: mult };
   if (kg > 0) out = { ...out, assistKg: kg };
-  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note).
-  const nc = notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
+  // Not comparable if THIS set is marked (per-set), or its NOTE is (per-note), or the whole
+  // exercise is EXPERIMENTAL (owner: a scratchpad — never feeds 1RM/volume/graphs/leaderboards).
+  const nc = isExperimental(out.exerciseName) || notComparableSets.has(setId(out)) || (!!out.notes && isNoteNotComparable(out.exerciseName, out.notes));
   return nc ? { ...out, notComparable: true } : out;
 }
-function computeRecordBase(r: SetRecord): SetRecord {
+function computeRecordBase(r: SetRecord, logged = assistLoggedView): SetRecord {
   // Synthetic group records (SQ mix, DL pattern…) already carry the bodyweight-
   // inclusive, ratio-scaled load — re-folding bodyweight would double-count it.
   if (r.syntheticGroupId) return r;
@@ -2347,21 +3287,32 @@ function computeRecordBase(r: SetRecord): SetRecord {
   // real load/1RM (it only scales a separate "effort" 1RM, see scaleForRecord).
   const coeff = coeffFor(r.exerciseName);
   // Assisted-machine sets (a NEGATIVE pull-up/dip weight): the machine dial over-reads
-  // ~2×. The current view decides how it's counted — REAL halves it (−40 → −20) with
-  // normal bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is
-  // the value to DISPLAY (so the set shows what the chosen view treats it as).
-  const viewAdded = viewAddedWeight(r.exerciseName, r.weight);
-  const bwMult = viewBwMult(r.exerciseName, r.weight);
+  // ~2×. The view decides how it's counted — REAL halves it (−40 → −20) with normal
+  // bodyweight; LOGGED keeps −40 and doubles the bodyweight share. origWeight is the
+  // value to DISPLAY. `logged` defaults to the global graph flag; the history passes
+  // false so the per-set list always reflects real effort regardless of the graph.
+  // Resolve THIS set's equipment once (its stamped machine, else the exercise default) and
+  // drive every machine fact from it, so metrics match the displayed −20/N formula exactly.
+  const eq = equipmentSettingsForSet(r);
+  const viewAdded = logged ? r.weight : assistedRealWeight(r.weight, eq.assisted, eq.divisor);
+  const bwMult = logged && r.weight !== null && r.weight < 0 && eq.assisted ? 2 : 1;
+  // Machine base weight (e.g. Leg Extension +20 kg): the machine adds a hidden base, so
+  // the TOTAL load (dialed + base) is what counts. Fold it into BOTH the effective load
+  // (1RM) and origWeight (so volume + every "added weight" read the total too). The set
+  // views still show the dialed value (raw r.weight) — prefixed "base+dialed" — and only
+  // that dialed part is editable; the base is the resolved equipment's kg base.
+  const mw = eq.kgBase;
+  const effAdded = mw > 0 && viewAdded != null ? viewAdded + mw : viewAdded;
   if (coeff <= 0) {
-    const base = viewAdded === r.weight ? r : { ...r, weight: viewAdded, origWeight: viewAdded };
+    const base = mw <= 0 && viewAdded === r.weight ? r : { ...r, weight: effAdded, origWeight: effAdded };
     return applyMachineMode(base);
   }
   // Always use the bodyweight recorded with the set; fall back to the profile
   // default only when the set didn't record one.
   const bw0 = r.bodyweight ?? athProfile(r.username)?.weight ?? null;
   const bw = bw0 === null ? null : bw0 * bwMult;
-  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = what to display.
-  return applyMachineMode({ ...r, weight: effectiveLoad(viewAdded, bw, coeff), origWeight: viewAdded });
+  // weight = bodyweight-inclusive load (for the 1RM calc); origWeight = the total added.
+  return applyMachineMode({ ...r, weight: effectiveLoad(effAdded, bw, coeff), origWeight: effAdded });
 }
 
 // ---- Owner-editable combinable/comparable membership ------------------------
@@ -2542,6 +3493,41 @@ function uiAlert(message: string, opts: { ok?: string } = {}): Promise<void> {
     requestAnimationFrame(() => wrap.querySelector<HTMLButtonElement>(".ui-modal-ok")!.focus());
   });
 }
+
+/** Two- or three-button choice modal — replaces window.confirm for styled picks. */
+function uiChoice<T extends string>(
+  message: string,
+  choices: { id: T; label: string; primary?: boolean }[],
+  opts: { cancel?: string } = {},
+): Promise<T | null> {
+  return new Promise((resolve) => {
+    document.getElementById("uiModal")?.remove();
+    const wrap = document.createElement("div");
+    wrap.id = "uiModal";
+    wrap.className = "ui-modal-back";
+    const btns = choices.map((c) =>
+      `<button type="button" class="ui-modal-${c.primary ? "ok" : "cancel"}" data-pick="${escapeHtml(c.id)}">${escapeHtml(c.label)}</button>`,
+    ).join("");
+    wrap.innerHTML =
+      `<div class="ui-modal" role="dialog" aria-modal="true">` +
+        `<div class="ui-modal-msg">${escapeHtml(message)}</div>` +
+        `<div class="ui-modal-acts ui-modal-acts-stack">${btns}` +
+          `<button type="button" class="ui-modal-cancel" data-pick="">${escapeHtml(opts.cancel ?? "Cancel")}</button>` +
+        `</div></div>`;
+    document.body.appendChild(wrap);
+    const done = (v: T | null) => { document.removeEventListener("keydown", onKey, true); wrap.remove(); resolve(v); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); done(null); } };
+    document.addEventListener("keydown", onKey, true);
+    wrap.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLElement>("[data-pick]");
+      if (!b || !wrap.contains(b)) return;
+      const id = b.dataset.pick ?? "";
+      done(id ? (id as T) : null);
+    });
+    wrap.addEventListener("mousedown", (e) => { if (e.target === wrap) done(null); });
+    requestAnimationFrame(() => wrap.querySelector<HTMLButtonElement>(".ui-modal-ok, .ui-modal-cancel")?.focus());
+  });
+}
 /** Small popup menu off a selected lift (replaces the inline ⓘ ⊕ ⇄ buttons): Info,
  * Combine, Compare (only the relations it has), Remove. The lift name opens it. */
 function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void {
@@ -2557,8 +3543,10 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
     // Members SORTED the same way the chart assigns shapes (distinctOrigins sorts), so
     // each member shows the exact dot shape it gets in the merged graph view.
     const ordered = [...new Set((g.members ?? []).map((m) => m.exerciseName))].sort();
+    // Each member is TAPPABLE — pick one to view just that single exercise (owner: "from
+    // squat pattern I should be able to choose specifically which single exercise I want").
     const legend = ordered
-      .map((ex, i) => `<span class="lift-menu-mem">${shapeIconSvg(ORIGIN_SHAPES[i % ORIGIN_SHAPES.length]!)}${escapeHtml(displayName(ex))}</span>`)
+      .map((ex, i) => `<button type="button" class="lift-menu-mem" data-lm="member" data-lmmem="${escapeHtml(ex)}" title="View only ${escapeHtml(displayName(ex))}">${shapeIconSvg(ORIGIN_SHAPES[i % ORIGIN_SHAPES.length]!)}${escapeHtml(displayName(ex))}</button>`)
       .join("");
     return `<div class="lift-menu-grp">` +
       `<div class="lift-menu-grp-name">${escapeHtml(g.derivedName ?? g.label)}</div>` +
@@ -2584,6 +3572,52 @@ function openLiftMenu(anchor: HTMLElement, scope: SelScope, name: string): void 
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.round(r.bottom + 4)}px`;
   menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
+}
+// "N exercises ▾" title dropdown (rule 32: fixed + clampMenuIntoView, appended to <body>
+// per the PB-38 lesson). Lists EVERY picked lift as the SAME tap-to-act chip the title
+// uses (data-liftmenu → Info / Combine / Compare / Remove), so a long selection stays one
+// compact label that opens the full list on demand. Closed by the next analysis re-render.
+function closeTitleExListMenu(): void {
+  document.getElementById("titleExList")?.remove();
+  document.removeEventListener("click", titleExListOutside, true);
+}
+/** The selected-lift chips for the "N exercises" dropdown (shared by open + refresh so they
+ * can't drift). Each opens that lift's Info/Combine/Compare/Remove menu. */
+function titleExListChipsHtml(scope: SelScope): string {
+  const sel = scope === "graph" ? waGraphSel : waSelected;
+  const sizeClass = (n: string): string => { const L = displayName(n).length; return L <= 12 ? " wa-tl-s1" : L <= 17 ? " wa-tl-s2" : " wa-tl-s3"; };
+  return sel
+    .map((n) => `<button type="button" class="wa-title-lift${sizeClass(n)}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`)
+    .join("");
+}
+/** Keep an OPEN "N exercises" dropdown alive across the re-render that removing a lift from it
+ * triggers (owner: "the exercise list shouldn't close after removing an exercise") — rule 24:
+ * a floating menu must survive the re-render its own options cause. Rebuilds the chips in place
+ * from the current selection; closes only when nothing is left to show. */
+function syncTitleExListMenu(): void {
+  const m = document.getElementById("titleExList");
+  if (!m) return;
+  const scope = (m.dataset.scope as SelScope) ?? "graph";
+  const sel = scope === "graph" ? waGraphSel : waSelected;
+  if (!sel.length) { closeTitleExListMenu(); return; }
+  const grid = m.querySelector(".title-exlist-grid");
+  if (grid) grid.innerHTML = titleExListChipsHtml(scope);
+}
+function titleExListOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("#titleExList") || t.closest("[data-titlelist]") || t.closest("#liftMenu")) return;
+  closeTitleExListMenu();
+}
+function openTitleExListMenu(anchor: HTMLElement, scope: SelScope): void {
+  const existing = document.getElementById("titleExList");
+  if (existing && existing.dataset.scope === scope) { closeTitleExListMenu(); return; }
+  closeTitleExListMenu();
+  const m = document.createElement("div");
+  m.id = "titleExList"; m.className = "title-exlist"; m.dataset.scope = scope;
+  m.innerHTML = `<div class="title-exlist-grid">${titleExListChipsHtml(scope)}</div>`;
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+  setTimeout(() => document.addEventListener("click", titleExListOutside, true), 0);
 }
 /** Toggle one exercise in/out of a group (default ratio 1; comparable editable after). */
 /** User-created combinable/comparable groups (userExerciseDefs) of one kind. */
@@ -2926,7 +3960,8 @@ function refreshActiveSet(): void {
   activeSet = base;
 }
 
-/** Persist the active-set controls to localStorage. */
+/** Persist the active-set controls to localStorage (the legacy single keys — kept as the
+ * device-local SEED), and mirror them into the CURRENT athlete's per-user filter (v2). */
 function saveActiveSet(): void {
   try {
     localStorage.setItem(ACTIVE_CUTOFF_KEY, activeCutoff ?? "none");
@@ -2936,6 +3971,58 @@ function saveActiveSet(): void {
     localStorage.setItem(ACTIVE_SOLO_KEY, JSON.stringify(activeSolo ? [...activeSolo] : []));
     localStorage.setItem(ACTIVE_META_KEY, JSON.stringify(activeMetaFilters));
   } catch { /* storage may be unavailable */ }
+  saveIndexFilterForCurrent();
+}
+
+// ---- PER-ATHLETE Index filter (owner: "each user has a separate filtering system — seeded
+// from the current one, then their changes stay with that user"). The live module vars above
+// are the CURRENTLY-loaded athlete's filter; this v2 map stores every athlete's own copy and
+// is swapped on athlete change. It SYNCS (per-user data), unlike the device-local legacy keys. */
+const INDEX_FILTER_KEY_V2 = "colosseum.indexFilter.v2";
+interface IndexFilterState {
+  cutoff: string | null; freq: string[]; include: string[]; exclude: string[];
+  solo: string[] | null; meta: Partial<Record<ExerciseFilterDim, string[]>>;
+}
+function captureIndexFilter(): IndexFilterState {
+  return {
+    cutoff: activeCutoff, freq: [...activeFreqTiers], include: [...activeInclude],
+    exclude: [...activeExclude], solo: activeSolo ? [...activeSolo] : null,
+    meta: JSON.parse(JSON.stringify(activeMetaFilters)),
+  };
+}
+function applyIndexFilter(s: IndexFilterState): void {
+  activeCutoff = s.cutoff ?? null;
+  activeFreqTiers = new Set(Array.isArray(s.freq) ? s.freq : []);
+  activeInclude = new Set(Array.isArray(s.include) ? s.include : []);
+  activeExclude = new Set(Array.isArray(s.exclude) ? s.exclude : []);
+  activeSolo = Array.isArray(s.solo) && s.solo.length ? new Set(s.solo) : null;
+  activeMetaFilters = (s.meta && typeof s.meta === "object" ? s.meta : {}) as Partial<Record<ExerciseFilterDim, string[]>>;
+}
+// The SEED = the filter present at startup (the legacy single keys), so every athlete who has
+// no saved filter yet starts identical to "right now", then keeps their own changes.
+const INDEX_FILTER_SEED: IndexFilterState = captureIndexFilter();
+let indexFilterUser: string | null = null;
+function loadAllIndexFilters(): Record<string, IndexFilterState> {
+  const raw = loadJsonObject<Record<string, unknown>>(INDEX_FILTER_KEY_V2) ?? {};
+  const out: Record<string, IndexFilterState> = {};
+  for (const [u, v] of Object.entries(raw)) if (v && typeof v === "object") out[u] = v as IndexFilterState;
+  return out;
+}
+/** Save the live filter into the CURRENT athlete's v2 entry (no-op before an athlete loads). */
+function saveIndexFilterForCurrent(): void {
+  if (!indexFilterUser) return;
+  try { const all = loadAllIndexFilters(); all[indexFilterUser] = captureIndexFilter(); saveJson(INDEX_FILTER_KEY_V2, all); }
+  catch { /* ignore */ }
+}
+/** Swap the live filter to `user`'s own copy (seeded from the startup filter if they have none),
+ * saving the outgoing athlete's first. Self-guards, so it's cheap to call on every render. */
+function ensureIndexFilterFor(user: string): void {
+  if (indexFilterUser === user) return;
+  if (indexFilterUser !== null) saveIndexFilterForCurrent(); // bank the outgoing athlete's filter
+  const all = loadAllIndexFilters();
+  applyIndexFilter(all[user] ?? INDEX_FILTER_SEED);
+  indexFilterUser = user;
+  refreshActiveSet();
 }
 
 /** Apply a group's "Only / Hide / Show" filter to the app-wide active set. */
@@ -3046,7 +4133,7 @@ function computedRecords(): SetRecord[] {
   // user exercise-def identity), PLUS the synthetic combinable/comparable group
   // records derived from those computed loads. Pure source lifts are never mutated.
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
-  const pure = activeRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
+  const pure = activeRecords().map(applySetOverride).map((r) => computeRecord(r)).map((r) => tagUserExerciseDef(r, byDef));
   computedRecordsCache = [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
   queueMicrotask(() => { computedRecordsCache = null; });
   return computedRecordsCache;
@@ -3060,7 +4147,7 @@ function computedRecords(): SetRecord[] {
  * (one card render); same transform pipeline, just the unfiltered base. */
 function computedRecordsAllLifts(): SetRecord[] {
   const byDef = new Map(userExerciseDefs.map((d) => [d.name, d]));
-  const pure = liveRecords().map(applySetOverride).map(computeRecord).map((r) => tagUserExerciseDef(r, byDef));
+  const pure = liveRecords().map(applySetOverride).map((r) => computeRecord(r)).map((r) => tagUserExerciseDef(r, byDef));
   return [...pure, ...withSyntheticGroups(pure, [...syntheticGroupDefs(), ...userCombinedGroupDefs()])];
 }
 
@@ -3071,7 +4158,9 @@ function computedRecordsAllLifts(): SetRecord[] {
  */
 function populateExercisePicker(): void {
   const prev = els.exercise.value;
-  const pure = distinctExercises(activeRecords()); // pure lifts, most-logged first (active set)
+  // selectableExercises so EXTRA_EXERCISES catalog lifts (no logged sets yet) are
+  // still graph/analysis-pickable — selecting one shows the inline calc (PB-25).
+  const pure = selectableExercises(activeRecords()); // pure lifts, most-logged first (active set)
   // The synthetic combinable/comparable lifts (SQ mix, DL pattern) whose members
   // are present — surfaced in a labelled group at the TOP so they're easy to find.
   const synth = availableSyntheticNames(pure);
@@ -3206,6 +4295,17 @@ function openHealth() {
 function openBackup() {
   setSettingsOpen(false);
   els.backupPage.hidden = false;
+}
+
+/** Open the Formulas overlay (the old Test tab, now a popup beside the Plan button):
+ * the 1RM calculator, the Coach working-weight tool, the strength-fade curve and the
+ * "how the numbers work" notes. Show first, then render so the SVG charts measure a
+ * real (non-zero) width. */
+function openFormulas() {
+  setSettingsOpen(false);
+  setOtherSheetOpen(false);
+  els.formulasPage.hidden = false;
+  requestAnimationFrame(() => { renderTest(); renderCalcTopSets(); });
 }
 
 /** Open the version-history overlay from Settings. */
@@ -3353,10 +4453,52 @@ function renderBacklog() {
 // row that pushes the table down. So it's unmistakably "this one exercise's
 // settings, in the context of the Index". `currentExInfo` is the lift it shows.
 let currentExInfo: string | null = null;
+// Manual weight×reps the owner can type on the exercise card to compute a 1RM there (so a
+// NEVER-logged lift still gets the warm-up / working-set calculator — PB-21). Reset per lift.
+let cardCalc: { weight: string; reps: string } = { weight: "", reps: "" };
+// The card's adjustable 1RM (the Nuzzo-fit slider). null = use the logged best. Drives
+// the whole card (working weights, warm-up) and where the real rep-max points sit on
+// the Nuzzo curve, so the user can dial the 1RM until their lifts fit the curve.
+let cardOrm: number | null = null;
+/** Which sub-tab is active in the exercise info card — "curve" (default, the Nuzzo
+ *  fit graph + training brief) or "volume" (the 3D rotatable volume "city"). */
+let exInfoTab: "curve" | "volume" = "curve";
+/** Camera angles (radians) for the rotatable 3D Volume chart — yaw spins around the
+ *  vertical axis, pitch tilts the view down from above. Persist across re-renders so a
+ *  re-paint keeps the angle the owner dragged to. */
+let vol3dYaw = -0.62;
+let vol3dPitch = 0.52;
+// Map-tab controls (owner): merge the floor by a weight bin (2/5/10 kg) and a rep bin
+// (every rep · 1–3/4–6 · 1–10/11–20), choose the time range of sets, and make the pin
+// HEIGHT count sets OR total reps. Device-local display prefs.
+const VOL3D_WTBINS = [1, 2, 5, 10, 15, 20] as const; // round kg bins (owner)
+const VOL3D_REPBINS = [1, 2, 3, 4, 5] as const; type Vol3dRepBin = number; // reps merged into bins of this size (1 = each rep)
+const VOL3D_RANGES = ["1w", "2w", "1mo", "3mo", "6mo", "12mo", "all"] as const; type Vol3dRange = (typeof VOL3D_RANGES)[number];
+const mapPref = (k: string, dflt: string): string => { try { return localStorage.getItem(`colosseum.map.${k}`) ?? dflt; } catch { return dflt; } };
+const setMapPref = (k: string, v: string): void => { try { localStorage.setItem(`colosseum.map.${k}`, v); } catch { /* ignore */ } };
+let vol3dWtBin: number = (() => { const v = Number(mapPref("wtBin", "5")); return (VOL3D_WTBINS as readonly number[]).includes(v) ? v : 5; })();
+let vol3dRepBin: Vol3dRepBin = (() => { const v = Number(mapPref("repBin", "1")); return (VOL3D_REPBINS as readonly number[]).includes(v) ? v : 1; })();
+let vol3dRange: Vol3dRange = ((v) => (VOL3D_RANGES as readonly string[]).includes(v) ? v : "all")(mapPref("range", "all")) as Vol3dRange;
 /** When ON, every pill in the exercise-settings card grows a small ⓘ that navigates
  * to that subject — a group's own info card, or the Index filtered to that
  * discipline / muscle / tier. Toggled by the ⓘ button in the card header. */
 let exInfoMode = false;
+/** "Pair with" list view prefs (device-local, rule 41): the sort key + whether to
+ *  hide AVOID-graded (no-way) suggestions. Cycled / toggled by the controls in the
+ *  section header; applied only on render, so a grade tap never re-sorts the list. */
+type PairSort = "practical" | "muscle" | "name" | "trained";
+let pairSort: PairSort = (() => {
+  try { const v = localStorage.getItem("colosseum.pairSort"); return v === "muscle" || v === "name" || v === "trained" ? v : "practical"; }
+  catch { return "practical"; }
+})();
+let pairHideAvoid = (() => { try { return localStorage.getItem("colosseum.pairHideAvoid") === "1"; } catch { return false; } })();
+/** Whether the exercise card's editable "Index entry" fold (code/tags/groups/data) is
+ * expanded — the info brief shows by default, the index editing is opt-in. Remembered
+ * across the card's re-renders so editing a tag inside doesn't snap it shut. */
+let exIndexFoldOpen = false;
+/** "Pair with" pills are collapsed under a dropdown by default (owner: the wall of pills
+ * dominated the card); this remembers its open state across the card's re-renders. */
+let pairFoldOpen = false;
 /** Open one exercise's settings: bring the Index (the all-exercises list) up as
  * the backdrop, reveal + scroll to that lift's row, then float the settings card
  * on top — filled from the single-source `exerciseInfoHtml`. */
@@ -3368,6 +4510,9 @@ function currentTopTab(): string {
 /** Where the exercise-settings overlay was opened from, so its Back button can
  * return there (Analysis or Index). Captured only on a fresh open. */
 let exInfoOrigin = "bwparts";
+/** True when the exercise card was opened from the 📋 Priorities popup, so Back returns
+ * to Priorities instead of a tab. Captured only on a fresh open. */
+let exInfoFromPlan = false;
 /** The Index table row for a lift — or, for a synthetic combined/comparison lift
  * that has NO row of its own (e.g. "SQ mix" isn't a logged name), the row of its
  * first listed member, so "go to Index" lands on something relevant instead of
@@ -3388,10 +4533,14 @@ function syncPillToggle(): void {
   els.exInfoPillToggle.classList.toggle("is-on", exInfoMode);
   els.exInfoPillToggle.setAttribute("aria-pressed", String(exInfoMode));
 }
-function openExerciseInfo(name: string): void {
+function openExerciseInfo(name: string, fromPlan = false): void {
   // Remember the view we came from (only on a fresh open — opening another lift
   // while the overlay is up keeps the original origin).
-  if (els.exInfoPage.hidden) exInfoOrigin = currentTopTab();
+  if (els.exInfoPage.hidden) { exInfoOrigin = currentTopTab(); exInfoFromPlan = fromPlan; }
+  cardCalc = { weight: "", reps: "" }; // fresh manual-1RM input per lift
+  cardOrm = null; // fresh 1RM-fit slider per lift (defaults to the logged best)
+  exInfoGraphStageKey = null;
+  exInfoTab = "curve"; // always start on the curve tab for a fresh open
   currentExInfo = name;
   switchTopTab("bwparts"); // the Index is the backdrop, scrolled to this lift
   const row = indexRowFor(name);
@@ -3400,9 +4549,9 @@ function openExerciseInfo(name: string): void {
     requestAnimationFrame(() => row.scrollIntoView({ behavior: "auto", block: "center" }));
   }
   els.exInfoTitle.textContent = name;
-  els.exInfoBody.innerHTML = exerciseInfoHtml(name);
+  els.exInfoPage.hidden = false; // unhide first so the embedded chart can measure width
+  paintExInfo(name);
   syncPillToggle();
-  els.exInfoPage.hidden = false;
   refreshPoseViz();
   els.exInfoBody.parentElement?.scrollTo(0, 0); // reset the card's own scroll
 }
@@ -3410,6 +4559,9 @@ function openExerciseInfo(name: string): void {
 function closeExerciseInfo(): void {
   currentExInfo = null;
   els.exInfoPage.hidden = true;
+  // Opened from the 📋 Priorities popup → Back reopens Priorities (over its original
+  // backdrop tab), not the tab behind it.
+  if (exInfoFromPlan) { exInfoFromPlan = false; switchTopTab(exInfoOrigin || "analysis"); openWorkoutPlan(); return; }
   // PB-9: Back returns to the view you opened the card FROM (Index / Analysis / S-ANL)
   // and leaves the analysis graph + history selection UNTOUCHED. It used to ALWAYS
   // collapse both selectors to just the inspected lift, so opening a card merely to
@@ -3468,7 +4620,7 @@ function gotoIndexCategory(mode: IndexGroupMode, key: string): void {
  * so it stays in sync without closing. No-op when the overlay is closed. */
 function refreshExerciseInfo(): void {
   if (currentExInfo === null || els.exInfoPage.hidden) return;
-  els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+  paintExInfo(currentExInfo);
   refreshPoseViz();
 }
 /** From a note's "who & when" entry: switch to that athlete, open the Analysis
@@ -3565,10 +4717,18 @@ function renderChangelog() {
     const modelTag = modelLabel
       ? `<span class="cl-model cl-model--${modelClass(modelLabel)}" title="${models.length > 1 ? `Made across ${models.length} models: ${escapeHtml(models.join(", "))}` : `Made by ${escapeHtml(modelLabel)}`}">${escapeHtml(modelLabel)}</span>`
       : "";
+    // AI session CODE-NAME chip (rule 50): which AI chat made this version. Several AIs share the
+    // one model on the branch, so the throwaway per-chat code-name disambiguates them. Leaf-only.
+    const aiTag = r.ai ? `<span class="cl-ai" title="Made by AI session “${escapeHtml(r.ai)}”">${escapeHtml(r.ai)}</span>` : "";
+    // Owner's quality grade for this version (set via the floating grade button), as a chip.
+    const gMeta = r.children?.length ? undefined : gradeMeta(gradeOf(r.version));
+    const gradeTag = gMeta ? `<span class="cl-grade cl-grade--${(gMeta as { tone: string }).tone}" title="Your grade">${escapeHtml(gMeta.label)}</span>` : "";
     const spOrTag = r.soon
       ? `<span class="cl-meta"><span class="cl-soon">soon</span></span>`
       : `<span class="cl-meta">` +
         modelTag +
+        aiTag +
+        gradeTag +
         `<span class="cl-sp" title="${fmtSp(r.sp)} story points">SP ${fmtSp(r.sp)}</span>` +
         `<span class="cl-cost" title="Real cost: this ${r.children?.length ? "collection's" : "update's"} share of the project's actual subscription spend, weighted by the model that made it (not API list price)">${fmtEur(costForNode(r))}</span>` +
         `</span>`;
@@ -3629,10 +4789,10 @@ function renderChangelog() {
       if (i < timeline.length && eraName(timeline[i]!.version) === eraName(timeline[i0]!.version)) continue;
       const era = eraName(timeline[i0]!.version);
       const pts: SvgPoint[] = [];
-      if (i0 > 0) { const pp = timeline[i0 - 1]!; pts.push({ x: Date.parse(pp.date), y: pp.cumulative }); }
+      if (i0 > 0) { const pp = timeline[i0 - 1]!; pts.push({ x: pp.t, y: pp.cumulative }); }
       for (let k = i0; k < i; k++) {
         const p = timeline[k]!;
-        pts.push({ x: Date.parse(p.date), y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
+        pts.push({ x: p.t, y: p.cumulative, meta: `${displayVersion(p.version)} · ${p.date} · ${fmtSp(p.cumulative)} SP` });
       }
       eraSeries.push({ name: era, color: eraColor(timeline[i0]!.version), type: "line", points: pts, noLegend: true });
       i0 = i;
@@ -3645,7 +4805,7 @@ function renderChangelog() {
       let cc = 0; const pts: SvgPoint[] = [];
       for (const p of timeline) if ((p.cat ?? "?") === tag) {
         cc = Math.round((cc + p.sp) * 10) / 10;
-        pts.push({ x: Date.parse(p.date), y: cc, meta: `${tag} · ${p.date} · ${fmtSp(cc)} SP` });
+        pts.push({ x: p.t, y: cc, meta: `${tag} · ${p.date} · ${fmtSp(cc)} SP` });
       }
       return { name: tag, color: PALETTE[(idx + 2) % PALETTE.length]!, type: "line" as const, points: pts, hidden: true };
     });
@@ -4014,13 +5174,23 @@ let workoutGroups: WorkoutGroup[] = [];
 // Workouts-list view state lives on S (appState). The two localStorage-backed
 // flags get their initial values right here so behaviour matches the previous
 // `let x = localStorage.getItem(…)` form.
-S.showAddSets = localStorage.getItem("colosseum.showAddSets") === "1";
+// "+ set" is ALWAYS ON by default (owner: "always have the + set setting on") — so it
+// defaults on unless explicitly turned off this session (and applyHistoryTabConfig forces
+// it on per tab too); the pill still toggles it off within a tab if you want a clean view.
+S.showAddSets = localStorage.getItem("colosseum.showAddSets") !== "0";
 S.showVariants = localStorage.getItem("colosseum.showVariants") === "1";
+S.showAllScale = localStorage.getItem("colosseum.showAllScale") === "1";
+S.machineReal = localStorage.getItem("colosseum.machineReal") === "1";
 S.showAloneTags = localStorage.getItem("colosseum.showAloneTags") === "1";
 // When on, the workout history ignores the Index app-wide filter and shows EVERY
 // lift this athlete logged (the lifts the filter hides come back), so you can see
 // a hidden lift's sets without disabling the whole-app filter.
 let woShowAllExercises = localStorage.getItem("colosseum.woShowAll") === "1";
+// History "By exercise" tab: group the log by LIFT (one expandable row per exercise,
+// its sets across all dates) instead of by day/week/month. A separate axis from the
+// period (Day/Week/Month) modes, so it's its own flag rather than a workoutViewMode value.
+let historyByExercise = localStorage.getItem("colosseum.histByExercise") === "1";
+function saveHistByExercise() { try { localStorage.setItem("colosseum.histByExercise", historyByExercise ? "1" : "0"); } catch { /* ignore */ } }
 // Short labels for the compact "Alone filter" DJ button (cycles through these).
 const ALONE_FILTER_SHORT: Record<AloneFilter, string> = { both: "All", alone: "Alone", notAlone: "Not" };
 /** Reflect every workout display toggle on its single button: the label shows the
@@ -4039,12 +5209,28 @@ function syncWorkoutToggles(): void {
   els.workoutRmCycle.textContent = `${xrmReps}RM`;
   els.workoutRmCycle.classList.toggle("is-active", xrmReps > 1);
   els.restToggle.hidden = false; // rest periods now apply to day AND the period modes
+  // Tri-state: off → Rest (full slivers) → Rest· (compact hairline) → off. The dot marks
+  // the compact mode; is-active covers both shown states. The compact CSS class on the
+  // table shrinks the rest rows.
+  els.prioSortToggle.textContent = WO_SORT_LABEL[woSortMode];
+  els.prioSortToggle.setAttribute("data-sub", WO_SORT_SUB[woSortMode]);
+  els.prioSortToggle.classList.toggle("is-active", woSortMode !== "logged");
+  els.prioSortToggle.setAttribute("aria-pressed", woSortMode !== "logged" ? "true" : "false");
   els.restToggle.classList.toggle("is-active", S.showRestDays);
+  els.restToggle.classList.toggle("is-compact", S.showRestDays && S.restCompact);
+  els.restToggle.textContent = S.showRestDays && S.restCompact ? "Rest·" : "Rest";
+  els.restToggle.title = !S.showRestDays ? "Rest days hidden — tap to show them"
+    : !S.restCompact ? "Rest days shown — tap for compact (thin hairline) rest days"
+    : "Rest days compact (thin hairline) — tap to hide them";
   els.restToggle.setAttribute("aria-pressed", S.showRestDays ? "true" : "false");
   els.addSetsToggle.classList.toggle("is-active", S.showAddSets);
   els.addSetsToggle.setAttribute("aria-pressed", S.showAddSets ? "true" : "false");
   els.variantToggle.classList.toggle("is-active", S.showVariants);
   els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
+  els.scaleModeToggle.classList.toggle("is-active", S.showAllScale);
+  els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
+  els.machineRealToggle.classList.toggle("is-active", S.machineReal);
+  els.machineRealToggle.setAttribute("aria-pressed", S.machineReal ? "true" : "false");
   els.aloneTagToggle.classList.toggle("is-active", S.showAloneTags);
   els.aloneTagToggle.setAttribute("aria-pressed", S.showAloneTags ? "true" : "false");
   // The "Hidden" control sits in the head row next to the ⚙. Label shows the
@@ -4058,6 +5244,162 @@ function syncWorkoutToggles(): void {
   els.woShowAllToggle.setAttribute("aria-pressed", woShowAllExercises ? "true" : "false");
   els.aloneFilter.textContent = ALONE_FILTER_SHORT[aloneFilter];
   els.aloneFilter.title = ALONE_FILTER_LABEL[aloneFilter] + " — tap to cycle";
+  renderWoTabs();
+}
+/** ===== History dashboard (user-managed tabs, like the graph's) =================
+ * Each tab is a fully INDEPENDENT history view: switching a tab APPLIES its config to
+ * the live history state; on every history render the live state is SNAPSHOT back into
+ * the active tab (so any setting you change is saved to the tab you're on, and tabs
+ * never bleed into each other). graph-style add / rename / duplicate / delete. */
+// Each ATHLETE has their OWN history tabs (a "glutes" tab made for one user must not show
+// for another). historyDash holds the CURRENTLY-loaded athlete's dashboard; historyDashUser
+// tracks who that is, so ensureHistoryTabApplied reloads when the athlete changes.
+let historyDash: HistoryDashboard = defaultHistoryDashboard();
+let historyDashUser: string | null = null;
+
+/** Read the live history view state into a config (the full shape; the exercise lens is
+ * carried through unchanged so it round-trips even though it's not re-applied live yet). */
+function snapshotHistoryLive(prev: HistoryTabConfig): HistoryTabConfig {
+  return {
+    viewMode: S.workoutViewMode,
+    byExercise: historyByExercise,
+    sortByPriority: woSortMode !== "logged", // back-compat mirror
+    sortMode: woSortMode,
+    showRest: S.showRestDays,
+    restCompact: S.restCompact,
+    showAddSets: S.showAddSets,
+    showVariants: S.showVariants,
+    showAllScale: S.showAllScale,
+    showAloneTags: S.showAloneTags,
+    showMode: S.workoutShowMode,
+    grouping: els.workoutGrouping?.value || prev.grouping,
+    rmReps: xrmReps,
+    aloneFilter,
+    lensFilter: [...waSelected], // the history's OWN exercise selection (per tab)
+    showAll: woShowAllExercises,
+  };
+}
+/** Apply a tab's config to the live history state (the inverse of snapshot). */
+function applyHistoryTabConfig(c: HistoryTabConfig): void {
+  S.workoutViewMode = c.viewMode;
+  historyByExercise = c.byExercise; saveHistByExercise();
+  woSortMode = c.sortMode ?? (c.sortByPriority ? "priority" : "logged"); // migrate old tabs
+  S.showRestDays = c.showRest;
+  S.restCompact = c.restCompact;
+  S.showAddSets = true; // owner: "+ set" is always on — ignore any stored-off per-tab value
+  S.showVariants = c.showVariants;
+  S.showAllScale = c.showAllScale ?? false;
+  S.showAloneTags = c.showAloneTags;
+  S.workoutShowMode = c.showMode;
+  if (els.workoutGrouping) els.workoutGrouping.value = c.grouping;
+  xrmReps = c.rmReps;
+  aloneFilter = c.aloneFilter;
+  woShowAllExercises = c.showAll;
+  // The history's OWN exercise selection (its title chips + lens) is per-tab too —
+  // switching tabs swaps WHICH lifts the history shows, fully contained per tab.
+  waSelected = [...c.lensFilter];
+  dbg(`HD apply lens=${c.lensFilter.length}`, c.lensFilter.length === 0); // DIAG #super-persistent
+}
+/** Save the live state into the active tab + persist. Called at the end of every history
+ * render, so the active tab always mirrors what's on screen. */
+function saveActiveHistoryTab(): void {
+  if (historyDashUser === null) return; // not loaded for an athlete yet
+  const act = activeHistoryTab(historyDash);
+  const snap = snapshotHistoryLive(act.config);
+  // DIAG (history-tab reset #super-persistent): log every save + flag an EMPTY lens save in red,
+  // so the owner's green-console screenshot shows IF/WHEN an empty selection gets persisted over a
+  // good one, and in what render sequence (paired with HD ensure/apply/seed below).
+  dbg(`HD save u=${historyDashUser} tab=${act.id} lens=${snap.lensFilter.length} waSel=${waSelected.length}`, snap.lensFilter.length === 0);
+  historyDash = setHistoryTabConfig(historyDash, act.id, snap);
+  saveHistoryDashboardFor(historyDashUser, historyDash);
+}
+/** Load the CURRENT athlete's history dashboard and apply its active tab — re-running
+ * whenever the athlete changes (their tabs are fully their own). The outgoing athlete's
+ * live view is saved first. A never-configured athlete gets a clean default; the very
+ * first athlete this session keeps their existing live prefs as their starter tab. */
+function ensureHistoryTabApplied(): void {
+  const user = els.athlete.value;
+  if (historyDashUser === user) return; // already loaded + applied for this athlete
+  // NOTE: we DON'T snapshot-and-save the outgoing athlete here anymore. The live state may
+  // already have been reset to defaults for the incoming athlete (renderAthlete runs first),
+  // so snapshotting it onto the outgoing athlete used to WIPE their saved tab. The outgoing
+  // athlete is persisted correctly elsewhere: saveActiveHistoryTab() runs at the end of every
+  // history render, and renderAthlete saves it explicitly before resetting the selection.
+  const firstThisSession = historyDashUser === null;
+  const loaded = loadHistoryDashboardFor(user);
+  // DIAG #super-persistent: what the store returns for this athlete on an athlete-change / first load.
+  dbg(`HD ensure u=${user} loaded=${loaded ? "Y" : "N"} firstSess=${firstThisSession} tabs=${loaded ? loaded.tabs.length : 0} actLens=${loaded ? activeHistoryTab(loaded).config.lensFilter.length : "-"}`);
+  if (loaded) {
+    historyDash = loaded;
+    historyDashUser = user;
+    applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+  } else {
+    historyDash = defaultHistoryDashboard();
+    historyDashUser = user;
+    if (firstThisSession) {
+      saveActiveHistoryTab(); // keep this athlete's existing live prefs as their first tab
+    } else {
+      // A different athlete with no tabs yet → clean default view (never another user's tabs).
+      applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+      saveHistoryDashboardFor(user, historyDash);
+    }
+  }
+}
+/** Build the tab bar: one chip per tab (active one editable inline) + a "+" to add. */
+// The history tab whose name is being inline-edited (null = none) — mirrors the
+// graph dashboard's dashEditTab so the two tab strips behave identically.
+let histEditTab: string | null = null;
+function renderWoTabs(): void {
+  const host = document.getElementById("woTabs");
+  if (!host) return;
+  // Don't rebuild while a rename <input> is live (a re-render would destroy the focused
+  // field mid-type) — the same guard the graph tabs use.
+  if (histEditTab && host.querySelector<HTMLInputElement>(".gdash-tabedit")) return;
+  const act = activeHistoryTab(historyDash);
+  // SAME logic + styles as the graph tabs: each tab is a pill (name + ⋯ options button);
+  // the ⋯ opens a floating menu to Duplicate / Rename / Add / Delete (no inline icons).
+  // The only difference from the graph strip is that this one sits ABOVE the title.
+  host.innerHTML = historyDash.tabs.map((t) => {
+    const on = t.id === act.id;
+    if (on && histEditTab === t.id) {
+      return `<input class="gdash-tab gdash-tabedit" data-hwtabname="${escapeHtml(t.id)}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
+    }
+    return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
+      `<button type="button" class="gdash-tab${on ? " is-on" : ""}" role="tab" aria-selected="${on}" data-hwtab="${escapeHtml(t.id)}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
+      `<button type="button" class="gdash-tab-more" data-hwmenu="${escapeHtml(t.id)}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
+      `</span>`;
+  }).join("");
+  if (histEditTab) {
+    const inp = host.querySelector<HTMLInputElement>(".gdash-tabedit");
+    inp?.focus(); inp?.select();
+  }
+}
+/** The history tab ⋯ options menu — mirrors openDashTabMenu (graph), reusing the same
+ * .dash-tab-menu styles (rule 32: fixed + clampMenuIntoView). */
+function openHistTabMenu(anchor: HTMLElement, tabId: string): void {
+  closeHistTabMenu();
+  const canDelete = historyDash.tabs.length > 1;
+  const m = document.createElement("div");
+  m.id = "histTabMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="duplicate" data-tab="${escapeHtml(tabId)}">⧉ Duplicate</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="rename" data-tab="${escapeHtml(tabId)}">✎ Rename</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-htabmenu="add">＋ Add tab</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-htabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+}
+function closeHistTabMenu(): void { document.getElementById("histTabMenu")?.remove(); }
+/** Switch to a tab: apply its config (incl. its exercise selection), mark active, then
+ * re-render the WHOLE history section — the selection title + exercise picker + the list
+ * (renderWorkoutAnalysis), so the swapped-in exercises + grouping all show at once. */
+function switchHistoryTab(id: string): void {
+  historyDash = setActiveHistoryTab(historyDash, id);
+  applyHistoryTabConfig(activeHistoryTab(historyDash).config);
+  if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash);
+  S.workoutsPage = 0;
+  syncWorkoutToggles();
+  renderWorkoutAnalysis();
 }
 // How the Exercises list is ordered: "sets" = flat, most-trained first;
 // "category" = grouped by muscle/movement category (categories ordered by total
@@ -4067,15 +5409,24 @@ let exerciseSort: "sets" | "category" | "tier" = "category";
 // hidden by default — but it's a normal category like any other, shown/hidden via
 // the "Show:" chips (hiddenExCats), not a dedicated Settings toggle.
 // Simplified view: when on, the bottom "Analysis" button opens the S-ANL page.
-// Defaults ON outside admin (spectator/user), OFF for admin — until explicitly set.
-let simplifiedView = (() => {
+// View detail TIER (owner): three levels — "s1" simple (the s-analysis tab), "s2" simple-2
+// (currently a copy of advanced, to be trimmed down later), "adv" advanced. `simplifiedView`
+// is derived (= s1) and still drives the s-analysis ⇄ analysis tab choice; s2 and adv both
+// use the full analysis tab for now. Stored device-local (colosseum.viewTier.v1), migrating
+// the old boolean. Defaults to simple (s1) outside admin, advanced for admin.
+type ViewTier = "s1" | "s2" | "adv";
+const VIEW_TIER_KEY = "colosseum.viewTier.v1";
+let viewTier: ViewTier = (() => {
   try {
-    const v = localStorage.getItem("colosseum.simplifiedView");
-    if (v === "1") return true;
-    if (v === "0") return false;
+    const v = localStorage.getItem(VIEW_TIER_KEY);
+    if (v === "s1" || v === "s2" || v === "adv") return v;
+    const old = localStorage.getItem("colosseum.simplifiedView"); // migrate the retired boolean
+    if (old === "1") return "s1";
+    if (old === "0") return "adv";
   } catch { /* ignore */ }
-  return viewMode !== "admin";
+  return viewMode !== "admin" ? "s1" : "adv";
 })();
+let simplifiedView = viewTier === "s1";
 // Which Exercises in-page tab is showing: the records-style list, or the compare graph.
 let exercisesTab: "list" | "compare" = "list";
 // Editable rep-max columns for the List & stats tab (the working weight for N reps
@@ -4279,39 +5630,68 @@ function syncSexToggle() {
  * The Men/Women filter additionally hides chips of the other sex. */
 function syncAthleteChips() {
   const active = els.athlete.value;
+  // Pin the current athlete's name in the sticky top bar so it's always visible (owner).
+  if (els.topAthlete) { els.topAthlete.textContent = athleteLabel(); els.topAthlete.hidden = !active; }
   const locked = lockedUsername(); // null in admin; the locked athlete otherwise
   // In a locked (user/spectator) view you only ever see yourself: hide the M/W sex
   // menu and every other athlete's chip entirely (not just disable them), and drop
   // the full-bleed sticky-bar styling so the lone chip isn't an empty white band.
   els.athleteSexFilter.hidden = locked !== null;
-  els.athleteChips.closest(".ath-row")?.classList.toggle("ath-row--solo", locked !== null);
+  // Public profiles everyone may spectate (besides yourself) — shown as chips even in a
+  // locked view, so it's no longer "solo" when there's anyone to spectate.
+  const publicOthers = locked !== null && [...els.athlete.options].some((o) => o.value !== locked && isPublicProfile(o.value));
+  els.athleteChips.closest(".ath-row")?.classList.toggle("ath-row--solo", locked !== null && !publicOthers);
   for (const btn of els.athleteChips.querySelectorAll<HTMLButtonElement>(".athlete-chip")) {
     const on = btn.dataset.username === active;
     btn.classList.toggle("is-active", on);
     btn.setAttribute("aria-checked", on ? "true" : "false");
     if (locked !== null) {
-      // Locked view: show ONLY the locked user's chip; no sex filtering, no lock-out
-      // styling on others (they're gone), nothing else selectable.
-      btn.hidden = btn.dataset.username !== locked;
+      // Locked view: show your OWN chip + every PUBLIC athlete's chip (tap to spectate
+      // them read-only). Non-public others stay hidden. No sex filtering, no lock styling.
+      btn.hidden = btn.dataset.username !== locked && !isPublicProfile(btn.dataset.username);
       btn.disabled = false;
+      btn.classList.toggle("is-self", btn.dataset.username === locked);     // YOUR own profile (home)
+      btn.classList.toggle("is-spectate", btn.dataset.username !== locked); // a public OTHER = read-only spectate chip
       btn.classList.remove("is-sexhidden", "is-locked");
       if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
       continue;
     }
+    btn.classList.remove("is-spectate", "is-self");
     // Admin: every chip is selectable; the M/W filter hides the other sex (the
     // active one stays visible so you can always see who's currently selected).
     btn.hidden = false;
     btn.disabled = false;
     btn.classList.remove("is-locked");
     const sex = athProfile(btn.dataset.username ?? "")?.sex;
-    btn.classList.toggle("is-sexhidden", sex !== athleteSexFilter && !on);
+    // Hide only when the sex is KNOWN and differs from the filter — an athlete with no
+    // profile/sex (e.g. the admin-only "test" sandbox) has nothing to filter on, so it
+    // always shows (otherwise the M/W filter swallowed it on both M and W).
+    btn.classList.toggle("is-sexhidden", sex !== undefined && sex !== athleteSexFilter && !on);
     if (on) btn.scrollIntoView({ block: "nearest", inline: "nearest" });
   }
+  renderViewSwitch(); // the mode pill flips User → Spec when you select someone else
+  syncPublicProfileToggle();
+}
+/** Settings "Public profile" toggle: reflects + controls whether YOUR profile (the selected
+ * athlete in admin) is public. Hidden for a logged-out spectator (no own profile to share). */
+function syncPublicProfileToggle(): void {
+  const btn = els.publicProfileToggle;
+  if (!btn) return;
+  const t = publicToggleTarget();
+  btn.hidden = !t;
+  if (!t) return;
+  const on = isPublicProfile(t);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("is-on", on);
 }
 
 /** Re-render every athlete sub-page for the selected athlete (resets paging). */
 function renderAthlete() {
   saveLastAthlete(els.athlete.value); // remember across reloads
+  syncAthleteUrl(els.athlete.value); // keep ?u=<username> in the URL for sharing/jumping
+  // Swap to THIS athlete's own Index filter (seeded from the startup filter the first time) —
+  // before any filter-dependent compute below. Self-guards, so same-athlete re-renders are free.
+  ensureIndexFilterFor(els.athlete.value);
   // The M/W toggle auto-follows whoever is selected (it's always Men or Women).
   const sex = athProfile(els.athlete.value)?.sex;
   if (sex === "m" || sex === "f") athleteSexFilter = sex;
@@ -4325,16 +5705,23 @@ function renderAthlete() {
   // selections for the new athlete — this replaces the old "↺ Default" button, which
   // now runs automatically. Guarded so ordinary re-renders don't wipe the selection.
   if (els.athlete.value !== lastAnalysisAthlete) {
+    // CLOBBER GUARD: persist the OUTGOING athlete's history tab with its CURRENT (still-correct)
+    // selection BEFORE we reset the live selection just below. Otherwise the default we're about
+    // to set would later be snapshotted onto the previous athlete and wipe their saved tab — the
+    // "my tabs reset when I switch athlete" bug. historyDashUser still points at the outgoing
+    // athlete here (it only advances inside ensureHistoryTabApplied), so this saves to the right one.
+    saveActiveHistoryTab();
     lastAnalysisAthlete = els.athlete.value;
     waSelected = defaultHistorySelection();
     waGraphSel = defaultGraphSelection();
+    dashLoadedBubbleId = null; // force the dashboard to RELOAD the bubble's lifts (not write the athlete-default over them)
     titleExpanded.graph = false;
     titleExpanded.hist = false;
     statsFullShown = false; // new athlete → lead with the mini facts again
     miniIdx = 0;
     graphCarOverride = null; // drop any search-chosen single-view reel for the old athlete
-    // Restore this athlete's last-used picker "Group by" mode (default if none saved).
-    waGroupBy = (waGroupByByUser[els.athlete.value] as WaGroupBy | undefined) ?? "bestlifts";
+    // Restore this athlete's last-used per-scope "Group by" modes (defaults if none saved).
+    loadWaGroupByForUser();
   }
   initHeatYear();
   renderAthleteProfile();
@@ -4807,33 +6194,83 @@ function setupStatsToggle(): void {
 // Both default to SHOWN (they're visible normally); the button just hides them. The
 // folds are static in the DOM (only their inner sections re-render), so a one-time
 // apply on init + on click keeps the hidden state — no per-render reapply needed.
-type SectionToggle = { btnId: string; foldId: string; key: string; label: string };
+type SectionToggle = { btnId: string; foldId: string; key: string; label: string; onShow?: () => void; defaultShown?: boolean };
 const SECTION_TOGGLES: SectionToggle[] = [
   { btnId: "graphToggleBtn", foldId: "waGraphFold", key: "colosseum.graphSectionShown", label: "Graph" },
+  // Plan is its own card now (moved out of the old overlay) — render it when shown.
+  { btnId: "planToggleBtn", foldId: "waPlanFold", key: "colosseum.planSectionShown", label: "Plan", onShow: () => renderWorkoutPlan() },
   { btnId: "histToggleBtn", foldId: "waHistFold", key: "colosseum.histSectionShown", label: "History" },
+  // Experimental views — OFF by default, revealed only when their button is tapped.
+  { btnId: "histHorizToggleBtn", foldId: "waHistHorizFold", key: "colosseum.histHorizSectionShown", label: "Horizontal history", defaultShown: false },
+  { btnId: "calToggleBtn", foldId: "waCalendarFold", key: "colosseum.calSectionShown", label: "Calendar", defaultShown: false },
 ];
 const sectionShown: Record<string, boolean> = {};
 function applySectionToggle(s: SectionToggle): void {
   const shown = sectionShown[s.key] ?? true;
   const fold = document.getElementById(s.foldId);
   if (fold) fold.hidden = !shown;
+  // The History toggle hides the WHOLE history section — including its tab strip
+  // (#woTabs, which lives ABOVE the fold), so "hide history" leaves nothing behind
+  // (owner: "the top history btn should completely hide the history including all tabs").
+  if (s.foldId === "waHistFold") {
+    const tabs = document.getElementById("woTabs");
+    if (tabs) tabs.hidden = !shown;
+  }
+  // Same for the Graph section: its tab strip (#gdashTabs) now lives ABOVE the fold, so
+  // hiding the Graph section must hide the tabs too (or they'd hang there with no card).
+  if (s.foldId === "waGraphFold") {
+    const tabs = document.getElementById("gdashTabs");
+    if (tabs) tabs.hidden = !shown;
+  }
   const btn = document.getElementById(s.btnId);
   if (btn) {
     btn.classList.toggle("is-on", shown);
     btn.setAttribute("aria-pressed", String(shown));
     btn.setAttribute("title", shown ? `Hide the ${s.label} section` : `Show the ${s.label} section`);
   }
+  if (shown) s.onShow?.();
+}
+/** Re-render the Plan card only when it's the visible analysis section (cheap no-op
+ * otherwise). Used by renderWorkoutAnalysis + data-change handlers so the plan stays
+ * fresh now that it's an always-present card rather than an on-demand overlay. */
+function renderWorkoutPlanIfShown(): void {
+  const fold = document.getElementById("waPlanFold");
+  if (fold && !fold.hidden) renderWorkoutPlan();
 }
 function setupSectionToggles(): void {
   for (const s of SECTION_TOGGLES) {
-    sectionShown[s.key] = (() => { try { return localStorage.getItem(s.key) !== "0"; } catch { return true; } })();
+    const def = s.defaultShown ?? true; // most sections show by default; experimental ones don't
+    sectionShown[s.key] = (() => { try { const v = localStorage.getItem(s.key); return v === null ? def : v !== "0"; } catch { return def; } })();
     document.getElementById(s.btnId)?.addEventListener("click", () => {
-      sectionShown[s.key] = !(sectionShown[s.key] ?? true);
+      sectionShown[s.key] = !(sectionShown[s.key] ?? def);
       try { localStorage.setItem(s.key, sectionShown[s.key] ? "1" : "0"); } catch { /* storage may be unavailable */ }
       applySectionToggle(s);
     });
     applySectionToggle(s);
   }
+}
+/** Stop an OPEN analysis section (Graph / History / …) from collapsing on a stray tap of its
+ * TITLE or the whitespace beside it (owner: "you can too often accidentally click next to the
+ * '65 exercises' title and it closes the history"). The ONLY collapse trigger when open is the
+ * outlined caret button at the top-right; every other tap on the summary is swallowed (we cancel
+ * just the <details> toggle — inner controls like the Pick tab / lift chips still get their
+ * click). When the section is CLOSED a tap anywhere still opens it (so it's easy to reopen).
+ * The listener lives on the persistent <summary> element, so it survives the innerHTML rebuilds
+ * the title goes through; the caret hit is geometry (top-right corner) since the caret is a CSS
+ * ::after with no element of its own. */
+function setupFoldToggleGuards(): void {
+  const sums = document.querySelectorAll<HTMLElement>(
+    ".wa-analysis-panel > .wa-fold-titled > summary.wa-fold-sum",
+  );
+  sums.forEach((sum) => {
+    sum.addEventListener("click", (e) => {
+      const details = sum.parentElement as HTMLDetailsElement | null;
+      if (!details || !details.open) return; // closed → a tap anywhere reopens it
+      const r = sum.getBoundingClientRect();
+      const inCaret = e.clientX >= r.right - 44 && e.clientY <= r.top + 46; // the top-right caret box
+      if (!inCaret) e.preventDefault(); // title / whitespace / Pick tab → don't toggle closed
+    });
+  });
 }
 
 function renderAthleteStats() {
@@ -5175,6 +6612,17 @@ function athleteLabel(): string {
   return els.athlete.options[els.athlete.selectedIndex]?.text ?? els.athlete.value;
 }
 
+/** Single-origin prev/range/Next pager (UIC-7): the ONE place the `.page-btn`
+ * prev/next markup lives, so every pager AND the Coach catalogue render the same
+ * control and can't drift. `rangeLabel` is the middle "x–y of N" text. */
+function pagerNav(page: number, pages: number, rangeLabel: string): string {
+  return (
+    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
+    `<span class="muted">${rangeLabel}</span>` +
+    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
+  );
+}
+
 /** Prev / range / Next controls for a paginated list. `size` defaults to the
  * app-wide PAGE_SIZE but callers (e.g. the workouts list) can pass their own. */
 function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): string {
@@ -5182,11 +6630,7 @@ function pagerHtml(page: number, total: number, size: number = PAGE_SIZE): strin
   const pages = Math.ceil(total / size);
   const from = page * size + 1;
   const to = Math.min(total, (page + 1) * size);
-  return (
-    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
-    `<span class="muted">${from}–${to} of ${total}</span>` +
-    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
-  );
+  return pagerNav(page, pages, `${from}–${to} of ${total}`);
 }
 
 /** Page boundaries for the workout list where REST-DAY slivers count only 1/10 of
@@ -5220,11 +6664,7 @@ function workoutsPagerHtml(page: number, starts: number[], groups: WorkoutGroup[
   const inPage = groups.slice(startIdx, endIdx).filter(isReal).length;
   const from = inPage ? before + 1 : before;
   const to = before + inPage;
-  return (
-    `<button class="page-btn" data-page="${page - 1}" ${page <= 0 ? "disabled" : ""}>‹ Prev</button>` +
-    `<span class="muted">${from}–${to} of ${total} ${byPeriod ? "periods" : "sessions"}</span>` +
-    `<button class="page-btn" data-page="${page + 1}" ${page >= pages - 1 ? "disabled" : ""}>Next ›</button>`
-  );
+  return pagerNav(page, pages, `${from}–${to} of ${total} ${byPeriod ? "periods" : "sessions"}`);
 }
 
 /** Period options for the exercises list. `days` of 0 means "all time"; every
@@ -5690,7 +7130,9 @@ function renderExercisesPage() {
   let items: ExItem[] = exerciseCounts(scoped, username).map((c) => ({ ...c, trained: true }));
   if (exerciseShowNotTrained) {
     const trainedEver = new Set(exerciseCounts(base, username).map((c) => c.exerciseName));
-    for (const name of distinctExercises(base))
+    // selectableExercises (not distinctExercises) so EXTRA_EXERCISES catalog lifts
+    // with zero logged sets anywhere still surface here as not-trained gaps (PB-25).
+    for (const name of selectableExercises(base))
       if (!trainedEver.has(name)) items.push({ exerciseName: name, count: 0, trained: false });
   }
   // Fold out 3rd-tier (cardio / mobility / warm-up) exercises unless the toggle
@@ -6285,6 +7727,7 @@ const CURRENT_STRENGTH_COLOR = "#2e7d52";
 function onExerciseRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (openSetMenuClick(target)) return; // tap a COLLAPSED-view set → small action menu (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -6369,6 +7812,7 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   // "Show all" (the history's "Hidden" toggle) bypasses the Index app-wide filter
   // for this list only, so lifts the filter hides reappear here.
   const recs = remapRegistryCombined(woShowAllExercises ? liveRecords() : activeRecords());
+  if (historyByExercise) return buildExerciseHistoryGroups(recs);
   const period = historyPeriod(S.workoutViewMode);
   if (period) {
     // Period grouping (week / 2-week / month / 3-month). Inactive periods show as
@@ -6412,6 +7856,32 @@ function buildWorkoutGroups(): WorkoutGroup[] {
   ), WO_REST_UNIT.day);
 }
 
+/** "By exercise" history grouping: ONE expandable row per lift (its sets across every
+ * date), most-trained first. Reuses the WorkoutGroup shape (label "" so the exercise
+ * line itself is the row) + the history lens filter; the expanded table shows day
+ * dividers (divMode), the collapsed line a capped recent run (setListHtml). */
+function buildExerciseHistoryGroups(recs: SetRecord[]): WorkoutGroup[] {
+  const user = els.athlete.value;
+  const byEx = new Map<string, SetRecord[]>();
+  for (const r of recs) {
+    if (r.username !== user || !r.exerciseName) continue;
+    (byEx.get(r.exerciseName) ?? byEx.set(r.exerciseName, []).get(r.exerciseName)!).push(r);
+  }
+  const groups: WorkoutGroup[] = [...byEx].map(([ex, sets]) => {
+    const sorted = [...sets].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : (a.setNumber ?? 0) - (b.setNumber ?? 0)));
+    return {
+      label: "", // no date header — the single exercise line IS the row
+      date: sorted[sorted.length - 1]?.date ?? "", // latest, for the calendar jump
+      totalSets: sorted.length,
+      exercises: [{ exerciseName: ex, count: sorted.length }],
+      sets: sorted,
+      rest: false,
+    };
+  });
+  groups.sort((a, b) => b.totalSets - a.totalSets || (a.exercises[0]!.exerciseName < b.exercises[0]!.exerciseName ? -1 : 1));
+  return scopeWorkoutGroups(groups); // honour the history lens filter
+}
+
 // History view modes (the ⚙ "Day/Week/…" toggle cycles these). A non-"day" mode
 // groups sessions into a period; the toggle label + rest-run unit come from here.
 const WO_VIEW_MODES = ["day", "week", "2week", "month", "3month"] as const;
@@ -6424,6 +7894,29 @@ const WO_REST_UNIT: Record<(typeof WO_VIEW_MODES)[number], string> = {
 /** The grouping period for a view mode (null = per-day). */
 function historyPeriod(mode: typeof S.workoutViewMode): HistoryPeriod | null {
   return mode === "day" ? null : mode;
+}
+const MONTH_FULL = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const addDaysIso = (iso: string, n: number): string => {
+  const d = new Date(iso + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+/** Period-grouped date header (owner: when grouping by week/month/… the MAIN date should be
+ * clear + grow with the period — "June" for a month — with NO weekday ("Monday"), and the exact
+ * span shown small for accuracy. `size` scales the main label (bigger period → bigger). */
+function periodHeaderParts(start: string, period: HistoryPeriod): { main: string; sub: string; size: number } {
+  const y = start.slice(0, 4);
+  const mIdx = Number(start.slice(5, 7)) - 1;
+  if (period === "month") return { main: MONTH_FULL[mIdx] ?? "", sub: `${MONTH_ABBR[mIdx]} ${y}`, size: 3 };
+  if (period === "3month") return { main: `${MONTH_ABBR[mIdx]}–${MONTH_ABBR[mIdx + 2] ?? ""}`, sub: y, size: 4 };
+  // Week / 2-week: the MAIN label IS the from–to range (owner: "Jun 22" alone isn't as clear
+  // as "Jun 22–29"); no gray sub (it just repeated the start). Same month → "Jun 22–29";
+  // across months → "Jun 29 – Jul 5".
+  const end = addDaysIso(start, period === "2week" ? 13 : 6);
+  const range = start.slice(0, 7) === end.slice(0, 7)
+    ? `${shortDate(start)}–${String(Number(end.slice(8, 10)))}`
+    : `${shortDate(start)} – ${shortDate(end)}`;
+  return { main: range, sub: "", size: period === "2week" ? 2 : 1 };
 }
 /** Header label for one period group (e.g. "Week of May 25", "May 2025", "Apr–Jun 2025"). */
 function periodGroupLabel(start: string, period: HistoryPeriod): string {
@@ -6931,7 +8424,7 @@ function jumpToWorkoutDate(iso: string): boolean {
   // fold) so the jumped-to row is actually visible, then expand + flash it.
   for (let el: HTMLElement | null = row; el; el = el.parentElement)
     if (el instanceof HTMLDetailsElement) el.open = true;
-  insertDetail(row, 2, workoutGroupHtml(grp)); // expand it like a tap would
+  insertDetail(row, 1, workoutGroupHtml(grp)); // expand it like a tap would
   row.scrollIntoView({ behavior: "smooth", block: "nearest" });
   row.classList.add("wo-flash");
   window.setTimeout(() => row.classList.remove("wo-flash"), 1600);
@@ -6973,18 +8466,159 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 /** Compact chips summarising a set's resolved variation (support, band, lean) for
  * model lifts — so the workout history shows b2w / f2w / ladder / free / band at a
  * glance, not just the ×multiplier. Empty for non-model lifts or noteless sets. */
-function variationChipsHtml(r: SetRecord): string {
+// SINGLE renderer for a resolved variation vector → chip HTML, shared by the history
+// tag, the live add-form preview, and any other surface — so a chip ALWAYS reads the
+// same. A dimension's BASELINE level is "just the exercise" (a free push-up) and is
+// NOT a tag: only levels that differ from the family's config default get a chip, and
+// every label comes from the shared AF_LEVEL_LBL map (afLevelText). (WO-235 #prune)
+/** A model-lift set's resolved variation vec — the SAME vec scaleForRecord uses (note
+ * tokens + per-set `__set:<id>` picks + family defaults for unspecified sets). */
+function setVec(r: SetRecord): Record<string, unknown> {
   const fam = familyOf(r.exerciseName);
-  const note = (r.notes ?? "").trim();
-  if (!fam || !note) return "";
-  const vec = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
-  const SUP: Record<string, string> = { free: "free", back_to_wall: "b2w", front_to_wall: "f2w", ladder: "ladder" };
-  const chips: string[] = [];
-  const sup = String(vec.support ?? "free");
-  chips.push(`<span class="wo-var-chip wo-var-sup">${escapeHtml(SUP[sup] ?? sup)}</span>`);
-  if (vec.band && vec.band !== "none") chips.push(`<span class="wo-var-chip wo-var-band">band ${escapeHtml(String(vec.band))}</span>`);
-  if (vec.lean && vec.lean !== "0cm") chips.push(`<span class="wo-var-chip">lean ${escapeHtml(String(vec.lean))}</span>`);
-  return `<span class="wo-var-chips">${chips.join("")}</span>`;
+  if (!fam) return {};
+  const note = variationNote(r);
+  if (!note) return {};
+  const raw = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+  return normalizeStaticLiftVec(fam, raw);
+}
+/** How many variation chips show before the rest collapse behind a "see more" (＋N)
+ * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
+ * off as a long horizontal line. >6 is rare (handstands at most), so the overflow is tucked
+ * away and revealed in place by tapping ＋N. */
+const MAX_VAR_CHIPS = 6;
+function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>, suppress?: Record<string, string>, username: string = els.athlete.value): string {
+  if (!fam) return "";
+  const items: { cls: string; txt: string }[] = [];
+  // Collect EVERY set variation dimension (owner: forearm support / shoulder gap / obstacle … must
+  // show, not just support/band). A GRAY level (the obvious baseline, or an owner 👁 override) is
+  // "just the exercise" and never a chip. The universal %-ROM attribute is romOfSet's chip;
+  // the family's own `rom` dim (e.g. HSPU hand height) shows here when non-gray.
+  for (const dim of famDimOrder(fam)) {
+    if (dim === "floorHeight" && vec.support !== "on_hands") continue;
+    const v = vec[dim] != null ? String(vec[dim]) : null;
+    if (!v || isGray(fam, dim, v)) continue;
+    if (suppress && suppress[dim] === v) continue;
+    const cls = dim === "support" ? " wo-var-sup" : dim === "band" ? " wo-var-band" : "";
+    // Lean reads from the fingertips; a lean that clamps to 0cm there is "no real lean" → no chip.
+    let leanTip = 0;
+    if (dim === "lean") { leanTip = leanFingertipCm(v, username); if (leanTip <= 0) continue; }
+    const base = dim === "band" ? `band ${v}` : dim === "lean" ? `lean ${leanTip}cm` : afLevelText(dim, v, fam);
+    const code = DIM_CHIP_CODE[dim];
+    const txt = code ? `${code} ${base}` : base;
+    items.push({ cls, txt });
+  }
+  if (!items.length) return "";
+  const chip = (it: { cls: string; txt: string }, extra = "") =>
+    `<span class="wo-var-chip${it.cls}${extra}">${escapeHtml(it.txt)}</span>`;
+  let body: string;
+  if (items.length > MAX_VAR_CHIPS) {
+    // 5 real tags + a ＋N "see more"; the rest ride hidden until ＋N is tapped (toggles
+    // .show-all via openSetMenuClick), then a "−" collapses them again.
+    const shown = items.slice(0, MAX_VAR_CHIPS - 1).map((it) => chip(it)).join("");
+    const rest = items.slice(MAX_VAR_CHIPS - 1).map((it) => chip(it, " wo-var-hidden")).join("");
+    const hiddenN = items.length - (MAX_VAR_CHIPS - 1);
+    const more = `<span class="wo-var-chip wo-var-more" role="button" tabindex="0" title="Show ${hiddenN} more tag${hiddenN === 1 ? "" : "s"}">+${hiddenN}</span>`;
+    const less = `<span class="wo-var-chip wo-var-less" role="button" tabindex="0" title="Show fewer tags">−</span>`;
+    body = shown + more + rest + less;
+  } else {
+    body = items.map((it) => chip(it)).join("");
+  }
+  return `<span class="wo-var-chips">${body}</span>`;
+}
+function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): string {
+  const fam = familyOf(r.exerciseName);
+  if (!fam) return "";
+  const vec = setVec(r);
+  if (Object.keys(vec).length === 0) return "";
+  return variationChipsFromVec(fam, vec, suppress, r.username);
+}
+/** Incline/height label for a set — empty at floor (0cm). */
+function inclineTagKey(s: SetRecord): string | null {
+  if (!isInclineLevelExercise(s.exerciseName)) return null;
+  if (s.levelDim === undefined || s.levelValue === undefined) return null;
+  if (levelCm(s.levelDim, s.levelValue) === 0) return null;
+  return s.levelLabel ?? levelLabel(s.levelDim, s.levelValue);
+}
+/** Incline/height chip — push-up levels (SQ / Smith / cm / box) live on the set record,
+ * not in the family variation vec, but they're active tags the owner set. */
+function inclineTagChip(s: SetRecord, suppress?: Record<string, string>): string {
+  const lbl = inclineTagKey(s);
+  if (!lbl) return "";
+  if (suppress?.["__incline"] === lbl) return "";
+  return `<span class="wo-var-chip" title="Hand height / incline — ${escapeHtml(lbl)}">${escapeHtml(lbl)}</span>`;
+}
+/** Experimental lifts are described by free-form notes — show the note as a normal tag
+ * chip (not the UN not-comparable mark or the tiny caption under the weight). */
+function experimentalNoteChip(note: string): string {
+  const txt = note.length > 20 ? `${note.slice(0, 20)}…` : note;
+  return `<span class="wo-var-chip wo-var-note" title="${escapeHtml(note)}">${escapeHtml(txt)}</span>`;
+}
+/** Variation + ROM + incline + experimental-note chips merged for one set line. */
+function setTagChipsBlock(s: SetRecord, suppress?: Record<string, string>): string {
+  const romRes = romOfSet(setId(s), s.notes);
+  const romChip = suppress && suppress["__rom"] !== undefined && suppress["__rom"] === romRes.label ? "" : romRes.chip;
+  const inc = inclineTagChip(s, suppress);
+  const vars = variationChipsHtml(s, suppress);
+  const expNote = isExperimental(s.exerciseName) && romRes.note ? experimentalNoteChip(romRes.note) : "";
+  if (vars) {
+    let out = inc ? vars.replace(/<\/span>\s*$/, inc + "</span>") : vars;
+    if (expNote) out = out.replace(/<\/span>\s*$/, expNote + "</span>");
+    return out + romChip;
+  }
+  const inner = inc + expNote + romChip;
+  return inner ? `<span class="wo-var-chips">${inner}</span>` : "";
+}
+function setHasDescriptiveTags(s: SetRecord, suppress?: Record<string, string>): boolean {
+  return !!setTagChipsBlock(s, suppress);
+}
+
+/** Tags a STRICT MAJORITY of an exercise's sets share — hoisted to the exercise title
+ * (owner: don't repeat FREE +23cm on every set). Sets that differ keep their own tag. */
+function commonTagsFor(sets: readonly SetRecord[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  const fam = sets.length ? familyOf(sets[0]!.exerciseName) : null;
+  if (sets.length < 2) return out;
+  const total = sets.length;
+  const majority = (counts: Map<string, number>): string | null => {
+    let best: string | null = null, bestN = 0;
+    for (const [v, n] of counts) if (n > bestN) { best = v; bestN = n; }
+    return best && bestN > total / 2 ? best : null;
+  };
+  if (fam) {
+    for (const dim of famDimOrder(fam)) {
+      const counts = new Map<string, number>();
+      for (const s of sets) {
+        const v = setVec(s)[dim];
+        const sv = v != null ? String(v) : null;
+        if (sv && !isGray(fam, dim, sv)) counts.set(sv, (counts.get(sv) ?? 0) + 1);
+      }
+      const m = majority(counts);
+      if (m) out[dim] = m;
+    }
+  }
+  const romCounts = new Map<string, number>();
+  for (const s of sets) { const l = romOfSet(setId(s), s.notes).label; if (l) romCounts.set(l, (romCounts.get(l) ?? 0) + 1); }
+  const rm = majority(romCounts);
+  if (rm) out["__rom"] = rm;
+  const incCounts = new Map<string, number>();
+  for (const s of sets) { const l = inclineTagKey(s); if (l) incCounts.set(l, (incCounts.get(l) ?? 0) + 1); }
+  const im = majority(incCounts);
+  if (im) out["__incline"] = im;
+  return out;
+}
+/** Hoisted common tags as chips for the exercise header. */
+function commonTagsChips(fam: string | null, common: Record<string, string>): string {
+  const vecChips = variationChipsFromVec(fam, common);
+  const romChip = common["__rom"]
+    ? `<span class="set-rom" title="${escapeHtml(common["__rom"])} — range of motion (most sets)">${escapeHtml(shortRomLabel(common["__rom"]))}</span>`
+    : "";
+  const incChip = common["__incline"]
+    ? `<span class="wo-var-chip" title="Hand height / incline (most sets)">${escapeHtml(common["__incline"])}</span>`
+    : "";
+  if (!vecChips && !romChip && !incChip) return "";
+  if (vecChips) return (incChip ? vecChips.replace(/<\/span>\s*$/, incChip + "</span>") : vecChips) + romChip;
+  const inner = incChip + romChip;
+  return inner ? `<span class="wo-var-chips">${inner}</span>` : "";
 }
 
 /** The `data-scaleedit-*` attributes a quick-edit Variant chip needs to open the
@@ -7001,7 +8635,7 @@ function variantTriggerData(s: SetRecord, sid: string): string {
   return `data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${scaleNote ? ` data-scaleedit-rawnote="${escapeHtml(scaleNote)}"` : ""}${lvlAttrs}`;
 }
 
-function setDisplay(raw: SetRecord): string {
+function setDisplay(raw: SetRecord, suppress?: Record<string, string>): string {
   // Apply the on-device per-set edits (note text, weight, reps…) FIRST, so the
   // compact line resolves the SAME effective note — and therefore the same
   // ×multiplier — as the expanded set rows (setRowsHtml, which also does this).
@@ -7015,34 +8649,60 @@ function setDisplay(raw: SetRecord): string {
   const effClass = setEffortClass(s, predictedRir(currentStrengthFor(currentStrengthByUserExercise(effFormula), s), s.weight, s.reps, effFormula));
   const effCls = effClass === "hard" ? "wo-eff wo-eff-hard" : effClass === "mid" ? "wo-eff wo-eff-mid" : "";
   const effWrap = (h: string) => (effCls ? `<span class="${effCls}">${h}</span>` : h);
-  const note = s.notes?.trim();
-  const bw = s.weight === 0 || s.weight === 1;
+  // ROM is a VARIATION chip shown with the tags — NEVER in the note (owner). romOfSet pulls it
+  // from the per-set attribute (or strips a legacy "ROM…" token) and returns the USER note only.
+  const romRes = romOfSet(setId(raw), s.notes);
+  const note = romRes.note;
+  // Machine-base lifts show "base+dialed" (e.g. 20+30) — the hidden machine weight + what
+  // you dialed (the editable part). Empty for normal lifts.
+  const mwp = machineWeightPrefixForSet(s);
   // Quick-edit "Variant" mode (history ⚙ → Var): each set that HAS a variant — a
   // machine cable/gravity choice, a difficulty family, an incline level, or a note —
   // becomes a tappable chip that opens the floating variant editor for that one set,
   // so you can flip it without expanding the full editor. `finish` wraps the token.
   const sid = setId(raw);
   const hasVariant = machineModeEligible(s.exerciseName) || !!familyOf(s.exerciseName) || !!note || s.levelDim !== undefined;
+  // Tapping a collapsed set opens a small ACTION MENU (owner): duplicate it, change its
+  // variant, or add a suggested next set. Variant attrs ride on the button when the set
+  // has a model/note/level so the menu can open the editor. No outer pill/outline — tags
+  // are styled individually (owner). Spectators (can't edit) get plain text.
   const finish = (h: string): string =>
-    S.showVariants && hasVariant
-      ? `<button type="button" class="wo-set-variant" ${variantTriggerData(s, sid)} title="Tap to edit this set's variant">${h}</button>`
+    canEditCurrentAthlete()
+      ? `<button type="button" class="wo-set-menu" data-setmenu="${escapeHtml(sid)}"${hasVariant ? ` ${variantTriggerData(s, sid)}` : ""} title="Tap for set options">${h}</button>`
       : h;
-  const chips = variationChipsHtml(s); // support / band / lean chips (model lifts)
+  // Glue the tag block + weight^reps together (owner: "you cannot wrap the weight away from
+  // the tags — they have to be in line"). An inline-flex row keeps the chips box (which wraps
+  // its OWN tags into tight rows) and the weight^reps side-by-side, so the weight can never
+  // drop onto a line of its own when the tags wrap.
+  const core = (h: string): string => `<span class="wo-set-core">${h}</span>`;
+  const chips = setTagChipsBlock(s, suppress);
   // Machine tag — same set the EXPANDED set rows show, so the collapsed line also flags
   // assisted-machine (negative counterweight), gravity (×ratio) and ambiguous-mixed sets.
   // Empty for plain cable / free-weight sets.
   const computedForMach = computeRecord(s);
-  const mach = isMachineSet(s.exerciseName, s.weight)
-    ? ` <span class="wo-mach wo-mach-asst" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default.">machine</span>`
+  const isAsstMach = isMachineSetEq(s);
+  const machRepsSup = s.reps === null ? "" : `<sup>${s.reps}</sup>`;
+  // Assisted-machine weight shows the FORMULA inline (owner): the dialed counterweight reads
+  // ~2× the real help, so the real effort is the dial halved — written as "-20/2" (like a
+  // machine-base lift shows "20+30"), instead of a real-vs-logged toggle. Non-machine sets
+  // render the normal weight^reps.
+  const weightHtml = isAsstMach
+    ? `<span class="wo-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${machRepsSup}</span>`
+    : `${mwp}${wr(s.weight, s.reps)}`;
+  const mach = isAsstMach
+    ? ""
     : computedForMach.machineType === "review"
       ? ` <span class="wo-mach wo-mach-review" title="Mixed machine: too ambiguous to trust — could be a light cable set or a gravity-machine warm-up. Check it.">⚠</span>`
       : computedForMach.machineType === "gravity"
         ? ` <span class="wo-mach" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
-  // A "not comparable" set (per-set flag OR note) has no meaningful multiplier —
-  // show "UN" with the reps instead of a weight number.
-  if (computedForMach.notComparable || (note && isNoteNotComparable(s.exerciseName, note)))
-    return finish(effWrap(`${chips}<span class="wo-scale wo-uncmp">UN</span>${s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`}${mach}`));
+  // A manually marked "not comparable" set (per-set flag OR per-note) shows "UN" — but
+  // EXPERIMENTAL lifts are auto-excluded from metrics and are described by their NOTES
+  // instead (note chips in setTagChipsBlock), so UN is wrong/noise there.
+  const manualNc = notComparableSets.has(sid) || (!!note && isNoteNotComparable(s.exerciseName, note));
+  const isExp = isExperimental(s.exerciseName);
+  if (!isExp && (computedForMach.notComparable || manualNc))
+    return finish(effWrap(core(`${chips}<span class="wo-scale wo-uncmp">UN</span>${weightHtml}${mach}`)));
   // The set's final variation multiplier (note model × level × per-set override).
   const scale = scaleForRecord(s);
   const scaled = Math.abs(scale - 1) > 1e-6;
@@ -7050,25 +8710,36 @@ function setDisplay(raw: SetRecord): string {
   // for a bodyweight lift it fills the empty weight slot (×0.6⁵); for a weighted
   // lift it tags onto the real weight^reps.
   if (scaled) {
-    const repsSup = s.reps === null ? "" : `<sup class="${bw ? "wr-bw" : ""}">${s.reps}</sup>`;
-    // Colour ENCODES the direction (added info, not just a number): a HARDER variation
-    // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
-    // opposite meanings stop looking identical. Tooltip spells it out.
-    const harder = scale > 1;
-    const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
-    const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
-    const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
-    return finish(effWrap(bw ? `${chips}${tag}${repsSup}${mach}` : `${chips}${wr(s.weight, s.reps)}${tag}${mach}`));
+    // Owner: the ×N multiplier is NOISE when tag CHIPS already say what the variation is.
+    // Show ×N ONLY for a manual per-set override (custom multiplier tag) or when the ×N-mode
+    // pill forces every multiplier on — never as a fallback when chips are empty.
+    const ovSc = setOverrides[setId(s)];
+    const customScale = (ovSc?.scale ?? 1) !== 1 || ovSc?.scaleAbs != null;
+    const hasTags = setHasDescriptiveTags(s, suppress);
+    const showScale = customScale || (S.showAllScale && !hasTags);
+    if (showScale) {
+      // Colour ENCODES the direction (added info, not just a number): a HARDER variation
+      // (×>1, worth more) reads warm/gold; an EASIER one (×<1) stays cool/blue — so the two
+      // opposite meanings stop looking identical. Tooltip spells it out.
+      const harder = scale > 1;
+      const cls = `wo-scale ${harder ? "wo-scale-up" : "wo-scale-down"}`;
+      const tip = `Difficulty ×${Math.round(scale * 100) / 100} — this variation is ${harder ? "harder" : "easier"} than the plain lift (the 1RM is scaled ${harder ? "up" : "down"}).`;
+      const tag = `<span class="${cls}" title="${escapeHtml(tip)}">×${Math.round(scale * 100) / 100}</span>`;
+      return finish(effWrap(core(`${chips}${weightHtml}${tag}${mach}`)));
+    }
+    // Multiplier implied by the chips → tags + weight^reps, no ×N.
+    return finish(effWrap(core(`${chips}${weightHtml}${mach}`)));
   }
-  if (bw && note) {
-    // Bodyweight set whose only "load" is its note (e.g. a plank variation): show a
-    // SHORT preview where a weight chip would sit (full note on hover + in the
-    // expanded rows) — a long note used to dump inline and wrap into a huge block,
-    // breaking the compact day line. Keep it the width of a normal weight^reps.
-    const short = note.length > 12 ? `${note.slice(0, 12)}…` : note;
-    return finish(effWrap(`${chips}<span class="wo-note" title="${escapeHtml(note)}">${escapeHtml(short)}</span>${s.reps === null ? "" : `<sup>${s.reps}</sup>`}${mach}`));
-  }
-  return finish(effWrap(`${chips}${wr(s.weight, s.reps)}${mach}`));
+  // A NOTE never sits in the tag/weight slot (owner: "the note shouldn't be in the same
+  // position as the tags; write it as a very small text right underneath the weight — under
+  // the tag + weight if there are tags — not instead of it, and no extra height"). So the chip
+  // shows tags + weight^reps as normal, and the note is a tiny truncated caption BELOW it.
+  const noteSub = note && !isExp
+    ? `<span class="wo-set-note-sub" title="${escapeHtml(note)}">${escapeHtml(note.length > 16 ? `${note.slice(0, 16)}…` : note)}</span>`
+    : "";
+  const stack = (chip: string): string => (noteSub ? `<span class="wo-set-stack"><span class="wo-set-main">${chip}</span>${noteSub}</span>` : chip);
+  // Tags + weight^reps on top (a bodyweight set just reads 0²⁰), the note tiny underneath.
+  return finish(effWrap(stack(core(`${chips}${weightHtml}${mach}`))));
 }
 /** ISO date of the Monday starting the week of `iso` (week-boundary key). */
 function mondayKey(iso: string): string {
@@ -7091,24 +8762,34 @@ function groupByKey<T>(items: readonly T[], keyOf: (t: T) => string): T[][] {
  * sessions: week / 2-week modes tint one band per DAY; month / 3-month modes tint
  * one band per WEEK *and* split the days inside it with a faint divider — so both
  * the week and the separate days are indicated. Day mode = one session, no tint. */
-function setListHtml(setsAsc: readonly SetRecord[]): string {
+function setListHtml(setsAsc: readonly SetRecord[], suppress?: Record<string, string>): string {
   const mode = S.workoutViewMode;
   // Newest-first everywhere (matches the history order): reverse the date-sorted
   // sets so the latest day/week/set leads and a session's warmup reads at the end.
   const sets = setsAsc.slice().reverse();
-  if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s)).join(" ");
+  // "By exercise" view: a lift can have hundreds of sets, so the collapsed line shows
+  // only the most-recent run (date-banded) with a "+N" count; expand for the full table.
+  if (historyByExercise) {
+    if (sets.length === 0) return "";
+    const CAP = 14;
+    const banded = groupByKey(sets.slice(0, CAP), (s) => s.date)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
+      .join(" ");
+    return banded + (sets.length > CAP ? ` <span class="muted wo-more">+${sets.length - CAP}</span>` : "");
+  }
+  if (mode === "day" || sets.length === 0) return sets.map((s) => setDisplay(s, suppress)).join(" ");
   const byWeekBand = mode === "month" || mode === "3month";
   if (!byWeekBand) {
     // Week / 2-week: one tinted band per day.
     return groupByKey(sets, (s) => s.date)
-      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s)).join(" ")}</span>`)
+      .map((g) => `<span class="wo-sess" title="${escapeHtml(shortDate(g[0]!.date))}">${g.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
       .join(" ");
   }
   // Month / 3-month: a tinted band per WEEK, the days inside split by a thin divider.
   return groupByKey(sets, (s) => mondayKey(s.date))
     .map((wk) => {
       const inner = groupByKey(wk, (s) => s.date)
-        .map((dg) => `<span class="wo-day" title="${escapeHtml(shortDate(dg[0]!.date))}">${dg.map((s) => setDisplay(s)).join(" ")}</span>`)
+        .map((dg) => `<span class="wo-day" title="${escapeHtml(shortDate(dg[0]!.date))}">${dg.map((s) => setDisplay(s, suppress)).join(" ")}</span>`)
         .join(`<span class="wo-day-sep" aria-hidden="true"></span>`);
       return `<span class="wo-sess" title="${escapeHtml(periodGroupLabel(mondayKey(wk[0]!.date), "week"))}">${inner}</span>`;
     })
@@ -7175,9 +8856,13 @@ function woSummaryInner(sets: readonly SetRecord[], formula: OneRepMaxFormula): 
     case "sets": return sets.length ? String(sets.length) : "";
     case "e1rm":
     default: {
-      const e1rms = applied.map(({ c }) => addedWeight1RM(c, formula)).filter((v): v is number => v !== null && Number.isFinite(v));
+      // Compute in REAL mode (logged=false) to MATCH the expanded set rows — otherwise the
+      // collapsed summary used the graph's Assist flag and could disagree with the per-set
+      // 1RMs. A missing 1RM now reads as a dash "—" (owner: not "0"), consistent with the
+      // expanded rows; tap the day to open them and see WHY each is missing.
+      const e1rms = applied.map(({ s }) => addedWeight1RM(computeRecord(s, false), formula)).filter((v): v is number => v !== null && Number.isFinite(v));
       const best = e1rms.length ? Math.max(...e1rms) : null;
-      return best === null ? "" : xrmInner(best);
+      return best === null ? "—" : xrmInner(best);
     }
   }
 }
@@ -7191,16 +8876,101 @@ function woSummaryCell(sets: readonly SetRecord[], formula: OneRepMaxFormula): s
     : `<button type="button" class="wo-1rm wo-summary" data-wosummary="1" title="${escapeHtml(m.name)} this day — tap to change what this column shows">${inner}</button>`;
 }
 
+// Workout history: FREEZE the exercise sort order across in-place edits (delete a set, change
+// an RIR, edit a note) so the list doesn't JUMP under your finger (owner: "deleting shouldn't
+// auto re-sort — re-sort on sparser moments like refresh / changing pages"). The order is
+// remembered per (athlete · sort mode · view · day): it re-sorts when any of those change, or
+// when cleared on a sparse event (opening the history page, a data refresh). A delete leaves
+// the freeze intact, so the surviving rows keep their places instead of reordering.
+let woSortFreeze = new Map<string, string[]>();
+function clearWorkoutSortFreeze(): void { woSortFreeze.clear(); }
+function applyWoSortFreeze(date: string, sorted: ExerciseCount[]): ExerciseCount[] {
+  const key = `${els.athlete.value}|${woSortMode}|${S.workoutViewMode}|${date}`;
+  const frozen = woSortFreeze.get(key);
+  if (!frozen) { woSortFreeze.set(key, sorted.map((e) => e.exerciseName)); dbg(`WO freeze SEED ${date} [${sorted.map((e) => e.exerciseName).join(",")}]`); return sorted; }
+  dbg(`WO freeze HOLD ${date} fresh=[${sorted.map((e) => e.exerciseName).join(",")}]`);
+  const idx = new Map(frozen.map((n, i) => [n, i] as const));
+  // Each exercise keeps its frozen slot; anything new (not yet frozen) sorts to the END in its
+  // freshly-computed order (a stable sort preserves that among the equal Infinity keys).
+  return [...sorted].sort((a, b) => (idx.get(a.exerciseName) ?? Infinity) - (idx.get(b.exerciseName) ?? Infinity));
+}
 function renderWorkoutsPage() {
+  // Which days/weeks are expanded RIGHT NOW — captured by DATE from the live DOM before
+  // workoutGroups is rebuilt below (rows index into the CURRENT groups). The expanded day
+  // is a `.detail-row` inserted into the table; the innerHTML rebuild below destroys it,
+  // so without this every in-place edit inside an open day (RIR/pRIR picker, the ×chip
+  // modifier, note toggles…) would collapse the day. Reopened after the rebuild so the
+  // expansion survives any re-render path, not just the add-set flow (rule 24 / PB-12 class).
+  const openDates = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
+      .map((r) => workoutGroups[Number(r.dataset.index)]?.date)
+      .filter((d): d is string => Boolean(d)),
+  );
+  // Same idea for single-exercise inline expansions (date|exname) so a tap-expanded
+  // exercise survives an in-place re-render (owner's per-exercise expand).
+  const openExLines = new Set(
+    Array.from(document.querySelectorAll<HTMLElement>(".wo-ex-line.ex-open"))
+      .map((el) => `${el.dataset.date}|${el.dataset.exname}`)
+      .filter((k) => !k.includes("undefined")),
+  );
+  ensureHistoryTabApplied(); // adopt the active history tab's view on the first render
   workoutGroups = buildWorkoutGroups();
+  // Order each group's exercises by the chosen sort mode (owner: priority / recency /
+  // volume, or the logged order). New group objects so no cached source is mutated; both
+  // the collapsed summary and the expanded set table read this one ordered array.
+  if (woSortMode === "similarity") {
+    // Group related exercises adjacently (body region → name-family → name); see similarityKey.
+    workoutGroups = workoutGroups.map((g) =>
+      g.exercises
+        ? { ...g, exercises: [...g.exercises].sort((x, y) => similarityKey(x.exerciseName).localeCompare(similarityKey(y.exerciseName))) }
+        : g);
+  } else if (woSortMode !== "logged") {
+    const prioCmp = woSortMode === "priority" ? priorityComparator(els.athlete.value) : null;
+    if (woSortMode !== "priority" || prioCmp) {
+      workoutGroups = workoutGroups.map((g) => {
+        if (!g.exercises) return g;
+        // recency/volume read the group's own sets; priority uses the plan comparator.
+        const metric = woSortMode === "priority" ? null : exerciseSortMetric(g.sets, woSortMode);
+        const cmp = (x: ExerciseCount, y: ExerciseCount): number =>
+          prioCmp ? prioCmp(x.exerciseName, y.exerciseName)
+            : (metric!.get(y.exerciseName) ?? -Infinity) - (metric!.get(x.exerciseName) ?? -Infinity);
+        return { ...g, exercises: [...g.exercises].sort(cmp) };
+      });
+    }
+  }
+  // FREEZE the exercise order for EVERY group, AFTER the optional metric sort above AND for the
+  // default "logged" mode (whose base order is workoutsForUser's set-COUNT sort — the one that
+  // jumped on delete). So an in-place edit (delete a set) keeps every exercise in its slot; it
+  // only re-sorts on a sparse event that cleared the freeze (page change, refresh, or CLOSING
+  // an expanded day — owner). PB-45. (#debug: the previous fix only froze the non-logged branch.)
+  workoutGroups = workoutGroups.map((g) => (g.exercises ? { ...g, exercises: applyWoSortFreeze(g.date, g.exercises) } : g));
+  dbg(`WO sort ${woSortMode} frozen=${woSortFreeze.size} grps=${workoutGroups.length}`);
   const workoutFormula = currentFormula();
-  const period = historyPeriod(S.workoutViewMode);
+  const period = historyByExercise ? null : historyPeriod(S.workoutViewMode);
   const byWeek = period !== null;
+  // SORE Phase 2 — soreness "overreach" indicator (DAY view only; period rows pool many
+  // days so a per-day record comparison wouldn't line up). A lift gets a 💢 dot when this
+  // session's volume beat your RECENT records (best day in the last month; best 7/14-day
+  // window in the last 3 months) — the no-input soreness signal — and the dot's strength
+  // scales by the lift's susceptibility × how far past the record you went. Records come
+  // from the athlete's FULL log (liveRecords), not the active-filter view. Memoised per
+  // (lift, date) because the collapsed line is reused (active + hidden-reveal lists).
+  const soreVol = (byWeek || historyByExercise) ? null : exerciseDailyVolumes(liveRecords(), els.athlete.value);
+  const soreCache = new Map<string, Overreach | null>();
+  const soreFor = (ex: string, date: string): Overreach | null => {
+    if (!soreVol) return null;
+    const k = `${ex}|${date}`;
+    if (!soreCache.has(k)) {
+      const ov = exerciseOverreach(soreVol.get(ex) ?? [], ex, date);
+      soreCache.set(k, ov.overreach > 0 ? ov : null);
+    }
+    return soreCache.get(k) ?? null;
+  };
   syncWorkoutToggles(); // keep the toggle labels / hidden states current
   const active = workoutGroups.filter((g) => !g.rest).length;
   els.workoutsTitle.innerHTML =
     `${escapeHtml(athleteLabel())} — workouts ` +
-    `<span class="muted">(${active} ${byWeek ? "periods" : "sessions"} · tap to expand)</span>`;
+    `<span class="muted">(${active} ${historyByExercise ? "exercises" : byWeek ? "periods" : "sessions"} · tap to expand)</span>`;
 
   // No column header row — the "Session / Sets" labels were redundant noise above
   // a list whose rows are self-explanatory (a date + its set count).
@@ -7220,7 +8990,7 @@ function renderWorkoutsPage() {
   // Each day/week's LIVE (unfiltered) exercises+sets, so a per-day "hidden N/M"
   // reveal can render JUST that day's hidden lifts inline — never a global unhide.
   const liveByKey = new Map<string, { exercises: ExerciseCount[]; sets: SetRecord[] }>();
-  if (!woShowAllExercises && activeSet && hiddenByIndexCount(els.athlete.value) > 0) {
+  if (!woShowAllExercises && activeSet && !historyByExercise && hiddenByIndexCount(els.athlete.value) > 0) {
     const allow = activeSet;
     const liveBase = period
       ? periodsForUser(liveRecords(), els.athlete.value, period).map((w) => ({ key: w.periodStart, exercises: w.exercises, sets: w.sets }))
@@ -7236,7 +9006,7 @@ function renderWorkoutsPage() {
   // one ABOVE it (later in time — the list is newest-first). Seed from the last active
   // day before this page so a boundary at the page top still shows.
   let prevRowDate: string | null = workoutGroups.slice(0, start).reverse().find((g) => !g.rest)?.date ?? null;
-  const dayBoundaries = S.workoutViewMode === "day"; // week lines only matter in the day view
+  const dayBoundaries = S.workoutViewMode === "day" && !historyByExercise; // week lines only matter in the day view (not the per-lift view)
   const rows = workoutGroups
     .slice(start, end)
     .map((g, i) => {
@@ -7244,17 +9014,20 @@ function renderWorkoutsPage() {
         if (g.gap) {
           // A collapsed run of empty days: a broken-axis break showing how many
           // rest days were skipped between the slivers above and below.
-          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td colspan="2"><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
+          return `<tr class="rest-gap-row" title="${g.gap} rest days with nothing here"><td><span class="rest-gap">⋯ ${g.gap} <span class="rest-gap-lbl">rest days</span> ⋯</span></td></tr>`;
         }
         // A rest day is just a thin sliver with a separating line — count the
-        // lines between sessions to see how many days passed, no text needed.
-        return `<tr class="rest-row" title="${escapeHtml(g.label)} — rest"><td colspan="2"></td></tr>`;
+        // lines between sessions to see how many days passed, no text needed. In
+        // compact mode (.is-compact) the sliver shrinks to a ~3px hairline.
+        return `<tr class="rest-row${S.restCompact ? " is-compact" : ""}" title="${escapeHtml(g.label)} — rest"><td></td></tr>`;
       }
       const abs = start + i;
       // One exercise's compact line (1RM · name · sets), reused for the day's active
       // lifts AND for its hidden-lift reveal.
       const exLineHtml = (exerciseName: string, sets: readonly SetRecord[]): string => {
-        const setsTxt = setListHtml(sets);
+        const common = commonTagsFor(sets);
+        const commonChips = commonTagsChips(familyOf(exerciseName), common);
+        const setsTxt = setListHtml(sets, common) + ghostSetsHtml(exerciseName, g.date); // + live add-preview ghost
         const name = displayName(exerciseName);
         // In a merged / comparable view the row name is the GROUP (e.g. "Bicep+") but
         // each set keeps its real source lift in originalExerciseName. Show the distinct
@@ -7268,13 +9041,38 @@ function renderWorkoutsPage() {
         // weight / reps / sets) — the collapsed-mode counterpart of the sets-table column
         // pickers. Empty placeholder kept so a note-only lift's grid still lines up (PB).
         const rmTxt = woSummaryCell(sets, workoutFormula);
-        const addBtn = S.showAddSets
+        const addBtn = showAddSetsNow()
           ? ` <button type="button" class="wo-addset" data-addex="${escapeHtml(exerciseName)}" data-adddate="${escapeHtml(g.date)}" title="Add more sets of ${escapeHtml(exerciseName)}">+ set</button>`
           : "";
+        // SORE Phase 2: a soreness dot when this session over-reached a recent volume
+        // record for this lift, weighted by the lift's intrinsic susceptibility (eccentric
+        // / stretch-loaded lifts tear more). dose = overreach × susceptibility; shown above
+        // a small floor so a trivial bump on a low-soreness lift stays quiet, brighter when
+        // it's a big over-reach on a tear-prone lift.
+        const ov = soreFor(exerciseName, g.date);
+        let soreTxt = "";
+        if (ov) {
+          const susc = sorenessSusceptibility(exerciseName);
+          const dose = ov.overreach * susc;
+          if (dose >= 0.25) {
+            const which = [ov.exceededDay ? "month's daily" : "", ov.exceededWeek ? "weekly" : "", ov.exceededTwoWeek ? "2-week" : ""].filter(Boolean).join(" + ");
+            const lean = susc >= 1.3 ? " — a stretch/eccentric lift, sores more" : susc <= 0.8 ? " — a low-soreness lift" : "";
+            const tip = `Beat your recent ${which} volume record → expect soreness${lean}.`;
+            soreTxt = ` <span class="wo-sore${dose >= 0.8 ? " is-high" : ""}" title="${escapeHtml(tip)}" aria-label="Likely soreness: ${escapeHtml(which)} record beaten"></span>`;
+          }
+        }
         // NO swipe-to-delete on this collapsed day line (owner request): removing sets is
         // done per-set INSIDE the expanded set table (swipe a set row there), never by
         // dragging a whole exercise off the collapsed day view.
-        return `<div class="wo-ex-line">${rmTxt}<span class="wo-ex-body"><span class="wo-exname" title="${escapeHtml(exerciseName)}">${escapeHtml(name)}</span>${srcTxt}<button type="button" class="set-info wo-ex-info" data-waexinfo="${escapeHtml(exerciseName)}" title="Open ${escapeHtml(name)} in the Index" aria-label="${escapeHtml(name)} — info">ⓘ</button> <span class="wo-setlist">${setsTxt}</span>${addBtn}</span></div>`;
+        const expTxt = isExperimental(exerciseName) ? ` <span class="wo-exp-tag" title="Experimental — a scratchpad; excluded from all 1RM, volume, graphs and leaderboards">exp</span>` : "";
+        // The "+ set" button lives in its OWN right-hand grid column (3rd col of
+        // .wo-ex-line), aligned to the name row — so every "+ set" lines up in a
+        // column on the right instead of wrapping under each exercise's sets (owner).
+        // The name (+ its flags) and the shared tags share ONE title row that never wraps —
+        // the shared tags are pushed to the right and stack into their own compact column, so
+        // they stay IN LINE with the exercise instead of wrapping underneath it (owner). The
+        // per-set list sits on its own line below.
+        return `<div class="wo-ex-line" data-exname="${escapeHtml(exerciseName)}" data-date="${escapeHtml(g.date)}" title="Tap to expand this exercise's sets"><span class="wo-ex-body"><span class="wo-ex-titlerow"><span class="wo-exname wo-exlink" data-exname="${escapeHtml(exerciseName)}" role="button" tabindex="0" title="Open ${escapeHtml(name)} info" aria-label="${escapeHtml(name)} — info">${escapeHtml(name)}</span>${expTxt}${soreTxt}${srcTxt}${commonChips ? `<span class="wo-ex-commontags">${commonChips}</span>` : ""}</span><span class="wo-setlist">${setsTxt}</span></span>${rmTxt}${addBtn}</div>`;
       };
       let did: string;
       if (S.workoutShowMode === "exercises") {
@@ -7294,7 +9092,7 @@ function renderWorkoutsPage() {
         const live = liveByKey.get(g.date);
         const hiddenLines = live && activeSet
           ? live.exercises.filter((e) => !activeSet!.has(e.exerciseName))
-              .map((e) => exLineHtml(e.exerciseName, live.sets.filter((s) => s.exerciseName === e.exerciseName))).join("")
+              .map((e) => `<div class="wo-hidden-day-item">${exLineHtml(e.exerciseName, live.sets.filter((s) => s.exerciseName === e.exerciseName))}<button type="button" class="wo-hidden-unhide" data-unhideex="${escapeHtml(e.exerciseName)}" title="Unhide ${escapeHtml(displayName(e.exerciseName))} (show it in this list again)">＋ unhide</button></div>`).join("")
           : "";
         const lbl = `${hc.hidden}/${hc.total}`;
         did +=
@@ -7309,7 +9107,7 @@ function renderWorkoutsPage() {
         : "";
       // "+ exercise" adds a brand-new exercise to this session (shown with the
       // rest of the quick-add UI).
-      const addExBtn = S.showAddSets
+      const addExBtn = showAddSetsNow()
         ? `<div class="wo-addex-wrap"><button type="button" class="wo-addex" data-adddate="${escapeHtml(g.date)}" title="Add a new exercise to this session">+ exercise</button></div>`
         : "";
       // A subtle separator when this day starts a new week / month / year vs the day
@@ -7324,20 +9122,43 @@ function renderWorkoutsPage() {
         if (yr) yearMark = `<span class="wo-yearmark">${escapeHtml(g.date.slice(0, 4))}</span>`;
       }
       prevRowDate = g.date;
+      // PERIOD grouping (week/2week/month/3month): a clear, period-sized MAIN label (no weekday)
+      // + the exact span small for accuracy (owner). DAY view keeps the relative-phrase header.
+      if (byWeek && period) {
+        const ph = periodHeaderParts(g.date, period);
+        return (
+          `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
+          `<div class="wo-date wo-perdate" data-persize="${ph.size}">${yearMark}<span class="caret">▸</span><span class="wo-permain">${escapeHtml(ph.main)}</span>${ph.sub ? ` <span class="wo-persub">${escapeHtml(ph.sub)}</span>` : ""}${tagBtn}</div>` +
+          `<div class="wo-did">${did}${addExBtn}</div></td></tr>`
+        );
+      }
+      // Longer date: a big relative phrase ("Last Thursday") + a smaller month-day
+      // ("May 12"), with the full year ("2026") added only when the day is expanded.
+      const dp = dayHeaderParts(g.date, todayIso());
       return (
         `<tr class="wo-row${boundaryCls}" data-index="${abs}"><td>` +
-        `<div class="wo-date">${yearMark}<span class="caret">▸</span>${g.label}<span class="wo-year"> '${escapeHtml(g.date.slice(2, 4))}</span>${tagBtn}</div>` +
-        `<div class="wo-did">${did}${addExBtn}</div></td>` +
-        `<td class="num">${g.totalSets}</td></tr>`
+        `<div class="wo-date">${yearMark}<span class="caret">▸</span><span class="wo-rel">${escapeHtml(dp.rel)}</span> <span class="wo-md">${escapeHtml(dp.md)}</span><span class="wo-year"> ${escapeHtml(dp.year)}</span>${tagBtn}</div>` +
+        `<div class="wo-did">${did}${addExBtn}</div></td></tr>`
       );
     })
     .join("");
+  // A persistent top-of-list "+ exercise today" button (owner): when there's no session dated
+  // TODAY you'd otherwise have to open a past day and change its date to log today — this gives a
+  // one-tap way to add an exercise to today, sitting just above the most recent day. Day view,
+  // first page, and only when today has no session yet (else that day's own "+ exercise" covers it).
+  const todayHasSession = workoutGroups.some((g) => !g.rest && g.date === todayIso());
+  const addTodayRow = (showAddSetsNow() && S.workoutsPage === 0 && !byWeek && !historyByExercise && !todayHasSession)
+    ? `<tr class="wo-addtoday-row"><td><button type="button" class="wo-addex wo-addtoday" data-adddate="${escapeHtml(todayIso())}" title="Log an exercise for today">+ exercise today</button></td></tr>`
+    : "";
   els.workoutsTable.innerHTML =
-    head + `<tbody>${rows || `<tr><td colspan="2" class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
+    head + `<tbody>${addTodayRow}${rows || `<tr><td class="muted">No workouts for this athlete.</td></tr>`}</tbody>`;
   els.workoutsPager.innerHTML = workoutsPagerHtml(S.workoutsPage, pageStarts, workoutGroups, byWeek);
   renderWoHiddenNote();
+  if (openDates.size) reopenWorkoutGroups(openDates); // re-expand the days that were open BEFORE reopenSetEdit, so the set editor inside one can re-anchor (rule 24 / PB-12)
+  reopenExLines(openExLines); // re-expand single-exercise inline expansions too
   reopenSetEdit(); // PB-12: keep the set-edit panel open across the rebuild a control triggered
   renderHorizontalHistory(); // EXPERIMENTAL sideways view — reuses the same groups
+  saveActiveHistoryTab(); // mirror the live view back into the active history tab
 }
 
 /**
@@ -7545,6 +9366,7 @@ function renderWoHiddenNote(): void {
 function onWorkoutRowClick(e: MouseEvent) {
   const target = e.target as HTMLElement;
   if (target.closest(".xdd-rpe") && onSetRpeClick(target)) return; // the RIR picker handles itself
+  if (openSetMenuClick(target)) return; // tap a COLLAPSED-view set → small action menu (owner)
   if (toggleScaleEditor(target)) return; // a set's ×chip → floating modifier editor
   if (resetSetEdit(target)) return; // "Reset set" in the edit row
   if (deleteSetEdit(target)) return; // "Delete set" — hide it everywhere (on-device)
@@ -7599,6 +9421,9 @@ function onWorkoutRowClick(e: MouseEvent) {
     toggleInlineAddForm(addBtn);
     return;
   }
+  // "＋ unhide" next to a lift in the per-day hidden reveal: un-hide just that lift (owner).
+  const unhideBtn = target.closest<HTMLElement>(".wo-hidden-unhide");
+  if (unhideBtn?.dataset.unhideex) { unhideLifts([unhideBtn.dataset.unhideex]); return; }
   // Per-day / expanded "hidden N/M" reveal toggles itself (own document handlers,
   // PB-2) — swallow it here so it never falls through to expand/collapse the day.
   if (target.closest("[data-woshowday]") || target.closest("[data-woshowexp]")) return;
@@ -7608,12 +9433,28 @@ function onWorkoutRowClick(e: MouseEvent) {
   if (openSetInfo(target)) return; // a set's ⓘ → open the exercise in the Index
   if (toggleSetEdit(target)) return; // tap the set row → open/close its edit panel (runs last)
 
-  // An exercise name in an expanded day -> filter the Analysis view to just that
-  // exercise (single mode), so the graph/stats/history all scope to it.
+  // Tapping an exercise NAME (collapsed line or expanded day header) opens its Index
+  // info popup — same as the plan page's focus lifts (owner request). The per-set ⓘ in
+  // the expanded set table still opens the same popup; the collapsed ⓘ is gone (the name
+  // is the affordance now).
   const exLink = target.closest(".wo-exlink") as HTMLElement | null;
   if (exLink) {
     const exName = exLink.dataset.exname;
-    if (exName) openWorkoutAnalysis({ exercises: [exName] });
+    if (exName) openExerciseInfo(exName);
+    return;
+  }
+
+  // Tapping the EMPTY AREA of one collapsed exercise (its 1RM / sets / blank space —
+  // NOT the blue name link, which opened its Index info above, nor the + set button)
+  // expands JUST that one exercise's sets inline (owner: "tap the empty area where the
+  // exercise+sets is → expand only that one exercise", where tapping the day used to
+  // expand all). The day DATE TITLE sits outside any .wo-ex-line, so tapping it still
+  // expands the whole day below.
+  const exLine = target.closest<HTMLElement>(".wo-ex-line");
+  if (exLine?.dataset.exname && exLine.dataset.date && !target.closest(".wo-summary")) {
+    // (.wo-exlink name and .wo-addset already returned above; the golden .wo-summary
+    // chip keeps its own column-change handler, so don't hijack it into an expand.)
+    toggleExLineExpand(exLine);
     return;
   }
 
@@ -7622,11 +9463,119 @@ function onWorkoutRowClick(e: MouseEvent) {
   // never expands the day, so you can open a lift's Index info without unfolding.
   const row = target.closest("tr.wo-row") as HTMLTableRowElement | null;
   if (!row) return;
-  if (!target.closest(".wo-date")) return;
-  if (toggleCollapse(row)) return;
+  // Tap ANYWHERE on the collapsed day expands it (owner) — the exercise-name link and
+  // every button already returned above; the golden per-lift summary chip has its own
+  // column-change handler, so leave it alone.
+  if (target.closest(".wo-summary")) return;
+  if (toggleCollapse(row)) {
+    // Owner: re-sort the history ONLY when the expanded view is CLOSED (not on every in-place
+    // edit). Closing a day clears the freeze and re-renders, so the order catches up now. PB-45.
+    dbg("WO collapse → clear freeze + resort");
+    clearWorkoutSortFreeze();
+    deferRender(renderWorkoutsPage);
+    return;
+  }
   const grp = workoutGroups[Number(row.dataset.index)];
   if (!grp) return;
-  insertDetail(row, 2, workoutGroupHtml(grp));
+  insertDetail(row, 1, workoutGroupHtml(grp));
+}
+
+/** One exercise's expanded sub-table rows (header + each set, newest-first),
+ * shared by the whole-day expand (workoutGroupHtml) and the single-exercise
+ * inline expand (workoutExerciseDetailHtml) so the two render identically. */
+function exerciseSetRowsHtml(
+  group: WorkoutGroup,
+  e: ExerciseCount,
+  sets: readonly SetRecord[],
+  formula: OneRepMaxFormula,
+  strengthByDay: Map<string, Map<number, number>>,
+  divMode: "day" | "week" | null,
+  includeHeader = true,
+): string {
+  const addBtn = showAddSetsNow()
+    ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
+    : "";
+  // Newest-first: reverse the date-sorted sets so the latest day/set leads (matches
+  // the history's newest→oldest order); the day/week dividers fire on each date change.
+  const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
+  const common = commonTagsFor(exSets);
+  const commonChips = commonTagsChips(familyOf(e.exerciseName), common);
+  const header =
+    `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
+    `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
+    `${commonChips ? ` <span class="wo-ex-commontags">${commonChips}</span>` : ""}${addBtn}</td></tr>`;
+  let lastDay: string | null = null;
+  let lastWeek: string | null = null;
+  const setRows = exSets
+    .map((s) => {
+      let div = "";
+      if (divMode && s.date !== lastDay) {
+        const wk = mondayKey(s.date);
+        const newWeek = divMode === "week" && wk !== lastWeek;
+        const label = newWeek ? `${shortDate(s.date)} · ${periodGroupLabel(wk, "week")}` : shortDate(s.date);
+        div = `<tr class="set-daydiv${newWeek ? " set-weekdiv" : ""}"><td colspan="5">${escapeHtml(label)}</td></tr>`;
+        lastDay = s.date;
+        lastWeek = wk;
+      }
+      return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common);
+    })
+    .join("");
+  // The inline single-exercise expand omits this header — the collapsed .wo-ex-line
+  // right above it is already the exercise's title (owner: don't show the collapsed
+  // line AND a duplicate title, just the title + the expanded table).
+  return (includeHeader ? header : "") + setRows;
+}
+
+/** The expanded set table for a SINGLE exercise within a day/period — the
+ * per-exercise counterpart of workoutGroupHtml, for the inline one-exercise
+ * expand. Mirrors workoutGroupHtml's formula / strength / divider setup. */
+function workoutExerciseDetailHtml(group: WorkoutGroup, exerciseName: string): string {
+  const e = group.exercises.find((x) => x.exerciseName === exerciseName);
+  if (!e) return "";
+  const formula = currentFormula();
+  const strengthByDay = currentStrengthByUserExercise(formula);
+  const mode = S.workoutViewMode;
+  const divMode: "day" | "week" | null =
+    historyByExercise ? "day"
+    : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${exerciseSetRowsHtml(group, e, group.sets, formula, strengthByDay, divMode, false)}</tbody></table>`;
+}
+
+/** Expand / collapse a SINGLE exercise's sets inline under its collapsed line
+ * (owner: tap an exercise's empty area → expand just that one). The expanded
+ * table is inserted as a .wo-ex-detail block right after the tapped .wo-ex-line;
+ * tapping again removes it. Re-applied across re-renders by reopenExLines (like
+ * reopenWorkoutGroups does for whole days). */
+function toggleExLineExpand(exLine: HTMLElement): void {
+  const next = exLine.nextElementSibling;
+  if (next && next.classList.contains("wo-ex-detail")) {
+    next.remove();
+    exLine.classList.remove("ex-open");
+    return;
+  }
+  const date = exLine.dataset.date;
+  const exname = exLine.dataset.exname;
+  if (!date || !exname) return;
+  const grp = workoutGroups.find((g) => !g.rest && g.date === date);
+  if (!grp) return;
+  const html = workoutExerciseDetailHtml(grp, exname);
+  if (!html) return;
+  const detail = document.createElement("div");
+  detail.className = "wo-ex-detail";
+  detail.innerHTML = html;
+  exLine.insertAdjacentElement("afterend", detail);
+  exLine.classList.add("ex-open");
+}
+
+/** Re-expand the single-exercise inline expansions that were open before a
+ * workouts re-render (collected by date|exname), so an in-place edit elsewhere
+ * doesn't silently collapse an exercise the owner had open. */
+function reopenExLines(keys: Set<string>): void {
+  if (!keys.size) return;
+  for (const el of document.querySelectorAll<HTMLElement>(".wo-ex-line")) {
+    if (el.classList.contains("ex-open")) continue;
+    if (keys.has(`${el.dataset.date}|${el.dataset.exname}`)) toggleExLineExpand(el);
+  }
 }
 
 /** Inner table for one expanded day/week: every exercise as a sub-header row
@@ -7658,43 +9607,17 @@ function workoutGroupHtml(group: WorkoutGroup): string {
   // day → no dividers.
   const mode = S.workoutViewMode;
   const divMode: "day" | "week" | null =
-    mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
+    historyByExercise ? "day" // by-exercise spans many days → date dividers between sets
+    : mode === "week" || mode === "2week" ? "day" : mode === "month" || mode === "3month" ? "week" : null;
   // One exercise's header + set-rows; reused for the day's active lifts AND for its
-  // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest.
-  const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string => {
-    const addBtn = S.showAddSets
-      ? `<button type="button" class="wo-addset" data-addex="${escapeHtml(e.exerciseName)}" data-adddate="${escapeHtml(group.date)}" title="Add a set of ${escapeHtml(e.exerciseName)}">+ set</button>`
-      : "";
-    const header =
-      `<tr class="set-ex-row"><td colspan="5" class="wo-exname">` +
-      `<span class="wo-exlink" data-exname="${escapeHtml(e.exerciseName)}" title="${escapeHtml(e.exerciseName)}">${escapeHtml(displayName(e.exerciseName))}</span>${originBadge(e.exerciseName)}` +
-      `${addBtn}</td></tr>`;
-    // Newest-first: reverse the date-sorted sets so the latest DAY (and within a day
-    // the latest SET) leads, matching the history's newest→oldest order — so a
-    // session's warmup (done first) reads at the END, not the top. The day/week
-    // dividers below still fire on each date change in this reversed order.
-    const exSets = sets.filter((s) => s.exerciseName === e.exerciseName).reverse();
-    let lastDay: string | null = null;
-    let lastWeek: string | null = null;
-    const setRows = exSets
-      .map((s) => {
-        let div = "";
-        if (divMode && s.date !== lastDay) {
-          const wk = mondayKey(s.date);
-          const newWeek = divMode === "week" && wk !== lastWeek;
-          const label = newWeek ? `${shortDate(s.date)} · ${periodGroupLabel(wk, "week")}` : shortDate(s.date);
-          div = `<tr class="set-daydiv${newWeek ? " set-weekdiv" : ""}"><td colspan="5">${escapeHtml(label)}</td></tr>`;
-          lastDay = s.date;
-          lastWeek = wk;
-        }
-        return div + setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s));
-      })
-      .join("");
-    return header + setRows;
-  };
+  // hidden-lift reveal so a revealed lift looks IDENTICAL to the rest. Delegates to
+  // the module-level renderer so a SINGLE exercise can be expanded inline too (owner:
+  // tapping one exercise's area expands just that exercise).
+  const exRows = (e: ExerciseCount, sets: readonly SetRecord[]): string =>
+    exerciseSetRowsHtml(group, e, sets, formula, strengthByDay, divMode);
   const body = group.exercises.map((e) => exRows(e, group.sets)).join("");
   // A trailing "+ exercise" row to add a brand-new exercise to this session.
-  const addExRow = S.showAddSets
+  const addExRow = showAddSetsNow()
     ? `<tr class="set-ex-row wo-addex-host"><td colspan="5"><button type="button" class="wo-addex" data-adddate="${escapeHtml(group.date)}" title="Add a new exercise to this session">+ exercise</button></td></tr>`
     : "";
   // Lifts the Index filter hides this day/week — shown under a "hidden N/M" toggle
@@ -7768,22 +9691,15 @@ function currentStrengthByUserExercise(formula: OneRepMaxFormula): Map<string, M
     const d = dayNumber(r.date);
     dm.set(d, Math.max(dm.get(d) ?? -Infinity, eff));
   }
-  // 2) Forward-simulate the fade + consolidation to get the current level per day.
+  // 2) Forward-simulate the OFFICIAL decay model per day, through the SAME engine as the
+  //    chart's Strength Decay line (decayedStrengthSeries) — so each set's predicted RIR is
+  //    judged against the strength curve the owner made official (rule 58, effective frame).
+  const op = officialDecay();
   const out = new Map<string, Map<number, number>>();
   for (const [key, dm] of byKeyDay) {
-    const days = [...dm.keys()].sort((a, b) => a - b);
+    const pts = [...dm.entries()].sort((a, b) => a[0] - b[0]).map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
     const levels = new Map<number, number>();
-    let anchor = days[0]!;
-    let level = dm.get(anchor)!;
-    let stability: number = STRENGTH_DECAY.baseStability;
-    levels.set(anchor, level);
-    for (let i = 1; i < days.length; i++) {
-      const d = days[i]!;
-      level = Math.max(level * strengthRetention(d - anchor, stability), dm.get(d)!);
-      anchor = d;
-      stability = grownStability(stability); // a new session makes future decay weaker
-      levels.set(d, level);
-    }
+    for (const p of decayedStrengthSeries(pts, Date.now(), 30, op)) levels.set(Math.round(p.x / MS_PER_DAY_RIR), p.y);
     out.set(key, levels);
   }
   strengthByExCache = { formula, map: out };
@@ -7810,14 +9726,18 @@ const currentStrengthFor = (m: Map<string, Map<number, number>>, s: SetRecord): 
 // setRowsHtml (cellFor), which has the computed numbers in scope.
 const SET_COL_METRICS: { id: string; label: string; name: string; title: string }[] = [
   { id: "weight", label: "W", name: "Weight × reps", title: "Weight × reps — what you actually lifted." },
+  { id: "wrm", label: "wRM", name: "Weight as rep-max", title: "The weight re-expressed as YOUR rep-max for it — e.g. 8RM means this weight is one your current strength says you could do about 8 reps with; the small number is the reps you actually did. So 8RM⁵ = your ~8-rep weight, done for 5." },
   { id: "e1rm", label: "RM", name: "Rep-max (1RM)", title: "Estimated rep-max — type how many reps in the header (1 = the 1RM, higher = that-many-rep max, computed from the 1RM). Tap a value for the formula." },
   { id: "volume", label: "Vol", name: "Volume", title: "Volume = weight × reps." },
   { id: "reps", label: "Reps", name: "Reps", title: "Reps done in the set." },
   { id: "prir", label: "pRIR", name: "Predicted RIR", title: "Predicted Reps In Reserve — your current strength (best est. 1RM, faded for time off) says how many reps you should manage at this weight; pRIR is that minus the reps you did. Tap a number for the maths." },
   { id: "rir", label: "RIR", name: "Logged RIR", title: "Reps In Reserve — your logged how-many-left grade (low = near failure)." },
 ];
-const SET_COLS_KEY = "colosseum.setColumns.v1";
-const SET_COLS_DEFAULT = ["weight", "e1rm", "volume", "prir", "rir"];
+// v2: RM (1RM) LEADS — it's the leftmost column now (owner: continuity with the collapsed
+// view, where each line reads "1RM exercise …"). The key bumped from v1 so the new order
+// actually lands (column choices aren't precious — a one-time reset to this order is fine).
+const SET_COLS_KEY = "colosseum.setColumns.v2";
+const SET_COLS_DEFAULT = ["e1rm", "weight", "volume", "prir", "rir"];
 let setColumns: string[] = (() => {
   try {
     const v = JSON.parse(localStorage.getItem(SET_COLS_KEY) ?? "null");
@@ -7891,7 +9811,20 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const effLoad = c.weight; // bodyweight-inclusive load
   const r = c.reps;
   const wrap = (s: string) => `<div class="rm-derive">${s}</div>`;
-  if (effLoad === null || r === null || effLoad <= 0 || r <= 0) return wrap(`<div class="rm-step">Needs a weight and reps to estimate a 1RM.</div>`);
+  const why = (s: string) => wrap(`<div class="rm-step rm-why">${s}</div>`);
+  // Explain EVERY reason a 1RM is dropped (owner: "the dash should be clickable with an
+  // explanation of why it's missing, so I can correct it") — in the SAME order addedWeight1RM
+  // returns null, so the message always matches why the value is actually absent.
+  if (isExperimental(c.exerciseName))
+    return why(`No 1RM: <b>${escapeHtml(displayName(c.exerciseName))}</b> is an <b>experimental</b> exercise — a scratchpad for exploration, so it's excluded from every metric (1RM, volume, graphs, leaderboards) on purpose. Turn off the experimental toggle in the exercise's index card to count it.`);
+  if (c.notComparable)
+    return why(`No 1RM: this set is marked <b>“not comparable”</b>, so its 1RM (and volume) are dropped on purpose — the reps/sets still count. Tap the set, then the ⊘ <b>not comparable</b> toggle to bring the 1RM back.`);
+  if (isIsometric(c.exerciseName))
+    return why(`No 1RM: <b>${escapeHtml(displayName(c.exerciseName))}</b> is an isometric hold — it's logged in seconds, not reps, so there's no rep-based 1RM.`);
+  if (r === null || r <= 0)
+    return why(`No 1RM: this set has <b>no reps</b> logged, so the rep-curve has nothing to estimate from.`);
+  if (effLoad === null || effLoad <= 0)
+    return why(`No 1RM: the effective load is <b>0 or less</b> (no weight, and no bodyweight share for this lift), so there's nothing to estimate a 1RM from. Set a Bodyweight part in the index card if this lift should carry bodyweight.`);
   const f2 = (n: number) => (Math.round(n * 100) / 100).toString();
   const kg = (n: number) => `${f2(n)} kg`;
   const frac = (n: string, d: string) => `<span class="rm-frac"><span class="rm-num">${n}</span><span class="rm-den">${d}</span></span>`;
@@ -7899,8 +9832,11 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const added = c.origWeight === undefined ? effLoad : (c.origWeight ?? 0);
   const bodyLoad = effLoad - added;
   const hasBody = bodyLoad > 0.01;
-  if (r > MAX_1RM_REPS)
-    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where a 1RM estimate is reliable — no 1RM shown.`));
+  // The cap is EXEMPT for the Nuzzo curve, which is data-derived across the full rep range
+  // (matches addedWeight1RM) — so when Nuzzo is active and IS showing a 1RM for this set, the
+  // derivation must show it too, not claim "no 1RM". Only Epley/Brzycki bail past the cap.
+  if (formula !== "nuzzo" && r > MAX_1RM_REPS)
+    return wrap(step("reps", `${r} reps is past the ${MAX_1RM_REPS}-rep limit where Epley/Brzycki break down — no 1RM shown (switch to the Nuzzo curve, which estimates the full rep range).`));
 
   const mult = c.difficultyMult ?? 1;
   const assist = c.assistKg ?? 0;
@@ -7908,6 +9844,11 @@ function oneRmFormulaText(c: SetRecord, formula: OneRepMaxFormula): string {
   const curveLoad = scaledLoad - assist; // what the rep-curve runs on (matches addedWeight1RM)
   const eff1rm = curveLoad > 0 ? estimate1RM(curveLoad, r, formula) : curveLoad;
   const added1rm = addedWeight1RM(c, formula);
+  // Catch-all: if the 1RM is still null here (none of the named reasons above fired), the
+  // rep-curve itself couldn't produce a value for these numbers — say so with the inputs, so
+  // the owner can see what to correct rather than a bare dash.
+  if (added1rm === null)
+    return why(`No 1RM: the ${formula} rep-curve couldn't produce a value from this set's load (${kg(curveLoad)}) and ${r} reps. Check the weight, reps and variation multiplier.`);
 
   const lines: string[] = [];
   // 1) Effective load = bar + bodyweight share.
@@ -7976,13 +9917,16 @@ function predictedRirText(c: SetRecord, anchorE1RM: number | null, formula: OneR
  * has a note (or is a dropset) the WHOLE note shows on its own muted sub-row right
  * under the set (no truncation). Both reveals are independent sub-rows.
  */
-function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null): string {
+function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: number | null, suppress?: Record<string, string>): string {
   // 1RM must be bodyweight-aware (same as the leaderboard/PRs): fold the body
   // share in, then report the added-weight 1RM. W and Vol stay in bar weight —
   // what was actually loaded. `raw` is a raw record; apply the on-device per-set
   // edits, then compute it here so the sets tables match every other view.
   const s = applySetOverride(raw);
-  const computed = computeRecord(s);
+  // The history list is INDEPENDENT of the graph's Assist option (owner): always compute
+  // in REAL mode (logged=false) so toggling the graph never changes the history numbers,
+  // and the weight column shows the LOGGED dial value separately (with a "not real" mark).
+  const computed = computeRecord(s, false);
   const e1rm = addedWeight1RM(computed, formula);
   // "Not comparable" lifts keep their reps (shown in the W column) but get no
   // volume — it's as meaningless as their 1RM here.
@@ -8002,14 +9946,20 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     predRir === null
       ? "—"
       : `<button type="button" class="prir-btn" title="Show how this RIR was estimated">${Math.round(predRir)}</button>`;
-  const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, s.notes ?? "")].filter(Boolean).join(" · ");
+  // Per-set range of motion is logged as a universal "ROM X%" note token (any
+  // exercise); show it as its own chip and peel it out of the displayed note text.
+  // ROM is a per-set VARIATION (chip), never a user note (owner). romOfSet reads the attribute
+  // (or strips a legacy "ROM…" token) and gives back the USER note only.
+  const romRes = romOfSet(setId(s), s.notes);
+  const notesNoRom = romRes.note;
+  const note = [s.dropset ? "dropset" : "", displayNote(s.exerciseName, notesNoRom)].filter(Boolean).join(" · ");
   // The column shows the estimated X-rep max (X = the header input; 1 = the 1RM): the
   // load for X reps, computed from this set's 1RM. Shown as value^X (matching the weight
   // column's weight^reps). The reps come from the header, so the whole column re-reads.
   const rmShown = e1rm === null ? null : (xrmReps <= 1 ? e1rm : weightForReps(e1rm, xrmReps, formula));
   const e1rmCell =
     rmShown === null
-      ? "—"
+      ? `<button type="button" class="e1rm-btn e1rm-missing" title="No 1RM for this set — tap to see why">—</button>`
       : `<button type="button" class="e1rm-btn" title="Estimated ${xrmReps}RM — the weight you could do for ${xrmReps} rep${xrmReps === 1 ? "" : "s"}${xrmReps > 1 ? " (from the 1RM)" : ""}. Tap for the formula.">${fmt(rmShown)}<sup class="onerm-sup">${xrmReps}</sup></button>`;
   const sid = setId(s);
   // Unilateral (single-arm/leg): this set was done on BOTH sides, so it reads as a
@@ -8021,11 +9971,14 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   const uniTag = uni
     ? `<span class="set-uni${sidesDifferNow ? " is-diff" : ""}" title="Unilateral — counts as a right + a left set${sidesDifferNow ? "; the sides differ (edit below)" : " (both sides, linked)"}">⇄${sidesDifferNow && both ? ` R${both.right.reps}/L${both.left.reps}` : ""}</span>`
     : "";
-  const rpeCell = rpeDropdownHtml(sid, rpeFor(s));
-  // A technique level (squat-rack hole / cm) logged in the note — show the tag.
-  const lvlTag = s.levelLabel ? `<span class="set-lvl" title="Technique level (tune its scale in the exercise's ⚙ Technique scaling)">${escapeHtml(s.levelLabel)}</span>` : "";
-  // The variation difficulty multiplier applied to this set (note model × level ×
-  // per-set), shown when it isn't a plain ×1 so you can see it here too.
+  // RIR: editable dropdown when you can edit this athlete; a static value otherwise — a
+  // spectate / someone-else's profile is read-only (owner). The assumed band still shows.
+  const rpeAssumed = assumedRirBandId(s.exerciseName, predRir);
+  const rpeCell = canEditCurrentAthlete()
+    ? rpeDropdownHtml(sid, rpeFor(s), rpeAssumed)
+    : `<span class="rpe-ro${rpeFor(s) ? "" : " is-assumed"}">${escapeHtml(rirLabel(rpeFor(s) ?? rpeAssumed))}</span>`;
+  // A technique level (squat-rack hole / cm) — now a chip beside the weight (setTagChipsBlock).
+  // The variation difficulty multiplier: show ONLY for custom override / ×N-mode without tags.
   const scaleVal = scaleForRecord(s);
   const scaleNum = Math.round(scaleVal * 100) / 100;
   const scaleNote = (s.notes ?? "").trim();
@@ -8033,8 +9986,10 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // note (e.g. a hand-added handstand) — a per-set synthetic key, so its banded/lean/
   // ROM form is editable just like a logged-note set.
   const editNote = scaleNote || (familyOf(s.exerciseName) ? `__set:${sid}` : "");
-  // A "not comparable" note has no meaningful multiplier — the chip reads "UN".
-  const uncmp = !!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote);
+  // A manually marked "not comparable" note/set shows "UN" — not experimental lifts (notes
+  // are their tag chips; auto-excluded from metrics without the UN label).
+  const isExp = isExperimental(s.exerciseName);
+  const uncmp = !isExp && (notComparableSets.has(sid) || (!!scaleNote && isNoteNotComparable(s.exerciseName, scaleNote)));
   const chipLabel = uncmp ? "UN" : `×${scaleNum}`;
   // The set's incline level (smith/sq/cm) rides along as data-attrs so the popover can
   // show it as the "incline" and edit its scale beside the family variation.
@@ -8045,12 +10000,16 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // The setId + the readable note ride along so the popover can show the ORIGINAL note
   // and edit THIS set's incline level (per-set override).
   const rawNote = (s.notes ?? "").trim();
-  const scaleTag = editNote
-    ? // Editable chip that opens the floating modifier editor (note OR per-set form).
-      `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
-    : Math.abs(scaleVal - 1) > 1e-6
-      ? `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`
-      : "";
+  const tagBlock = setTagChipsBlock(s, suppress);
+  const customScale = (setOverrides[sid]?.scale ?? 1) !== 1 || setOverrides[sid]?.scaleAbs != null;
+  const hasTags = !!tagBlock;
+  const showScaleNum = uncmp || (Math.abs(scaleVal - 1) > 1e-6 && (customScale || (S.showAllScale && !hasTags)));
+  const scaleTag = !showScaleNum
+    ? ""
+    : editNote
+      ? // Editable chip that opens the per-set variation editor.
+        `<button type="button" class="set-scale is-editable${uncmp ? " is-uncmp" : ""}" data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs} title="${uncmp ? "Not comparable — tap to edit" : "Tap to set this set's variation (band, lean, range…)"}">${chipLabel} ▾</button>`
+      : `<span class="set-scale" title="Difficulty multiplier (from the level / per-set scale)">×${scaleNum}</span>`;
   // Effort from RIR (logged, else predicted): hard / mid / warm-up. Big leg lifts get a
   // wider "mid" band (see effortClass). It no longer shows as a tag — it colours the
   // WHOLE set-row OUTLINE (red = hard, orange = mid, grey = warm-up; .set-main.eff-* CSS).
@@ -8069,24 +10028,51 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
         ? `<span class="set-grav" title="Gravity machine — strength counted at ×${GRAVITY_MULT} of the logged weight">grav</span>`
         : "";
   const edited = setOverrides[sid] !== undefined;
-  // Assisted MACHINE set (negative counterweight) — an auto tag. The weight shown +
-  // counted depends on the global Assist view (real ½ vs logged ×2, set on the graph).
-  const machineSet = isMachineSet(s.exerciseName, s.weight);
+  // Assisted MACHINE set (negative counterweight) — an auto tag. The weight cell shows the
+  // FORMULA "-20/2" (dial halved = the real effort) so the math is visible inline.
+  const machineSet = isMachineSetEq(s);
   const assistTag = machineSet
-    ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. Counted at HALF (your real effort) by default; switch the graph's Assist option to ‘logged’ to see the machine's reading (×2, bodyweight also ×2).">machine</span>`
+    ? `<span class="set-machine" title="Assisted machine — the negative weight is the counterweight, which over-reads ~2×. The list shows the LOGGED dial value (your real effort is about half); expand the set to see both. The graph's Assist option doesn't change this list.">machine</span>`
     : "";
-  // The whole set row is the edit handle now — tap anywhere on it (except the
-  // inner 1RM / pRIR / note / RIR controls, which keep their own taps) to open
-  // this set's edit panel. No separate ✎ pencil button.
-  // The leading cell always carries the set's identity prefix (info button, variation /
-  // scale / machine chips), whatever metric column 0 is set to show.
-  const prefix = `<button type="button" class="set-info" data-waexinfo="${escapeHtml(s.exerciseName)}" title="Open ${escapeHtml(displayName(s.exerciseName))} in the index" aria-label="Open ${escapeHtml(displayName(s.exerciseName))} in the index">ⓘ</button>${lvlTag}${variationChipsHtml(s)}${scaleTag}${machineTag}${assistTag}${uniTag}`;
+  // The whole set row is the edit handle now — tap anywhere on it (except the inner 1RM /
+  // pRIR / note / RIR controls) to open the edit panel. Owner layout: the 1RM stands ALONE
+  // in its (left) column; the tags + multipliers sit NEXT TO THE REP COUNT (the weight cell);
+  // the descriptive variation info goes in the Vol column (falling back to volume); the ⓘ
+  // info button is gone (open a lift from its name header instead).
+  // Owner: the variation TAG sits BEFORE the weight/reps (matching the collapsed line), while
+  // the auto machine / assisted / unilateral FLAGS trail after. leadTags = the styled tag
+  // (or the ×N fallback when there's no tag); trailTags = the auto flags.
+  const leadTags = `${tagBlock}${scaleTag}`;
+  const trailTags = `${machineTag}${assistTag}${uniTag}`;
+  // Variation INFO for the Vol cell: technique level (e.g. "Sq 3") · ROM · the note. Shown
+  // when present, else the volume number, else "—".
+  const varInfo = note && !isExp ? `<span class="set-varnote">${escapeHtml(note)}</span>` : "";
   const cellFor = (id: string): string => {
     switch (id) {
-      // Machine sets show the view's weight (real −20 / logged −40), not the raw log.
-      case "weight": return wr(machineSet ? (computed.origWeight ?? s.weight) : s.weight, s.reps);
-      case "e1rm": return e1rmCell;
-      case "volume": return vol === null ? "—" : fmt(vol);
+      // Always show the LOGGED dial value (s.weight) + the tags/multipliers right beside the
+      // reps; a machine set gets a "not real" mark; a machine-base lift shows "base+dialed".
+      case "weight": return (leadTags ? `<span class="set-wtags set-wtags-lead">${leadTags}</span>` : "")
+        + (machineSet
+        ? `<span class="set-mform" title="Assisted machine: the dialed counterweight over-reads by this factor, so the real effort is the dial over it — shown as the formula.">${fmt(s.weight ?? 0)}/${fmt(equipmentSettingsForSet(s).divisor)}${s.reps === null ? "" : `<sup>${s.reps}</sup>`}</span>`
+        : `${machineWeightPrefixForSet(s)}${wr(s.weight, s.reps)}`) + (trailTags ? `<span class="set-wtags">${trailTags}</span>` : "");
+      // Weight as YOUR rep-max for it (owner): 70kg you could do ~8 reps → "8RM", with the
+      // reps actually done as the superscript ("8RM⁵"). Same lead/trail tags as the W cell so
+      // it's a drop-in alternative. Falls back to the plain weight if there's no strength anchor.
+      case "wrm": {
+        const rm = anchorE1RM != null && computed.weight != null && computed.weight > 0
+          ? repsForWeight(anchorE1RM, computed.weight, formula) : null;
+        const n = rm == null ? null : Math.max(1, Math.round(rm));
+        const body = n == null
+          ? wr(s.weight, s.reps)
+          : `${n}RM${s.reps == null ? "" : `<sup>${s.reps}</sup>`}`;
+        const tip = n == null ? ""
+          : ` title="${escapeHtml(`This weight is about your ${n}RM (a weight you could do ~${n} reps with, from your current ${fmt(anchorE1RM!)} kg 1RM); you did ${s.reps ?? "?"}.`)}"`;
+        return (leadTags ? `<span class="set-wtags set-wtags-lead">${leadTags}</span>` : "")
+          + `<span class="set-wrm"${tip}>${body}</span>`
+          + (trailTags ? `<span class="set-wtags">${trailTags}</span>` : "");
+      }
+      case "e1rm": return e1rmCell; // the 1RM stands alone
+      case "volume": return varInfo || (vol === null ? "—" : fmt(vol));
       case "reps": return s.reps === null || s.reps === undefined ? "—" : String(s.reps);
       case "prir": return prirCell;
       case "rir": return rpeCell;
@@ -8094,36 +10080,36 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
     }
   };
   const tds = setColumns
-    .map((id, i) => `<td class="num${id === "rir" ? " rpe-cell" : ""}${i === 0 ? " wcell" : ""}">${i === 0 ? prefix : ""}${cellFor(id)}</td>`)
+    .map((id) => `<td class="num${id === "rir" ? " rpe-cell" : ""}${id === "weight" ? " wcell" : ""}${id === "volume" ? " volcell" : ""}">${cellFor(id)}</td>`)
     .join("");
   const main =
     `<tr class="set-main${effClass}${note ? " set-row has-note" : ""}${edited ? " is-edited" : ""}" data-setid="${escapeHtml(sid)}" ` +
     `title="Tap to edit this set (weight, reps, bodyweight, scale)${effTitle}">${tds}</tr>`;
-  // Show the WHOLE note on its own line under the set (no truncation) — in the
-  // expanded set views readability beats compactness.
-  const noteRow = note
-    ? `<tr class="set-note-row"><td colspan="5" class="muted">${escapeHtml(note)}</td></tr>`
-    : "";
+  // The note now rides in the Vol column (varInfo) — no separate full-width note row (owner).
+  const noteRow = "";
+  // Always render the explanation row — when the 1RM is MISSING it explains WHY (owner), so
+  // the dash is tappable just like a present 1RM is.
   const formulaRow =
-    e1rm === null
-      ? ""
-      : `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
+    `<tr class="e1rm-formula-row" hidden><td colspan="5" class="muted">${oneRmFormulaText(computed, formula)}</td></tr>`;
   const prirRow =
     predRir === null || !prirText
       ? ""
       : `<tr class="prir-formula-row" hidden><td colspan="5" class="muted">${escapeHtml(prirText)}</td></tr>`;
-  // Edit row: tweak this set's weight / reps / bodyweight / scaling factor. RIR is
-  // the dropdown in the row itself. Bodyweight is just for this set (placeholder
-  // shows the default). Blank a field to clear that one edit.
-  const dfltBw = raw.bodyweight ?? athProfile(s.username)?.weight ?? null;
+  // Edit row: tweak this set's weight / reps / scaling factor. RIR is the dropdown in the
+  // row itself. Blank a field to clear that one edit. (The person's bodyweight is a profile
+  // value, edited in their stats — not a per-set field — so it's not here, per owner.)
   const efld = (field: keyof SetOverride, label: string, val: number | null, step: number, ph = "") =>
     `<label class="set-edit-f">${label}<input class="set-edit-input" type="number" step="${step}" inputmode="decimal" ` +
     `data-setid="${escapeHtml(sid)}" data-field="${field}" value="${val ?? ""}"${ph ? ` placeholder="${escapeHtml(ph)}"` : ""} /></label>`;
   // Editable NOTE: the original CSV note (or your edit of it). Drives the displayed
   // text and the variation difficulty; blank it to fall back to the original.
+  // The Note field is the USER's note ONLY — ROM (a variation) is shown as a chip, never here
+  // (owner). Strip any legacy "ROM…" token from both the value and the original-compare baseline.
+  const userNote = romOfSet(sid, s.notes).note;
+  const origUserNote = romOfSet(sid, raw.notes).note;
   const noteFld =
     `<label class="set-edit-f set-edit-f-note">Note` +
-    `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(raw.notes ?? "")}" value="${escapeHtml(s.notes ?? "")}" placeholder="${escapeHtml(raw.notes ?? "(no note)")}" /></label>`;
+    `<input class="set-edit-note" type="text" data-setid="${escapeHtml(sid)}" data-orig="${escapeHtml(origUserNote)}" value="${escapeHtml(userNote)}" placeholder="${escapeHtml(origUserNote || "(no note)")}" /></label>`;
   // Per-SIDE edit fields (unilateral only): each side defaults to the logged value
   // (blank input = linked); fill one in to record a side that differs. Writes go to
   // the per-set side store, not the set override. The "⇄ unilateral" toggle sets the
@@ -8163,18 +10149,49 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
   // Assisted machine: the Weight field IS the machine's dialed counterweight
   // ("machine assist"); show the REAL assistance (half) calculated right beside it.
   const realW = realAddedWeight(s.exerciseName, s.weight);
-  const weightField = (assisted && s.weight !== null && s.weight < 0 && realW !== null)
-    ? `<label class="set-edit-f">Machine assist (kg)` +
-      `<span class="set-edit-wreal"><input class="set-edit-input" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" />` +
-      `<span class="set-edit-real" title="Real assistance counted for strength — half the dial (the machine over-reads ~2×)">= ${fmt(realW)} real</span></span></label>`
-    : efld("weight", "Weight (kg)", s.weight, 0.5);
+  // Weight + reps rendered as a CHIP — the weight is the main number, the reps a small
+  // superscript, and the variation tags sit BEFORE it — so the editor reads like the final
+  // history set chip (owner: "I want the edit menu to look more like the final menu after it's
+  // added … reps above the weights … the tags before the weight and reps"). The inputs keep
+  // their .set-edit-input + data-field wiring, so the existing edit handlers are untouched.
+  const editTags = variationChipsHtml(s); // the same small chips the collapsed history line shows
+  const realHint = (assisted && s.weight !== null && s.weight < 0 && realW !== null)
+    ? `<span class="set-edit-real" title="Real effort counted for strength — the dial halved (the machine over-reads ~2×)">/2 = ${fmt(realW)}</span>`
+    : "";
+  const chipRow =
+    `<div class="set-edit-chiprow">` +
+    `<div class="set-edit-chip" title="Weight · reps — tap to edit">` +
+    (editTags ? `<span class="set-edit-chip-tags">${editTags}</span>` : "") +
+    `<input class="set-edit-input set-edit-cw" type="number" step="0.5" inputmode="decimal" data-setid="${escapeHtml(sid)}" data-field="weight" value="${s.weight ?? ""}" placeholder="0" aria-label="Weight (kg)" />` +
+    `<input class="set-edit-input set-edit-cr" type="number" step="1" min="1" inputmode="numeric" data-setid="${escapeHtml(sid)}" data-field="reps" value="${s.reps ?? ""}" placeholder="0" aria-label="Reps" />` +
+    `</div>${realHint}</div>`;
+  // The variation block. DEDUP-2 (owner: "there shouldn't be two separate set-editing
+  // menus — put the old one into the new"): when the set is difficulty-MODEL-editable
+  // (a family lift or a noted set → `editNote`), the FULL variation model (incline level +
+  // support / band / depth×lean / tempo / hands / range) renders INLINE here on open —
+  // no more separate floating popover. The container carries the same data-scaleedit-*
+  // contract the old chip used; renderCardVarModel() populates it. A non-model scaled set
+  // (level / per-set scale only) falls back to the static chip summary.
+  const varModelData = editNote
+    ? ` data-scaleedit-ex="${escapeHtml(s.exerciseName)}" data-scaleedit-note="${escapeHtml(editNote)}" data-scaleedit-setid="${escapeHtml(sid)}"${rawNote ? ` data-scaleedit-rawnote="${escapeHtml(rawNote)}"` : ""}${lvlAttrs}`
+    : "";
+  const variantsBlock = editNote
+    ? `<div class="set-edit-varmodel" aria-label="Variation"${varModelData}></div>`
+    : (variationChipsHtml(s).trim() || scaleTag.trim())
+      ? `<div class="set-edit-variants" aria-label="Variants">${variationChipsHtml(s)}${scaleTag}</div>`
+      : "";
+  // Floating popup (owner: "a popup menu, not physical"): the panel is a fixed-position card
+  // (positioned by JS near the tapped set, closed by an outside tap) so it OVERLAYS the
+  // history instead of pushing it down. It stays INSIDE the table so all the existing
+  // table-scoped edit wiring (inputs, toggles, delete) keeps working untouched.
+  // Bodyweight-of-the-person field removed per owner (it's a profile value, not a per-set one).
   const editRow =
-    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid">` +
-    weightField +
-    efld("reps", "Reps", s.reps, 1) +
-    efld("bodyweight", "Bodyweight", setOverrides[sid]?.bodyweight ?? null, 0.5, dfltBw === null ? "" : String(dfltBw)) +
+    `<tr class="set-edit-row" data-seteditid="${escapeHtml(sid)}" hidden><td colspan="5"><div class="set-edit-grid set-edit-pop">` +
+    `<button type="button" class="set-edit-close" data-seteditclose title="Close">✕</button>` +
+    chipRow +
     efld("scale", "Scale ×", setOverrides[sid]?.scale ?? null, 0.05, "1") +
     noteFld +
+    variantsBlock +
     uniToggle +
     assistToggle +
     machineToggle +
@@ -8191,29 +10208,70 @@ function setRowsHtml(raw: SetRecord, formula: OneRepMaxFormula, anchorE1RM: numb
  * unset); the open menu lists every band with its full description, plus a Clear
  * row. Reuses the app's .xdd dropdown styling; matched to the cell width. Clicks
  * are handled by delegation in the sets-table handler (onSetRpeClick). */
-function rpeDropdownHtml(sid: string, grade: string | undefined): string {
-  const band = rirBand(grade);
-  const label = band ? band.id : "–";
-  const optHtml = (val: string, text: string, title: string, active: boolean) =>
-    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(val)}" title="${escapeHtml(title)}" role="option">${escapeHtml(text)}</button>`;
-  // Just the number range — no explanations (the why stays as a hover tooltip).
-  const menu =
-    optHtml("", "–", "Clear the grade", !band) +
-    RIR_BANDS.map((b) => optHtml(b.id, b.id, b.desc, grade === b.id)).join("");
+/** One RIR picker option: the descriptive label big, the actual rep-range tiny + gray under it,
+ * with the geometric-mean value the calculations use in the tooltip. Shared by both pickers. */
+function rirBandOptHtml(b: (typeof RIR_BANDS)[number], active: boolean): string {
+  const sub = b.sub ? `<span class="rpe-opt-sub">${escapeHtml(b.sub)}</span>` : "";
   return (
-    `<div class="xdd xdd-rpe${band ? " is-set" : ""}" data-setid="${escapeHtml(sid)}">` +
-    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve (RIR)">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
-    `<div class="xdd-menu" hidden role="listbox">${menu}</div>` +
+    `<button type="button" class="xdd-opt set-rpe-opt${active ? " is-active" : ""}" data-rir="${escapeHtml(b.id)}" ` +
+    `title="${escapeHtml(`RIR ${b.sub || b.label} · avg ${b.rep.toFixed(2)}`)}" role="option">` +
+    `<span class="rpe-opt-lbl">${escapeHtml(b.label)}</span>${sub}</button>`
+  );
+}
+/** The RIR picker MENU inner HTML, shared by the per-set and add-modal pickers: a "clear" row,
+ * every band (MULTI-selectable — tap two when unsure, owner), then a footer showing the value the
+ * calculations use (the range's gray log-average) with a "specify" toggle that swaps it for a typed
+ * exact RIR. `g` = the current grade (null = none picked); `assumedRep` = the faded fallback value. */
+function rpeMenuHtml(g: RirGrade | null, assumedRep: number | null): string {
+  const has = (id: string) => !!g && g.bands.includes(id);
+  const opts =
+    `<button type="button" class="xdd-opt set-rpe-opt rpe-clear${!g ? " is-active" : ""}" data-rir="" title="Clear — back to the assumed RIR" role="option">clear</button>` +
+    RIR_BANDS.map((b) => rirBandOptHtml(b, has(b.id))).join("");
+  const hasBands = !!g && g.bands.length > 0;
+  if (!hasBands) return opts;
+  const exactOn = g!.exact !== null;
+  const rep = rirGradeRep(g!);
+  const avgTxt = rep != null ? fmtRir(rep) : (assumedRep != null ? fmtRir(assumedRep) : "–");
+  // Footer: the value the calc uses + a "specify" toggle (type an exact RIR over the range average).
+  const spec = `<button type="button" class="rpe-specify${exactOn ? " is-on" : ""}" data-rirspec aria-pressed="${exactOn}" title="Type an exact reps-in-reserve instead of the range's average">${exactOn ? "exact" : "specify"}</button>`;
+  const input = exactOn
+    ? `<input type="number" class="rpe-exact" inputmode="decimal" step="0.5" min="0" value="${g!.exact}" aria-label="Exact reps in reserve" />`
+    : `<span class="rpe-avg" title="The value calculations use — the logarithmic average of the picked range">avg <b>${escapeHtml(avgTxt)}</b></span>`;
+  return opts + `<div class="rpe-foot">${input}${spec}</div>`;
+}
+
+function rpeDropdownHtml(sid: string, grade: string | undefined, assumedId?: string): string {
+  const g = parseRirGrade(grade);
+  // No graded value → show the ASSUMED band (faded/dashed) instead of "–", so every set carries a
+  // RIR. Picking turns it REAL (solid). The assumed id rides on data-assumed so clear can restore it.
+  const assumedRep = assumedId ? rirBandMid(assumedId) : null;
+  const label = g ? rirLabel(grade) : rirLabel(assumedId);
+  const cls = g ? " is-set" : assumedId ? " is-assumed" : "";
+  const aria = g ? "Reps in reserve (RIR)" : "Assumed reps in reserve — tap to set the real value";
+  return (
+    `<div class="xdd xdd-rpe${cls}" data-setid="${escapeHtml(sid)}" data-assumed="${escapeHtml(assumedId ?? "")}">` +
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="${aria}" title="${escapeHtml(aria)}">${escapeHtml(label)}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${rpeMenuHtml(g, assumedRep)}</div>` +
     `</div>`
   );
 }
+/** Re-render a per-set RIR dropdown in place from the saved grade, and RE-OPEN its menu — used after
+ * a band toggle / specify tap so the multi-select stays open (rule 24: a setting tap inside a menu
+ * must not collapse it). */
+function rerenderRpeOpen(dd: HTMLElement, sid: string): void {
+  const assumed = dd.dataset.assumed || undefined;
+  const parent = dd.parentElement;
+  dd.outerHTML = rpeDropdownHtml(sid, rpeGrades[sid] || undefined, assumed);
+  const fresh = parent?.querySelector<HTMLElement>(`.xdd-rpe[data-setid="${CSS.escape(sid)}"]`);
+  if (fresh) { fresh.classList.add("open"); fresh.querySelector<HTMLElement>(".xdd-menu")?.removeAttribute("hidden"); }
+}
 
-/** Click inside a set's RIR dropdown: toggle the menu open, or apply a picked
- * band (save it, re-render the cell, refresh the drill-in graph). Returns true if
- * it handled the click. Shared by both sets tables. */
+/** Click inside a set's RIR dropdown: toggle the menu open, toggle a band (multi-select, keeps the
+ * menu open), clear, or toggle the exact-value override. Returns true if it handled the click. */
 function onSetRpeClick(target: HTMLElement): boolean {
   const dd = target.closest<HTMLElement>(".xdd-rpe");
   if (!dd?.dataset.setid) return false;
+  const sid = dd.dataset.setid;
   const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
   // Tapping the closed button toggles this menu (and closes any other open one).
   if (target.closest(".set-rpe-btn")) {
@@ -8223,16 +10281,32 @@ function onSetRpeClick(target: HTMLElement): boolean {
     dd.classList.toggle("open", opening);
     return true;
   }
-  // Tapping a band applies it.
-  const opt = target.closest<HTMLElement>(".set-rpe-opt");
-  if (opt?.dataset.rir !== undefined) {
-    const v = opt.dataset.rir === "" ? null : opt.dataset.rir;
-    setRpe(dd.dataset.setid, v);
-    // Swap in a freshly-rendered dropdown so the button label + is-set update.
-    dd.outerHTML = rpeDropdownHtml(dd.dataset.setid, v ?? undefined);
+  // "specify" → turn the range's average into a typed exact value (or back to the average).
+  if (target.closest("[data-rirspec]")) {
+    const g = parseRirGrade(rpeGrades[sid]);
+    if (g && g.bands.length) {
+      g.exact = g.exact !== null ? null : (rirGradeRep({ bands: g.bands, exact: null }) ?? null);
+      if (g.exact !== null) g.exact = Math.round(g.exact * 10) / 10;
+      setRpe(sid, formatRirGrade(g));
+      rerenderRpeOpen(dd, sid);
+    }
     return true;
   }
-  return true; // a click inside the open menu (e.g. on a gap) — swallow it
+  // Tapping a band toggles it (clear empties the grade and closes; a band keeps the menu open).
+  const opt = target.closest<HTMLElement>(".set-rpe-opt");
+  if (opt?.dataset.rir !== undefined) {
+    const id = opt.dataset.rir;
+    if (id === "") {
+      setRpe(sid, null);
+      dd.outerHTML = rpeDropdownHtml(sid, undefined, dd.dataset.assumed || undefined);
+      return true;
+    }
+    const g2 = toggleRirBand(parseRirGrade(rpeGrades[sid]), id);
+    setRpe(sid, g2 ? formatRirGrade(g2) : null);
+    rerenderRpeOpen(dd, sid);
+    return true;
+  }
+  return true; // a click inside the open menu (e.g. on the exact input / a gap) — swallow it
 }
 
 /** Close every open RIR dropdown menu (used before opening one, and on outside click). */
@@ -8273,6 +10347,13 @@ function openSetInfo(target: HTMLElement): boolean {
 // ---- Floating "edit this note's modifiers" popover (from a set row's ×chip) ----
 let scaleEditState: { ex: string; note: string; setId?: string; rawNote?: string; level?: { dim: LevelDim; value: number; label: string } } | null = null;
 let scaleEditDirty = false; // an edit was made while the popover was open
+// DEDUP-2: the difficulty model used to live ONLY in a separate floating popover
+// (#scaleEditPop). It now ALSO renders INLINE inside the set-edit card (one editor, not
+// two — owner). When true, renderScaleEditor() targets the open card's `.set-edit-varmodel`
+// container and emits just the model BODY (level + note picker); the card already supplies
+// the header, machine toggle and not-comparable button. The standalone popover (reached
+// from the collapsed `wo-set-variant` chip) keeps its full chrome with this false.
+let scaleEditInCard = false;
 // Band is collapsed to "none + banded" until the user expands it (owner request — the
 // assist-level chips are rarely used and eat space). Reset each time the popover opens.
 let scaleBandExpanded = false;
@@ -8329,12 +10410,24 @@ function scaleEditLevelBlock(): string {
   );
 }
 function renderScaleEditor(): void {
+  if (!scaleEditState) return;
+  // The variation editor is now the SAME add-set-style dim dropdowns everywhere
+  // (DEDUP-2 owner: "the edit menu should be the same as the add one") — no more rich
+  // pad/chip popover here. The incline LEVEL block stays above it (it's the per-set
+  // cm/Smith/squat-hole tool, not part of the family variation).
+  const variantUi = variantSelectsHtml(scaleEditState.ex, { note: scaleEditState.note });
+  // INLINE-IN-CARD mode (DEDUP-2): render only the model body into the open card's
+  // container — the card frames it (close/✕, machine, not-comparable are its own controls).
+  if (scaleEditInCard) {
+    const host = document.querySelector<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-varmodel");
+    if (!host) return;
+    host.innerHTML = scaleEditLevelBlock() + variantUi;
+    refreshPoseViz();
+    return;
+  }
   const pop = document.getElementById("scaleEditPop");
-  if (!pop || !scaleEditState) return;
+  if (!pop) return;
   const title = scaleEditState.note.startsWith("__set:") ? "This set's variation" : scaleEditState.note;
-  // The incline level (if any) multiplies into the picker's "final multiplier".
-  const lv = scaleEditState.level;
-  const lvlFactor = lv ? levelScaleFor(scaleEditState.ex, lv.dim, lv.value) : 1;
   // A per-set "not comparable" toggle, same as the set-edit row — keep this set's
   // reps/sets but drop its 1RM & volume (a static hold or odd one-off). Only a real
   // set (with an id) can be marked; the note-level mark lives in the variations review.
@@ -8358,7 +10451,7 @@ function renderScaleEditor(): void {
     `<button type="button" class="scale-edit-close" aria-label="Close">✕</button></div>` +
     machBlock +
     scaleEditLevelBlock() +
-    notePickerHtml(scaleEditState.ex, scaleEditState.note, lvlFactor) +
+    variantUi +
     ncBtn;
   refreshPoseViz();
 }
@@ -8383,7 +10476,15 @@ function positionScaleEditor(anchor: HTMLElement): void {
   pop.style.top = `${top}px`;
 }
 function openScaleEditor(ex: string, note: string, anchor: HTMLElement, level?: { dim: LevelDim; value: number; label: string }, meta?: { setId?: string | undefined; rawNote?: string | undefined }): void {
+  // #super-persistent (PB-48): EVERY edit of a real set routes through the modern Add-set sheet,
+  // never the old Scale×/grid popover (owner). So the moment we have a set id, redirect — this
+  // chokepoint covers the collapsed quick-edit chip and any other caller that passes a setId.
+  if (meta?.setId) {
+    const src = liveRecords().find((r) => setId(r) === meta.setId);
+    if (src) { openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) }, { sid: meta.setId, note: note || `__set:${meta.setId}`, rawNote: meta.rawNote ?? src.notes ?? "" }); return; }
+  }
   scaleEditState = { ex, note, ...(level ? { level } : {}), ...(meta?.setId ? { setId: meta.setId } : {}), ...(meta?.rawNote ? { rawNote: meta.rawNote } : {}) };
+  scaleEditInCard = false; // this is the standalone popover (the collapsed-line chip), not the card
   scaleBandExpanded = false; // band starts collapsed each time the popover opens
   shoulderRefPhoto = false;  // shoulder-distance reference starts on the SVG diagram
   let pop = document.getElementById("scaleEditPop");
@@ -8408,14 +10509,25 @@ function closeScaleEditor(): void {
   // workouts list + charts so the compact ×multipliers update, scroll preserved.
   if (wasDirty) refreshAfterDifficultyEdit();
 }
+/** DEDUP-2: after a model PICK (vec level / free-lift ×). The standalone popover CLOSES on
+ * a pick (which syncs); the in-card model STAYS OPEN, re-renders inline, and defers its sync
+ * to when the card closes — so you can keep tweaking dimensions without it vanishing. */
+function afterModelPick(): void {
+  scaleEditDirty = true;
+  if (scaleEditInCard) renderScaleEditor();
+  else closeScaleEditor();
+}
 /** Click on a set row's editable ×chip: open/close the floating modifier editor
  * for that note. Returns true if it handled the click (so the row doesn't edit). */
 function toggleScaleEditor(target: HTMLElement): boolean {
   if (target.closest(".scale-edit-close")) { closeScaleEditor(); return true; }
-  // `.set-scale.is-editable` = the expanded-row chip; `.wo-set-variant` = the
-  // collapsed-line quick-edit chip (history ⚙ → Var). Both carry the same data.
-  const btn = target.closest<HTMLElement>(".set-scale.is-editable, .wo-set-variant");
+  // The only editable scale chip is the EXPANDED set row's ×N chip (`.set-scale.is-editable`
+  // in a `tr.set-main`), and it falls through to toggleSetEdit → the unified Add/Edit card
+  // (DEDUP-5: there is ONE editor; the old standalone popover is no longer reachable). The
+  // legacy `.wo-set-variant` collapsed chip is gone (no longer emitted).
+  const btn = target.closest<HTMLElement>(".set-scale.is-editable");
   if (!btn?.dataset.scaleeditEx || btn.dataset.scaleeditNote === undefined) return false;
+  if (btn.classList.contains("set-scale") && btn.closest("tr.set-main")) return false;
   if (scaleEditState && scaleEditState.ex === btn.dataset.scaleeditEx && scaleEditState.note === btn.dataset.scaleeditNote)
     closeScaleEditor();
   else {
@@ -8478,20 +10590,101 @@ function togglePrirFormula(target: HTMLElement): boolean {
 // COLLAPSE the panel mid-edit (the recurring rule-24 "tapping a setting closes the menu").
 // renderWorkoutsPage re-applies this after each rebuild, so the panel stays put.
 let openSetEditId: string | null = null;
+/** Position the floating set-edit card near its set-main row (fixed coords, flips above
+ * when it would run off the bottom — mirrors positionScaleEditor). The card stays inside
+ * the table DOM so all the existing edit wiring keeps working; only its rendering floats. */
+function positionSetEditPop(pop: HTMLElement, anchor: HTMLElement): void {
+  const r = anchor.getBoundingClientRect();
+  const w = Math.min(window.innerWidth - 16, 360);
+  pop.style.width = `${w}px`;
+  pop.style.left = `${Math.max(8, Math.min(r.left, window.innerWidth - w - 8))}px`;
+  const margin = 8;
+  const ph = pop.offsetHeight; // capped by max-height; content scrolls inside
+  let top = r.bottom + 6;
+  if (top + ph > window.innerHeight - margin) {
+    const above = r.top - 6 - ph;
+    top = above >= margin ? above : Math.max(margin, window.innerHeight - margin - ph);
+  }
+  pop.style.top = `${top}px`;
+}
+/** Re-place every visible floating set-edit card next to its set-main row. */
+function positionSetEditPops(): void {
+  for (const pop of document.querySelectorAll<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-pop")) {
+    let anchor = pop.closest("tr")?.previousElementSibling as HTMLElement | null;
+    while (anchor && !anchor.classList.contains("set-main")) anchor = anchor.previousElementSibling as HTMLElement | null;
+    if (anchor) positionSetEditPop(pop, anchor);
+  }
+}
+/** DEDUP-2: (re)render the inline difficulty model into the OPEN set-edit card's
+ * `.set-edit-varmodel` container, driving the shared scaleEditState off the container's
+ * data-scaleedit-* attributes. A no-op for a card whose set has no model (no container). */
+function renderCardVarModel(): void {
+  const host = document.querySelector<HTMLElement>(".set-edit-row:not([hidden]) .set-edit-varmodel");
+  if (!host) { if (scaleEditInCard) { scaleEditInCard = false; scaleEditState = null; } return; }
+  const d = host.dataset;
+  if (!d.scaleeditEx || d.scaleeditNote === undefined) return;
+  scaleEditState = {
+    ex: d.scaleeditEx,
+    note: d.scaleeditNote,
+    ...(d.scaleeditSetid ? { setId: d.scaleeditSetid } : {}),
+    ...(d.scaleeditRawnote ? { rawNote: d.scaleeditRawnote } : {}),
+    ...(d.scaleeditLeveldim && d.scaleeditLevelvalue !== undefined
+      ? { level: { dim: d.scaleeditLeveldim as LevelDim, value: Number(d.scaleeditLevelvalue), label: d.scaleeditLevellabel ?? "" } }
+      : {}),
+  };
+  scaleEditInCard = true;
+  scaleBandExpanded = false;
+  shoulderRefPhoto = false;
+  renderScaleEditor();
+}
+/** Close the open set-edit card (hide every matching row, drop the outside listener). */
+function closeSetEdit(): void {
+  if (openSetEditId === null) return;
+  for (const editRow of document.querySelectorAll<HTMLElement>(`.set-edit-row[data-seteditid="${CSS.escape(openSetEditId)}"]`)) {
+    editRow.hidden = true;
+    let p = editRow.previousElementSibling;
+    while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
+    p?.classList.remove("edit-open");
+  }
+  openSetEditId = null;
+  document.removeEventListener("click", setEditOutside, true);
+  // DEDUP-2: the inline model rode this card's scaleEditState — tear it down, and sync
+  // the rest of the app ONCE if a difficulty edit was made (mirrors closeScaleEditor).
+  // DEFER the sync a frame: closeSetEdit can run mid-toggleSetEdit (switching sets), and
+  // refreshAfterDifficultyEdit rebuilds the table synchronously — doing it now would detach
+  // the row the caller is still opening. Next frame is safe (reopenSetEdit re-applies any
+  // still-open card via openSetEditId).
+  if (scaleEditInCard) {
+    const wasDirty = scaleEditDirty;
+    scaleEditState = null;
+    scaleEditInCard = false;
+    scaleEditDirty = false;
+    if (wasDirty) requestAnimationFrame(refreshAfterDifficultyEdit);
+  }
+}
+/** Outside-tap closes the floating card (owner). A tap on a set-main row is left to
+ * toggleSetEdit (which switches/closes), and taps inside the card or its sub-rows stay. */
+function setEditOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest(".set-edit-pop") || t.closest("tr.set-main") || t.closest(".set-note-row, .e1rm-formula-row, .prir-formula-row")) return;
+  if (t.closest("#scaleEditPop") || t.closest(".xdd-menu")) return; // the variant editor / RIR menu it spawns
+  closeSetEdit();
+}
 function toggleSetEdit(target: HTMLElement): boolean {
+  if (target.closest("[data-seteditclose]")) { closeSetEdit(); return true; } // legacy card's ✕ (now unused)
   const row = target.closest<HTMLElement>("tr.set-main");
-  if (!row) return false;
-  let sib = row.nextElementSibling;
-  while (sib && !sib.classList.contains("set-edit-row")) {
-    if (sib.classList.contains("set-main")) break; // reached the next set's main row
-    sib = sib.nextElementSibling;
-  }
-  if (sib?.classList.contains("set-edit-row")) {
-    const willOpen = sib.hasAttribute("hidden"); // currently hidden → this tap opens it
-    sib.toggleAttribute("hidden");
-    row.classList.toggle("edit-open");
-    openSetEditId = willOpen ? ((sib as HTMLElement).dataset.seteditid ?? null) : null;
-  }
+  if (!row?.dataset.setid) return false;
+  if (!canEditCurrentAthlete()) return false; // read-only spectate view — never open the editor (owner)
+  // #super-persistent (PB-48): tapping a set to edit it opens the SAME modern Add-set sheet as
+  // adding one (owner: "the editing menu should look EXACTLY like the add menu"), NOT the old
+  // Scale×/grid inline card. Route through openAddModal's edit mode — the single set editor.
+  const sid = row.dataset.setid;
+  const src = liveRecords().find((r) => setId(r) === sid);
+  if (!src) return false;
+  const chip = row.querySelector<HTMLElement>(".set-scale.is-editable"); // carries the set's note keys
+  const note = chip?.dataset.scaleeditNote ?? `__set:${sid}`;
+  const rawNote = chip?.dataset.scaleeditRawnote ?? (src.notes ?? "");
+  openAddModal(src.originalExerciseName ?? src.exerciseName, src.date, { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) }, { sid, note, rawNote });
   return true;
 }
 /** Re-open the set-edit panel that was open before a table rebuild (PB-12): un-hide its
@@ -8514,6 +10707,8 @@ function reopenSetEdit(): void {
       while (p && !p.classList.contains("set-main")) p = p.previousElementSibling;
       p?.classList.add("edit-open");
     }
+    renderCardVarModel(); // DEDUP-2: repopulate the inline variation model on the rebuilt card
+    positionSetEditPops(); // the floating card re-anchors to its (rebuilt) row
   };
   reopen();
   requestAnimationFrame(reopen);
@@ -8534,16 +10729,310 @@ function resetSetEdit(target: HTMLElement): boolean {
  * Restorable in Settings → Data health. */
 function deleteSetById(id: string): void {
   setDeleted(id, true);
-  if (openSetEditId === id) openSetEditId = null; // its panel is gone — don't try to reopen
+  if (openSetEditId === id) { openSetEditId = null; document.removeEventListener("click", setEditOutside, true); } // its panel is gone
   const y = window.scrollY;
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   renderHealth();
-  window.scrollTo(0, y);
+  restoreScrollY(y);
 }
 
+/** Tap a COLLAPSED-view set chip → open its small action menu (owner: duplicate /
+ * change variant / add a suggested set). */
+function openSetMenuClick(target: HTMLElement): boolean {
+  // Tap a ＋N / − chip → expand/collapse the overflow tags IN PLACE (owner), without
+  // opening the set action menu. Handled here (before the set-menu check) so it works
+  // whether the chips sit in a collapsed set pill, the hoisted common tags, or an
+  // expanded set row.
+  const moreLess = target.closest<HTMLElement>(".wo-var-more, .wo-var-less");
+  if (moreLess) { moreLess.closest(".wo-var-chips")?.classList.toggle("show-all"); return true; }
+  const btn = target.closest<HTMLElement>(".wo-set-menu");
+  if (!btn?.dataset.setmenu) return false;
+  openSetActionMenu(btn);
+  return true;
+}
+function closeSetActionMenu(): void {
+  document.getElementById("setActionMenu")?.remove();
+  document.removeEventListener("click", setActOutside, true);
+}
+/** Capture-phase listener while the set menu is open: run a tapped action, else close
+ * on an outside tap. (One menu at a time; rule 32 floating menu.) */
+function setActOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  const item = t.closest<HTMLElement>("[data-setact]");
+  if (item) { e.preventDefault(); e.stopPropagation(); handleSetAct(item); closeSetActionMenu(); return; }
+  if (!t.closest("#setActionMenu")) closeSetActionMenu();
+}
+/** Perform a set-menu action: duplicate, open the variant editor, delete the set, or
+ * add a new set (a quick suggestion, or the reps/weight dialed on the rulers). */
+function handleSetAct(item: HTMLElement): void {
+  const sid = item.dataset.sid;
+  if (!sid) return;
+  const act = item.dataset.setact;
+  if (act === "dup") { duplicateSetFromId(sid); return; }
+  if (act === "del") {
+    const src = liveRecords().find((r) => setId(r) === sid);
+    deleteSetsWithUndo([sid], src ? displayName(src.exerciseName) : "set");
+    return;
+  }
+  if (act === "edit" || act === "variant") {
+    // Open the FULL add/edit sheet in EDIT mode (owner #persistent: "editing a set should open the
+    // SAME menu as adding — weight, reps, note, TAGS, cog, proper CSS — not the old pills popover").
+    // Prefilled with this set's values; Save updates the set in place. Replaces the old scaleEditor.
+    const src = liveRecords().find((r) => setId(r) === sid);
+    if (!src) return;
+    const btn = document.querySelector<HTMLElement>(`.wo-set-menu[data-setmenu="${CSS.escape(sid)}"]`);
+    const note = btn?.dataset.scaleeditNote ?? `__set:${sid}`;
+    const rawNote = btn?.dataset.scaleeditRawnote ?? (src.notes ?? "");
+    openAddModal(
+      src.originalExerciseName ?? src.exerciseName, src.date,
+      { weight: src.weight ?? null, reps: Math.max(1, Math.round(src.reps ?? 1)) },
+      { sid, note, rawNote },
+    );
+    return;
+  }
+  if (act === "ruleredit") {
+    // Apply the dialed reps/weight to the TAPPED set (edit in place), via the same per-set
+    // override the expanded editor uses. The free-text note / tags are untouched.
+    const menu = document.getElementById("setActionMenu");
+    if (!menu) return;
+    const repR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="rep"]');
+    const wtR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="wt"]');
+    if (repR) setSetOverrideField(sid, "reps", rulerValue(repR));
+    if (wtR) setSetOverrideField(sid, "weight", rulerValue(wtR));
+    scheduleRender();
+    return;
+  }
+  if (act === "ruleradd") {
+    // Read the values dialed on the reps / weight rulers and log a new set like the tapped one.
+    const menu = document.getElementById("setActionMenu");
+    const src = liveRecords().find((r) => setId(r) === sid);
+    if (!menu || !src) return;
+    const repR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="rep"]');
+    const wtR = menu.querySelector<HTMLElement>('.set-ruler[data-ruler="wt"]');
+    const reps = repR ? rulerValue(repR) : (src.reps ?? 0);
+    const weight = wtR ? rulerValue(wtR) : (src.weight ?? 0);
+    addManualSetLike(src, weight, reps);
+    return;
+  }
+  if (act === "sugg") { addSuggestedSet(sid, item.dataset.mode ?? "same"); return; }
+}
+/** The value currently centred under a scrollable ruler (its snapped tick). */
+function rulerValue(ruler: HTMLElement): number {
+  const tick = ruler.querySelector<HTMLElement>(".set-ruler-tick");
+  const tw = tick?.offsetWidth || 1;
+  const min = parseFloat(ruler.dataset.min ?? "0");
+  const step = parseFloat(ruler.dataset.step ?? "1");
+  const count = parseInt(ruler.dataset.count ?? "1", 10);
+  const idx = Math.max(0, Math.min(count - 1, Math.round(ruler.scrollLeft / tw)));
+  return Math.round((min + idx * step) / step) * step;
+}
+/** A horizontal scroll-snap ruler: a row of value ticks you swipe to pick a number, with
+ * a centre mark and a big live readout above it (owner: scroll the line to change reps /
+ * weight, then a button to add the set). */
+function rulerHtml(kind: string, min: number, step: number, count: number, curIdx: number, unit: string): string {
+  let ticks = "";
+  for (let i = 0; i < count; i++) ticks += `<span class="set-ruler-tick">${escapeHtml(fmt(min + i * step))}</span>`;
+  return (
+    `<div class="set-ruler-block">` +
+    `<div class="set-ruler-val" data-rulerval="${escapeHtml(kind)}"><span class="set-ruler-num">${escapeHtml(fmt(min + curIdx * step))}</span><span class="set-ruler-unit">${escapeHtml(unit)}</span></div>` +
+    `<div class="set-ruler-wrap"><span class="set-ruler-mark"></span>` +
+    `<div class="set-ruler" data-ruler="${escapeHtml(kind)}" data-min="${min}" data-step="${step}" data-count="${count}" data-curidx="${curIdx}">${ticks}</div>` +
+    `</div></div>`
+  );
+}
+/** The small per-set action menu (rule 32: fixed + clampMenuIntoView, body-appended). */
+function openSetActionMenu(anchor: HTMLElement): void {
+  closeSetActionMenu();
+  const sid = anchor.dataset.setmenu!;
+  const src = liveRecords().find((r) => setId(r) === sid);
+  const curReps = Math.max(1, Math.round(src?.reps ?? 1));
+  const w = src?.weight ?? 0;
+  const ico = (act: string, glyph: string, label: string, cls = "") =>
+    `<button type="button" class="set-act-ico${cls}" data-setact="${act}" data-sid="${escapeHtml(sid)}" title="${label}" aria-label="${label}">${glyph}</button>`;
+  // Reps ruler: 1..50. Weight ruler: 2.5-kg steps. ASSISTED machines log a NEGATIVE weight
+  // (the assistance), so key the range on whether the lift is ASSISTED — not on the current
+  // value's sign (owner: "assisted exercises don't give negative numbers and sometimes switch
+  // pos↔neg"). Assisted → a band spanning negatives through 0 to a little positive, so negatives
+  // are ALWAYS reachable and the range is the same shape for every set. Plate lifts stay 0..+;
+  // pure bodyweight (w === 0, not assisted) has no weight ruler.
+  const repMin = 1, repStep = 1, repCount = 50;
+  const repIdx = Math.min(repCount - 1, Math.max(0, curReps - repMin));
+  const assisted = isAssistedMachine(src?.exerciseName ?? "");
+  let wtRuler = "";
+  if (w !== 0 || assisted) {
+    const wtStep = 2.5;
+    const wtMin = assisted
+      ? Math.floor((Math.min(w, 0) - 40) / wtStep) * wtStep
+      : (w > 0 ? 0 : Math.floor((w - 20) / wtStep) * wtStep);
+    const wtMax = assisted
+      ? Math.ceil((Math.max(w, 0) + 20) / wtStep) * wtStep
+      : (w > 0 ? Math.max(w + 50, 60) : 0);
+    const wtCount = Math.round((wtMax - wtMin) / wtStep) + 1;
+    const wtIdx = Math.min(wtCount - 1, Math.max(0, Math.round((Math.round(w / wtStep) * wtStep - wtMin) / wtStep)));
+    wtRuler = rulerHtml("wt", wtMin, wtStep, wtCount, wtIdx, "kg");
+  }
+  const menu = document.createElement("div");
+  menu.id = "setActionMenu";
+  menu.className = "set-act-menu set-act-menu--rulers";
+  // No Duplicate button (owner): "+ Add set" with unchanged values already duplicates the set.
+  menu.innerHTML =
+    `<div class="set-act-icons">` +
+    ico("edit", "✎", "Edit this set — the full menu (weight, reps, tags, note, RIR…)") +
+    ico("del", "✕", "Delete set", " set-act-ico--del") +
+    `</div>` +
+    `<div class="set-act-sec">Change reps / weight, then edit this set or add a new one</div>` +
+    rulerHtml("rep", repMin, repStep, repCount, repIdx, "reps") +
+    wtRuler +
+    // Two buttons (owner): apply the dialed reps/weight to THIS set, or add a NEW set with them.
+    `<div class="set-act-btns">` +
+    `<button type="button" class="set-act-edit" data-setact="ruleredit" data-sid="${escapeHtml(sid)}">✎ Edit set</button>` +
+    `<button type="button" class="set-act-add" data-setact="ruleradd" data-sid="${escapeHtml(sid)}">＋ Add set</button>` +
+    `</div>`;
+  document.body.appendChild(menu);
+  clampMenuIntoView(menu, anchor);
+  // Centre each ruler on its current value and keep the readout live as you swipe.
+  for (const ruler of menu.querySelectorAll<HTMLElement>(".set-ruler")) {
+    const tw = ruler.querySelector<HTMLElement>(".set-ruler-tick")?.offsetWidth || 1;
+    ruler.scrollLeft = parseInt(ruler.dataset.curidx ?? "0", 10) * tw;
+    const out = menu.querySelector<HTMLElement>(`[data-rulerval="${ruler.dataset.ruler}"] .set-ruler-num`);
+    ruler.addEventListener("scroll", () => { if (out) out.textContent = fmt(rulerValue(ruler)); }, { passive: true });
+  }
+  setTimeout(() => document.addEventListener("click", setActOutside, true), 0);
+}
+/** Add a new manual set based on an existing one, tweaked per the suggestion mode
+ * (+1 rep, +2.5 kg, −10% back-off). Keeps the note/level; a fresh set, so per-set
+ * side-stores aren't copied (unlike a faithful Duplicate). */
+function addSuggestedSet(id: string, mode: string): void {
+  const src = liveRecords().find((r) => setId(r) === id);
+  if (!src) return;
+  let weight = src.weight ?? 0;
+  let reps = src.reps ?? 0;
+  if (mode === "rep") reps = (reps || 0) + 1;
+  else if (mode === "wt") weight = (weight || 0) + 2.5;
+  else if (mode === "back") weight = Math.round((weight || 0) * 0.9 * 10) / 10;
+  addManualSetLike(src, weight, reps);
+}
+/** Log a fresh hand-logged set with the given weight/reps, on the same day + exercise +
+ * note/level as `src` (shared by the quick suggestions and the ruler "Add set"). */
+function addManualSetLike(src: SetRecord, weight: number, reps: number): void {
+  if (!canEditCurrentAthlete()) return;
+  const username = src.username;
+  const exerciseName = src.originalExerciseName ?? src.exerciseName;
+  // ROM is a per-set VARIATION, not a note (owner): carry it as an attribute and NEVER copy a
+  // legacy "ROM…" token into the new set's note.
+  const srcRom = setOverrides[setId(src)]?.rom;
+  const cleanNote = romOfSet(setId(src), src.notes).note;
+  manualEntries.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    seq: Date.now() % 2000000000,
+    user: athleteLabel(),
+    username,
+    date: src.date,
+    exerciseName,
+    weight,
+    reps,
+    ...(cleanNote ? { notes: cleanNote } : {}),
+    ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
+  });
+  const entryId = manualEntries[manualEntries.length - 1]!.id;
+  // The new set must carry the SOURCE set's variation TAGS (owner: "+ Add set should copy all the
+  // tags the set I copied from had" — it was logging a tagless set). The weight/reps come from the
+  // ruler, but every per-set variation transfers: the picked-tag vec (__set:<id>), any non-SQ
+  // level (smith/cm), the difficulty scale, and ROM. Mirrors duplicateSetFromId's faithful copy.
+  const newId = `${username}|${exerciseName}|${src.date}|${100000 + manualEntries.length - 1}`;
+  const srcVec = variationVecOverrides[variationKey(exerciseName, `__set:${setId(src)}`)];
+  if (srcVec && Object.keys(srcVec).length) { variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)] = { ...srcVec }; saveVariationVecs(); }
+  const a = applySetOverride(src); // effective level (covers a per-set level override)
+  if (a.levelDim && a.levelDim !== "sq" && a.levelValue !== undefined) setSetOverrideLevel(newId, a.levelDim, a.levelValue);
+  const srcScale = setOverrides[setId(src)]?.scale;
+  if (srcScale != null && srcScale !== 1) setSetOverrideField(newId, "scale", srcScale);
+  const srcScaleAbs = setOverrides[setId(src)]?.scaleAbs;
+  if (srcScaleAbs != null) setSetOverrideField(newId, "scaleAbs", srcScaleAbs);
+  if (srcRom) setSetRom(newId, { ...srcRom });
+  saveManual();
+  mergeManualSets();
+  const refresh = () => {
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    refreshExerciseInfo();
+    restoreScrollY(y);
+  };
+  refresh();
+  showToast(`Added ${displayName(exerciseName)} set (${reps}×${fmt(weight)})`, "Undo", () => {
+    manualEntries = manualEntries.filter((e) => e.id !== entryId);
+    delete setOverrides[newId]; saveSetOverrides();
+    if (variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)]) { delete variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)]; saveVariationVecs(); }
+    saveManual();
+    mergeManualSets();
+    refresh();
+  });
+}
+/** Create a hand-logged COPY of an existing set (same day, same effective weight/reps/
+ * note + every per-set variation), then refresh. Faithful: it mirrors the source's base
+ * values into a new manual entry and copies the id-keyed side-stores onto the new setId. */
+function duplicateSetFromId(id: string): void {
+  if (!canEditCurrentAthlete()) return;
+  const src = liveRecords().find((r) => setId(r) === id);
+  if (!src) return;
+  const username = src.username;
+  const date = src.date;
+  const exerciseName = src.originalExerciseName ?? src.exerciseName; // the REAL lift, not a merged display name
+  const a = applySetOverride(src); // effective level (covers a per-set level override)
+  const newSetNumber = 100000 + manualEntries.length; // mirrors mergeManualSets' numbering
+  const newId = `${username}|${exerciseName}|${date}|${newSetNumber}`;
+  manualEntries.push({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    seq: Date.now() % 2000000000,
+    user: athleteLabel(),
+    username,
+    date,
+    exerciseName,
+    weight: src.weight ?? null,
+    reps: src.reps ?? null,
+    ...(src.notes ? { notes: src.notes } : {}),
+    ...(src.levelDim === "sq" && src.levelValue !== undefined ? { levelValue: src.levelValue } : {}),
+  });
+  // Copy the per-set side-stores keyed by setId so the duplicate is faithful.
+  if (setOverrides[id]) { setOverrides[newId] = { ...setOverrides[id] }; saveSetOverrides(); }
+  if (setSidesStore[id]) { setSidesStore[newId] = { ...setSidesStore[id] }; saveJson(SET_SIDES_KEY, setSidesStore); }
+  if (notComparableSets.has(id)) { notComparableSets.add(newId); saveJson(NC_SETS_KEY, [...notComparableSets]); }
+  if (rpeGrades[id]) { rpeGrades[newId] = rpeGrades[id]!; saveJson(RPE_STORE_KEY, rpeGrades); }
+  // A noted set shares its note's vec automatically (same ex|note); a NOTELESS model set
+  // carries a per-set __set:<id> vec — copy that to the new id so picked tags transfer.
+  const srcVec = variationVecOverrides[variationKey(exerciseName, `__set:${id}`)];
+  if (srcVec && Object.keys(srcVec).length) { variationVecOverrides[variationKey(exerciseName, `__set:${newId}`)] = { ...srcVec }; saveVariationVecs(); }
+  // A non-sq level (smith/cm) rides in setOverrides above; ensure any effective level lands.
+  if (a.levelDim && a.levelDim !== "sq" && a.levelValue !== undefined) setSetOverrideLevel(newId, a.levelDim, a.levelValue);
+  const entryId = manualEntries[manualEntries.length - 1]!.id;
+  saveManual();
+  mergeManualSets();
+  const refresh = () => {
+    const y = window.scrollY;
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
+    refreshExerciseInfo();
+    restoreScrollY(y);
+  };
+  refresh();
+  // A tap adds data, so make it recoverable: a 10s Undo that removes the copy (it's the
+  // last manual entry, so dropping it can't renumber the others) and its copied stores.
+  showToast(`Duplicated ${displayName(exerciseName)} set`, "Undo", () => {
+    manualEntries = manualEntries.filter((e) => e.id !== entryId);
+    delete setOverrides[newId]; saveSetOverrides();
+    if (setSidesStore[newId]) { delete setSidesStore[newId]; saveJson(SET_SIDES_KEY, setSidesStore); }
+    if (notComparableSets.delete(newId)) saveJson(NC_SETS_KEY, [...notComparableSets]);
+    if (rpeGrades[newId]) { delete rpeGrades[newId]; saveJson(RPE_STORE_KEY, rpeGrades); }
+    saveManual();
+    mergeManualSets();
+    refresh();
+  });
+}
 /** Click "Delete set": hide this set everywhere (on-device only — the source CSV
  * is untouched). Confirm first; restorable in Data health. */
 function deleteSetEdit(target: HTMLElement): boolean {
@@ -8566,13 +11055,26 @@ function toggleSetNotComparable(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
 /** A set-edit input changed: save the override (weight/reps/bodyweight/scale) and
  * re-render so the new value flows everywhere (1RM, volume, leaderboard, graphs). */
 function onSetEditInput(e: Event): void {
+  // Exact RIR override typed into a set's RIR picker footer (the "specify" input).
+  const rirInp = (e.target as HTMLElement).closest<HTMLInputElement>(".rpe-exact");
+  if (rirInp) {
+    const dd = rirInp.closest<HTMLElement>(".xdd-rpe");
+    if (dd?.dataset.setid) {
+      const g = parseRirGrade(rpeGrades[dd.dataset.setid]) ?? { bands: [], exact: null };
+      const n = parseFloat(rirInp.value);
+      g.exact = Number.isFinite(n) ? n : null;
+      setRpe(dd.dataset.setid, g.bands.length || g.exact !== null ? formatRirGrade(g) : null);
+      scheduleRender();
+    }
+    return;
+  }
   // Note text field (string) — edits the original CSV note for this set.
   const noteInp = (e.target as HTMLElement).closest<HTMLInputElement>(".set-edit-note");
   if (noteInp?.dataset.setid !== undefined) {
@@ -8619,7 +11121,7 @@ function toggleUnilateralExercise(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -8635,7 +11137,7 @@ function toggleAssistedExercise(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -8654,7 +11156,7 @@ function toggleSetMachineGravity(target: HTMLElement): boolean {
   if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
   refreshExerciseInfo();
   reopenSetEdit(); // PB-12: a setting tap inside the set editor must not collapse it — reopen LAST, after every render above
-  window.scrollTo(0, y);
+  restoreScrollY(y);
   return true;
 }
 
@@ -8672,11 +11174,14 @@ function setsByDateTableHtml(sets: readonly SetRecord[]): string {
     if (g) g.push(s);
     else byDate.set(s.date, [s]);
   }
+  const common = commonTagsFor(sets);
+  const commonChips = commonTagsChips(sets.length ? familyOf(sets[0]!.exerciseName) : null, common);
+  const commonRow = commonChips ? `<tr class="set-ex-row"><td colspan="5"><span class="wo-ex-commontags">${commonChips}</span></td></tr>` : "";
   const body = Array.from(byDate, ([date, daySets]) => {
     const header = `<tr class="set-date-row"><td colspan="5" class="wo-date">${shortDate(date)}</td></tr>`;
-    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s))).join("");
+    return header + daySets.map((s) => setRowsHtml(s, formula, currentStrengthFor(strengthByDay, s), common)).join("");
   }).join("");
-  return `<table class="data-table detail-table">${setsHead()}<tbody>${body}</tbody></table>`;
+  return `<table class="data-table detail-table">${setsHead()}<tbody>${commonRow}${body}</tbody></table>`;
 }
 
 /** Best / latest / trend summary line for an exercise's day-by-day 1RM series.
@@ -9208,10 +11713,12 @@ function renderBwGroupBar(): void {
 // ---- Edit athlete stats page ----
 let statsEditUser = ""; // which athlete the editor is showing
 
-/** Open the stats editor for one athlete (from the ✎ Edit button on the card). */
+/** Open the athlete stats editor as a popup overlay (from the ✎ Edit button in the
+ * Stats section). No longer a menu page — moved into the Stats section per owner. */
 function openStatsEditor(username: string): void {
   statsEditUser = username;
-  switchTopTab("statsedit");
+  renderStatsEdit();
+  els.statseditPage.hidden = false;
 }
 
 /** Render the editable stats form for `statsEditUser` (defaults to the selected
@@ -9277,33 +11784,6 @@ function coachingSeed(username: string): CoachingProfile | null {
 function coachingFor(username: string): CoachingProfile | null {
   return coachingOverrides[username] ?? coachingSeed(username);
 }
-/** Muscle groups named within an athlete's "maintain" lines (e.g. "Adductors"), so
- * their lifts can be surfaced for injury care. */
-function maintainMusclesFor(coach: CoachingProfile | null): MuscleGroup[] {
-  if (!coach?.maintain?.length) return [];
-  const hay = coach.maintain.join(" ").toLowerCase();
-  return MUSCLE_GROUPS.filter((m) => hay.includes(m.toLowerCase()));
-}
-/** The athlete's recent top weighted set on any lift hitting a muscle group — the
- * heaviest set logged for it in the last ~60 days. Used to size a warm-up off recent
- * strength. Returns null if no weighted set is on record. */
-function recentTopSetForMuscle(username: string, muscle: MuscleGroup, todayD: number): { exercise: string; weight: number; reps: number; daysAgo: number } | null {
-  let best: { exercise: string; weight: number; reps: number; day: number } | null = null;
-  for (const r of computedRecords()) {
-    if (r.username !== username || !r.date) continue;
-    if (typeof r.weight !== "number" || !(r.weight > 0)) continue;
-    const d = dayNumber(r.date);
-    if (todayD - d > 60) continue; // only "recent" strength
-    if (!mgsFor(r.exerciseName).includes(muscle)) continue;
-    if (!best || r.weight > best.weight) best = { exercise: r.exerciseName, weight: r.weight, reps: r.reps ?? 0, day: d };
-  }
-  return best ? { exercise: best.exercise, weight: best.weight, reps: best.reps, daysAgo: todayD - best.day } : null;
-}
-/** Round a warm-up weight to a tidy increment (2.5 kg ≥ 20, else 1 kg). */
-function tidyWarmupKg(kg: number): number {
-  if (kg >= 20) return Math.round(kg / 2.5) * 2.5;
-  return Math.max(1, Math.round(kg));
-}
 /** Lowercased goal/maintain keywords (≥3 chars), for goal-weighting the plan. */
 function goalKeywords(coach: CoachingProfile | null): string[] {
   if (!coach) return [];
@@ -9314,17 +11794,6 @@ function goalKeywords(coach: CoachingProfile | null): string[] {
       .filter((w) => w.length >= 3 && !STOP.has(w)),
   )];
 }
-
-/** Antagonist muscle-group pairs — opposing movers good to superset together. */
-const ANTAGONIST_PAIRS: [MuscleGroup, MuscleGroup][] = [
-  ["Chest", "Upper back"],
-  ["Chest", "Lats"],
-  ["Shoulders", "Lats"],
-  ["Biceps", "Triceps"],
-  ["Quads", "Hamstrings"],
-  ["Abductors", "Adductors"],
-  ["Lower back", "Core"],
-];
 
 interface LiveEx {
   name: string;
@@ -9663,13 +12132,12 @@ function renderCoachUiCatalogue(): void {
     <p class="muted" style="font-size:0.8rem;margin:0 0 0.8rem">Live renders — tap an item to expand. Use the <strong>Prompt name</strong> when reporting problems.</p>
 
     ${group("Buttons", [
-      sec("Nav tab", "nav tab / top tab", ".tab", `<button class="tab">Tab</button> <button class="tab is-active">Active tab</button>`),
-      sec("Bottom nav button", "bottom nav / subtab", ".subtab-btn", `<button class="subtab-btn">⌂ Home</button>`),
+      sec("App tab (view switcher)", "app tab / view tab / nav tab", ".ex-tab", `<button class="ex-tab">Workouts</button> <button class="ex-tab is-active">List &amp; stats</button>`),
       sec("Primary button", "primary button", ".primary-btn", `<button class="primary-btn">Primary</button>`),
       sec("Settings link button", "settings button / settings row button", ".settings-link", `<button class="settings-link">⬆ Upload sets</button>`),
       sec("Icon button (on-chart)", "on-chart button / graph corner button", ".wa-gov-btn", `<button class="wa-gov-btn">⤢</button> <button class="wa-gov-btn">kg</button> <button class="wa-gov-btn">⛶</button>`),
       sec("Clear/action pill", "clear pill / action pill", ".wa-clear", `<button class="wa-clear">Select all</button> <button class="wa-clear">✕ Clear</button>`),
-      sec("Pagination button", "pagination button", ".page-btn", `<button class="page-btn">‹</button> <button class="page-btn is-active">2</button> <button class="page-btn">›</button>`),
+      sec("Pagination pager", "pagination button / pager", ".page-btn", pagerNav(1, 5, "11–20 of 47")),
       sec("Guide button", "guide button", ".guide-btn", `<button class="guide-btn">Guide</button> <button class="guide-btn is-active">Active</button>`),
     ].join(""))}
 
@@ -9690,6 +12158,7 @@ function renderCoachUiCatalogue(): void {
       sec("Workout DJ button (on/off)", "DJ button / workout filter pill", ".wo-dj-btn", `<button class="wo-dj-btn is-active">10RM</button> <button class="wo-dj-btn">Rest</button> <button class="wo-dj-btn is-active">Sets+</button>`),
       sec("Language toggle", "language toggle", ".lang-opt", `<button class="lang-opt is-active">EN</button> <button class="lang-opt">LT</button>`),
       sec("Alone filter", "alone filter / session filter", ".alone-filter", `<button class="alone-filter wo-dj-btn">Both</button>`),
+      sec("Segmented toggle", "segmented toggle / mode toggle", ".seg-toggle / .seg-btn", segToggle(segBtn("By day", { active: true }) + segBtn("By week"))),
     ].join(""))}
 
     ${group("Folds / Expandable sections", [
@@ -9702,6 +12171,7 @@ function renderCoachUiCatalogue(): void {
 
     ${group("Inputs & Search", [
       sec("Command / search bar", "search bar / command bar", ".cmd-input", `<input class="cmd-input" type="text" placeholder="Search exercises… or type . for commands" style="max-width:260px" readonly>`),
+      sec("Picker search box", "picker search / exercise filter box", ".wa-chip-search", `<input class="wa-chip-search" type="search" placeholder="Search exercises…" style="max-width:260px">`),
       sec("Inline number input", "number input / set weight input", ".set-edit-f input", `<input type="number" value="80" style="width:4rem;padding:4px 6px;border:1px solid var(--line);border-radius:var(--r-pill);font:inherit;background:var(--bg);color:var(--text)">`),
       sec("Rep-max column input", "rep-max input / RM input", ".rm-col-input", `<input class="rm-col-input" type="number" value="5" style="width:3rem">`),
     ].join(""))}
@@ -9716,6 +12186,12 @@ function renderCoachUiCatalogue(): void {
       sec("Workout ⚙ console", "workout cog / DJ console / workout settings", ".wo-controls-fold", `<details class="wo-controls-fold"><summary class="wo-controls-sum">⚙</summary></details>`),
       sec("Settings panel", "settings panel / gear menu", ".settings-panel", `<span class="muted" style="font-size:0.8rem">Opens from ⚙ top-right corner</span>`),
       sec("Other sheet", "other menu / bottom sheet", ".other-sheet", `<span class="muted" style="font-size:0.8rem">Opens from ··· bottom nav</span>`),
+    ].join(""))}
+
+    ${group("Exercise pickers (3 tiers — see docs/exercise-picker-tiers.md)", [
+      sec("Tier 1 — Pick one (dropdown)", "picker tier 1 / pick-one dropdown", ".xdd", `<div class="xdd" style="display:inline-block"><button class="xdd-btn" type="button">Pick exercise ▾</button></div>`),
+      sec("Tier 2 — Pick a few (search + chips)", "picker tier 2 / search picker", ".wa-chip-search / .prio-add-chip", `<input class="wa-chip-search" type="search" placeholder="Search exercises…" style="max-width:220px"><div style="margin-top:4px;display:flex;gap:5px"><button class="prio-add-chip">+ Squat</button> <button class="prio-add-chip is-synth">✦ Pull*</button></div>`),
+      sec("Tier 3 — Full picker (drawer)", "picker tier 3 / full drawer picker", ".wa-pick-card", `<span class="muted" style="font-size:0.8rem">Search + category pills + counts + ⓘ in a sliding <code>.wa-pick-card</code> drawer (the Analysis selector).</span>`),
     ].join(""))}
 
     ${group("Cards & Panels", [
@@ -9814,26 +12290,25 @@ function renderCoachTechStack(): void {
   el.innerHTML = TECH_STACK_HTML;
 }
 
-const PERSISTENT_BUGS_HTML = `
-  <details class="coach-section"><summary class="coach-sum">PB-10 · wa-sel-cog-menu goes off-screen</summary>
-  <div class="coach-body"><p>Exercise selector ⚙ popup escaped the viewport when the cog wrapped to a new row. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code>. <em>Recurrences: 1</em></p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-13 · Exercise picker opener keeps changing</summary>
-  <div class="coach-body"><p>The opener UI has been redesigned multiple times: full-width bar → pill → slide-in drawer → sticky tab. Each redesign solved discoverability but broke another constraint. Root cause: tension between reach (always visible) and space (no room). Current: sticky tab on right edge, drag left to open.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-14 · Version number not bumped on ship</summary>
-  <div class="coach-body"><p>AIs shipped commits without bumping the patch version or updating the changelog. Fixed: added CLAUDE.md rule 29 — version bump + changelog entry + index.html span are mandatory before any commit.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-15 · Manual sets with no seq silently dropped from upload</summary>
-  <div class="coach-body"><p>Sets added before the <code>seq</code> field existed had <code>seq: undefined</code> and were filtered out of every Supabase upsert silently. Fixed: back-fill seq on first upload.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-16 · Supabase anon key can't INSERT even with RLS disabled</summary>
-  <div class="coach-body"><p>RLS disable alone doesn't grant write access; <code>GRANT SELECT/INSERT/UPDATE/DELETE TO anon, authenticated</code> is also required. Table also had a uuid PK that caused PostgREST to cast the text user_id to uuid → 400. Fixed: rebuilt table with composite natural PK, added GRANT.</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">PB-17 · Workout ⚙ menu out of viewport bounds</summary>
-  <div class="coach-body"><p>Same class as PB-10 — <code>position:absolute</code> with <code>right:0</code> / <code>left:0</code> always escapes bounds when the anchor moves. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code> on toggle event.</p></div></details>
-`;
+/** Single-origin builder for the Coach-page fold (UIC-7): ONE place emits the
+ * `.coach-section` <details> + `.coach-sum` summary + `.coach-body`, so the
+ * persistent-bugs / app-info folds can't drift. Bodies are trusted static HTML. */
+function coachSection(title: string, bodyHtml: string, attrs = ""): string {
+  return `<details class="coach-section"${attrs}><summary class="coach-sum">${title}</summary><div class="coach-body">${bodyHtml}</div></details>`;
+}
 
-const APP_INFO_HTML = `
-  <details class="coach-section"><summary class="coach-sum">Data flow</summary>
-  <div class="coach-body"><p>StrengthLevel → Apps Script → Google Sheet "UD" → <code>doGet</code> JSON → site (validate → compute → render). Manual sets also stored in Supabase <code>sets</code> table (anon key, composite PK).</p></div></details>
-  <details class="coach-section"><summary class="coach-sum">Key source files</summary>
-  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+const PERSISTENT_BUGS_HTML = ([
+  ["PB-10 · wa-sel-cog-menu goes off-screen", `<p>Exercise selector ⚙ popup escaped the viewport when the cog wrapped to a new row. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code>. <em>Recurrences: 1</em></p>`],
+  ["PB-13 · Exercise picker opener keeps changing", `<p>The opener UI has been redesigned multiple times: full-width bar → pill → slide-in drawer → sticky tab. Each redesign solved discoverability but broke another constraint. Root cause: tension between reach (always visible) and space (no room). Current: sticky tab on right edge, drag left to open.</p>`],
+  ["PB-14 · Version number not bumped on ship", `<p>AIs shipped commits without bumping the patch version or updating the changelog. Fixed: added CLAUDE.md rule 29 — version bump + changelog entry + index.html span are mandatory before any commit.</p>`],
+  ["PB-15 · Manual sets with no seq silently dropped from upload", `<p>Sets added before the <code>seq</code> field existed had <code>seq: undefined</code> and were filtered out of every Supabase upsert silently. Fixed: back-fill seq on first upload.</p>`],
+  ["PB-16 · Supabase anon key can't INSERT even with RLS disabled", `<p>RLS disable alone doesn't grant write access; <code>GRANT SELECT/INSERT/UPDATE/DELETE TO anon, authenticated</code> is also required. Table also had a uuid PK that caused PostgREST to cast the text user_id to uuid → 400. Fixed: rebuilt table with composite natural PK, added GRANT.</p>`],
+  ["PB-17 · Workout ⚙ menu out of viewport bounds", `<p>Same class as PB-10 — <code>position:absolute</code> with <code>right:0</code> / <code>left:0</code> always escapes bounds when the anchor moves. Fixed: <code>position:fixed</code> + <code>clampMenuIntoView()</code> on toggle event.</p>`],
+] as const).map(([t, b]) => coachSection(t, b)).join("");
+
+const APP_INFO_HTML = ([
+  ["Data flow", `<p>StrengthLevel → Apps Script → Google Sheet "UD" → <code>doGet</code> JSON → site (validate → compute → render). Manual sets also stored in Supabase <code>sets</code> table (anon key, composite PK).</p>`],
+  ["Key source files", `<ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
     <li><code>src/main.ts</code> — all DOM glue, render functions, event handlers</li>
     <li><code>src/metrics.ts</code> — pure 1RM / strength / percentile calculations</li>
     <li><code>src/aggregate.ts</code> — data grouping, filtering, record selection</li>
@@ -9844,9 +12319,8 @@ const APP_INFO_HTML = `
     <li><code>src/i18n.ts</code> — EN/LT translation dictionary</li>
     <li><code>src/supabase.ts</code> — Supabase client, set upload/download helpers</li>
     <li><code>src/versionName.ts</code> — Bleach zanpakutō display names for version minors</li>
-  </ul></div></details>
-  <details class="coach-section"><summary class="coach-sum">Standing rules (key highlights)</summary>
-  <div class="coach-body"><ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
+  </ul>`],
+  ["Standing rules (key highlights)", `<ul style="margin:0;padding-left:1.2rem;font-size:0.82rem;line-height:1.8">
     <li>Version: AIs bump ONLY the patch (3rd digit). Owner bumps minor/major.</li>
     <li>Save = commit + push after every change (owner sees only the live site).</li>
     <li>Every change: bump version + update changelog + update index.html span.</li>
@@ -9856,8 +12330,8 @@ const APP_INFO_HTML = `
     <li>Popup menus must preserve their open state across re-renders (rule 24).</li>
     <li>Supabase <code>sets</code> table: composite natural PK, no uuid, GRANT to anon.</li>
     <li>No-code project: optimise for AI readability, not human conventions.</li>
-  </ul></div></details>
-`;
+  </ul>`],
+] as const).map(([t, b]) => coachSection(t, b)).join("");
 
 const TECH_STACK_HTML = `
   <div style="display:flex;flex-direction:column;gap:0.4rem">
@@ -9879,174 +12353,146 @@ const TECH_STACK_HTML = `
 `;
 
 /** The "Live" training-plan page for the currently-selected athlete. */
-function renderLive(): void {
-  const box = document.getElementById("liveBody");
-  if (!box) return;
-  const username = els.athlete.value;
-  const todayD = dayNumber(todayIso());
-  const list = liveExercises(username, todayD);
-  if (!list.length) {
-    box.innerHTML = `<p class="muted">No training logged for ${escapeHtml(athleteLabel())} yet — log some sets and your plan appears here.</p>`;
-    return;
-  }
-  const coach = coachingFor(username);
-  const daysAgo = (x: LiveEx) => (Number.isFinite(x.lastDay) ? todayD - x.lastDay : 999);
-  const agoTxt = (x: LiveEx) => { const n = daysAgo(x); return n >= 999 ? "never" : n === 0 ? "today" : `${n}d ago`; };
-  const dropTxt = (x: LiveEx) => (x.drop >= 0.5 ? `<span class="live-drop">−${x.drop.toFixed(0)}%</span>` : "");
-  const exPill = (x: LiveEx) =>
-    `<button type="button" class="live-ex${x.goal ? " is-goal" : ""}" data-waexinfo="${escapeHtml(x.name)}" title="${escapeHtml(x.name)}${x.goal ? " — a goal lift" : ""} — tap for info">` +
-    `${x.goal ? `<span class="live-goal-star" title="Matches a goal" aria-hidden="true">★</span>` : ""}` +
-    `<span class="live-ex-name">${escapeHtml(displayName(x.name))}</span>` +
-    `<span class="live-ex-meta muted">${agoTxt(x)}</span>${dropTxt(x)}</button>`;
-
-  // 1) WHAT TO TRAIN — by tier, most-stale/slipped first. Primary & Secondary capped
-  //    at 6 (your focus lifts); Tertiary is the longer maintenance tail.
-  const byTier = (t: ExerciseTier) => list.filter((x) => x.tier === t).sort((a, b) => b.priority - a.priority);
-  const tierBlock = (t: ExerciseTier, cap: number, blurb: string) => {
-    const items = byTier(t);
-    if (!items.length) return "";
-    const shown = cap > 0 ? items.slice(0, cap) : items;
-    return (
-      `<div class="live-tier"><div class="live-tier-hd"><span class="live-tier-lbl">${TIER_LABELS[t]}</span> ` +
-      `<span class="muted">${blurb}${items.length > shown.length ? ` · top ${shown.length} of ${items.length}` : ""}</span></div>` +
-      `<div class="live-ex-row">${shown.map(exPill).join("")}</div></div>`
-    );
-  };
-  const trainSection =
-    `<section class="live-card"><h3 class="live-h">Train today</h3>` +
-    `<p class="live-sub muted">Your lifts by tier, the ones that have slipped most or that you've not trained in a while first.</p>` +
-    tierBlock("main", 6, "top priorities") +
-    tierBlock("second", 6, "secondary") +
-    tierBlock("third", 12, "maintenance") +
-    tierBlock("ugly", 12, "ugly — deprioritised") +
-    `</section>`;
-
-  // 2) ANTAGONIST SUPERSETS — pair an opposing-muscle lift either side. Pick the
-  //    highest-priority lift on each side; don't reuse a lift across pairs.
-  const topByMuscle = (m: MuscleGroup, used: Set<string>): LiveEx | null =>
-    list.filter((x) => x.muscles[0] === m && !used.has(x.name)).sort((a, b) => b.priority - a.priority)[0] ?? null;
-  const usedSS = new Set<string>();
-  const pairs: string[] = [];
-  for (const [a, b] of ANTAGONIST_PAIRS) {
-    const ea = topByMuscle(a, usedSS);
-    const eb = topByMuscle(b, usedSS);
-    if (ea && eb) {
-      usedSS.add(ea.name); usedSS.add(eb.name);
-      pairs.push(
-        `<div class="live-ss"><span class="live-ss-pair">${exPill(ea)}<span class="live-ss-plus">+</span>${exPill(eb)}</span>` +
-        `<span class="live-ss-why muted">${a} ⇄ ${b}</span></div>`,
-      );
-    }
-    if (pairs.length >= 5) break;
-  }
-  const ssSection = pairs.length
-    ? `<section class="live-card"><h3 class="live-h">Antagonist supersets</h3>` +
-      `<p class="live-sub muted">Alternate opposing muscles to save time and keep both sides balanced — rest one while the other works.</p>` +
-      pairs.join("") + `</section>`
-    : "";
-
-  // 2.5) PLANNED TODAY — explicit planned work from the coaching profile (e.g. Marija's
-  //      "2 sets of adductors"), with the working weight + a warm-up sized off her recent
-  //      top set for that muscle (so the warm-up tracks current strength, not a guess).
-  const plannedItems = (coach?.planned ?? []).map((p) => {
-    const top = recentTopSetForMuscle(username, p.muscle, todayD);
-    const setsTxt = `<b>${p.sets} set${p.sets === 1 ? "" : "s"}</b> of <b>${escapeHtml(p.muscle)}</b>`;
-    if (!top) {
-      return `<li>${setsTxt}${p.note ? ` <span class="muted">(${escapeHtml(p.note)})</span>` : ""} — <span class="muted">no recent weight on record, start light and feel it out.</span></li>`;
-    }
-    const warm = tidyWarmupKg(top.weight * 0.5);
-    const recentTxt = `recent top: ${top.weight} kg × ${top.reps} on ${escapeHtml(displayName(top.exercise))}, ${top.daysAgo}d ago`;
-    return `<li>${setsTxt} at ~<b>${top.weight} kg</b> <span class="muted">(${recentTxt})</span>. ` +
-      `Warm-up: 1 set ×15 at ~<b>${warm} kg</b> <span class="muted">(≈50% of recent)</span>.` +
-      (p.note ? ` <span class="muted">${escapeHtml(p.note)}</span>` : "") + `</li>`;
-  });
-  const plannedSection = plannedItems.length
-    ? `<section class="live-card"><h3 class="live-h">Planned today</h3>` +
-      `<p class="live-sub muted">Set work added to the plan, with the warm-up sized off your recent strength.</p>` +
-      `<ul class="live-list">${plannedItems.join("")}</ul></section>`
-    : "";
-
-  // 3) WARM-UPS — the muscle groups today's top lifts hit, + a simple ramp recipe.
-  const topToday = [...byTier("main"), ...byTier("second")].sort((a, b) => b.priority - a.priority).slice(0, 4);
-  const warmMuscles = [...new Set(topToday.flatMap((x) => x.muscles.slice(0, 2)))].slice(0, 6);
-  const warmSection = topToday.length
-    ? `<section class="live-card"><h3 class="live-h">Warm-ups</h3>` +
-      `<p class="live-sub muted">Before today's top lifts:</p>` +
-      `<ul class="live-list">` +
-      `<li>Raise + mobilise: ${warmMuscles.length ? warmMuscles.map((m) => escapeHtml(m)).join(" · ") : "the muscles you're training"} (5–8 min).</li>` +
-      `<li>Per lift, ramp up: 2–3 sets rising ~50% → 70% → 85% of your working weight before the first hard set.</li>` +
-      `<li>First heavy lift today: <b>${escapeHtml(displayName(topToday[0]!.name))}</b> — give it the fullest warm-up.</li>` +
-      `</ul></section>`
-    : "";
-
-  // 4) WATCH-OUTS — neglected muscle groups (no set in 21+ days) and stale primaries.
-  const lastByMuscle = new Map<MuscleGroup, number>();
-  for (const x of list) for (const m of x.muscles) lastByMuscle.set(m, Math.max(lastByMuscle.get(m) ?? -Infinity, x.lastDay));
-  const neglected = [...lastByMuscle.entries()]
-    .filter(([, d]) => todayD - d >= 21)
-    .sort((a, b) => a[1] - b[1])
-    .map(([m, d]) => `${escapeHtml(m)} <span class="muted">(${todayD - d}d)</span>`);
-  const staleMain = byTier("main").filter((x) => daysAgo(x) >= 14).slice(0, 5);
-  const watchItems: string[] = [];
-  if (neglected.length) watchItems.push(`<li>Neglected muscles (3+ weeks): ${neglected.slice(0, 8).join(" · ")}.</li>`);
-  if (staleMain.length) watchItems.push(`<li>Top lifts going stale: ${staleMain.map((x) => `${escapeHtml(displayName(x.name))} <span class="muted">(${agoTxt(x)})</span>`).join(" · ")}.</li>`);
-  const watchSection = watchItems.length
-    ? `<section class="live-card live-warn"><h3 class="live-h">Watch-outs</h3><ul class="live-list">${watchItems.join("")}</ul></section>`
-    : "";
-
-  // 0) GOALS & CAUTIONS — the athlete's coaching profile (goals, injury cautions +
-  //    maintenance areas, style notes), the lifts they do that cover a caution muscle
-  //    (e.g. adductor work for adductor pain), and an editor to change any of it.
-  const careMuscles = maintainMusclesFor(coach);
-  const careLifts = careMuscles.length
-    ? list.filter((x) => x.muscles.some((m) => careMuscles.includes(m))).sort((a, b) => b.priority - a.priority).slice(0, 6)
-    : [];
-  const ta = (key: string, label: string, vals: string[] | undefined) =>
-    `<label class="live-edit-f"><span class="live-edit-lbl">${label}</span>` +
-    `<textarea class="live-edit" data-livefield="${key}" rows="3" placeholder="one per line…">${escapeHtml((vals ?? []).join("\n"))}</textarea></label>`;
-  const editor =
-    `<details class="live-editor"><summary class="live-editor-sum">✎ Edit plan</summary>` +
-    `<div class="live-editor-body">` +
-    ta("goals", "Goals", coach?.goals) +
-    ta("notes", "Style / preferences", coach?.notes) +
-    ta("cautions", "Cautions (injuries)", coach?.cautions) +
-    ta("maintain", "Keep maintaining (muscle names auto-detected)", coach?.maintain) +
-    `<button type="button" class="live-ss-toggle wa-name-opt${coach?.pushSupersets ? " is-on" : ""}" data-livesupersets="1" title="Lean on antagonist supersets (e.g. rushes rests)">Lean on supersets</button>` +
-    `<div class="live-editor-actions"><button type="button" class="live-save">Save</button><span class="live-edit-msg muted"></span></div>` +
-    `</div></details>`;
-  const li = (s: string) => `<li>${escapeHtml(s)}</li>`;
-  const hasProfile = !!(coach && (coach.goals?.length || coach.notes?.length || coach.cautions?.length || coach.maintain?.length));
-  const coachSection =
-    `<section class="live-card live-goals"><h3 class="live-h">Goals &amp; cautions</h3>` +
-    (hasProfile
-      ? (coach!.goals?.length ? `<div class="live-block"><div class="live-block-hd">Goals</div><ul class="live-list">${coach!.goals.map(li).join("")}</ul></div>` : "") +
-        (coach!.notes?.length ? `<div class="live-block"><div class="live-block-hd">Style</div><ul class="live-list">${coach!.notes.map(li).join("")}</ul></div>` : "") +
-        (coach!.cautions?.length || coach!.maintain?.length
-          ? `<div class="live-block live-block-warn"><div class="live-block-hd">⚠ Cautions — keep maintaining</div><ul class="live-list">` +
-            (coach!.cautions ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("") +
-            (coach!.maintain?.length ? `<li>Keep training: <b>${coach!.maintain.map((m) => escapeHtml(m)).join(" · ")}</b></li>` : "") +
-            `</ul>` +
-            (careLifts.length ? `<div class="live-ex-row">${careLifts.map(exPill).join("")}</div>` : "") +
-            `</div>`
-          : "")
-      : `<p class="live-sub muted">No plan for ${escapeHtml(athleteLabel())} yet — add goals, cautions and preferences below.</p>`) +
-    editor +
-    `</section>`;
-  // When the athlete is flagged to lean on supersets (e.g. rushes rests), show that
-  // section right after the plan; otherwise it sits lower.
-  const ordered = coach?.pushSupersets
-    ? coachSection + plannedSection + trainSection + ssSection + warmSection + watchSection
-    : coachSection + plannedSection + trainSection + warmSection + ssSection + watchSection;
-
-  box.innerHTML =
-    `<h2 class="live-title">${escapeHtml(athleteLabel())}</h2>` +
-    `<p class="live-for muted">Training plan — switch athlete on the Analysis view.</p>` +
-    ordered;
-}
-
 // ---- World records page ---------------------------------------------------
 // Which trio lift the records table is showing (mutually-exclusive pill set).
 let recordsLift: PowerLift = "total";
+// Sex shown in the strength-percentile panel (the curves are sex-specific). Cycles M↔W.
+let recordsStdSex: Sex = "m";
+/** Ordinal suffix: 1→1st, 22→22nd, 23→23rd, 72→72nd, 95→95th. */
+function ordinal(n: number): string {
+  const v = n % 100, s = ["th", "st", "nd", "rd"];
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+// ---- Personal benchmarks (Phase 3): the owner's OWN labelled targets per lift,
+// GLOBAL (one list per lift, applies to everyone), each row in ×bw OR kg. Pure shape +
+// "is it met?" maths live in benchmarks.ts; here is the localStorage glue + editor. ----
+const BENCHMARK_STORE_KEY = "colosseum.benchmarks.v1";
+const BENCHMARK_REF_BW = 80; // nominal bodyweight used only to ORDER a mixed ×bw/kg list
+let benchmarks: BenchmarkStore = loadBenchmarks();
+function loadBenchmarks(): BenchmarkStore {
+  try { return cleanStore(JSON.parse(localStorage.getItem(BENCHMARK_STORE_KEY) ?? "{}")); }
+  catch { return {}; }
+}
+/** This lift's benchmark rows (already stored easiest→hardest), or []. */
+function benchmarksFor(exerciseName: string): Benchmark[] {
+  return benchmarks[benchKey(exerciseName)] ?? [];
+}
+/** Replace a lift's benchmark list (kept sorted; empty list drops the key) + persist. */
+function commitBenchmarks(exerciseName: string, list: Benchmark[]): void {
+  const key = benchKey(exerciseName);
+  const sorted = sortBenchmarks(list, BENCHMARK_REF_BW);
+  if (sorted.length) benchmarks[key] = sorted; else delete benchmarks[key];
+  saveJson(BENCHMARK_STORE_KEY, benchmarks);
+}
+/** The benchmarks editor / read-out shown under the percentile table. Admins get
+ * editable rows (label · value · ×|kg unit pill · ✕); locked/spectator views see the
+ * targets read-only. */
+function benchmarksHtml(exerciseName: string): string {
+  const list = benchmarksFor(exerciseName);
+  const exAttr = escapeHtml(exerciseName);
+  const admin = canEditGlobalMeta();
+  if (!admin) {
+    if (!list.length) return "";
+    const chips = list.map((b) => `<span class="rec-bm-chip">${escapeHtml(b.label)} <b>${b.unit === "kg" ? `${fmt(b.value)}kg` : `${b.value}×`}</b></span>`).join("");
+    return `<div class="rec-bm" data-bm-ex="${exAttr}"><div class="rec-bm-head"><span class="rec-bm-title">Benchmarks</span></div><div class="rec-bm-chips">${chips}</div></div>`;
+  }
+  const rows = list.map((b, i) =>
+    `<div class="rec-bm-row" data-bmidx="${i}">` +
+    `<input class="rec-bm-label" data-bmfield="label" value="${escapeHtml(b.label)}" placeholder="Label" aria-label="Benchmark label" />` +
+    `<input class="rec-bm-val" data-bmfield="value" type="number" step="0.05" min="0" value="${b.value}" aria-label="Benchmark value" />` +
+    `<button type="button" class="rec-bm-unit" data-bmunit title="Toggle unit — ×bodyweight or kg">${b.unit === "kg" ? "kg" : "×"}</button>` +
+    `<button type="button" class="rec-bm-del" data-bmdel title="Remove this benchmark">✕</button>` +
+    `</div>`).join("");
+  return `<div class="rec-bm" data-bm-ex="${exAttr}">` +
+    `<div class="rec-bm-head"><span class="rec-bm-title">Your benchmarks</span>` +
+    `<button type="button" class="rec-bm-add" data-bmadd title="Add a benchmark for this lift">+ add</button></div>` +
+    (rows ? `<div class="rec-bm-rows">${rows}</div>` : `<div class="rec-pct-sub muted">No benchmarks yet — set your own targets for this lift.</div>`) +
+    `</div>`;
+}
+
+/** The "Strength percentiles (estimated)" panel for the selected lift + sex: the 3
+ * population bw-ratio curves, plus where each athlete of that sex lands on the gym curve.
+ * Phase 2 of docs/ceo/strength-percentiles-benchmarks.md. */
+function recordsPercentileHtml(byLift: Map<PowerLift, Map<string, number>>, roster: { username: string; user: string }[]): string {
+  // No per-lift standard exists for the summed Total, so the panel falls back to Squat
+  // when Total is picked — the feature stays visible on load instead of hiding behind a note.
+  const panelLift: Exclude<PowerLift, "total"> = recordsLift === "total" ? "squat" : recordsLift;
+  const ex = LIFT_EXERCISE[panelLift];
+  if (!hasStandards(ex)) return "";
+  const s = recordsStdSex;
+  const bms = benchmarksFor(ex);
+  const you = roster.filter((u) => athProfile(u.username)?.sex === s).map((u) => {
+    const p = athProfile(u.username)!;
+    const best = byLift.get(panelLift)?.get(u.username);
+    if (best == null || !p.weight) return "";
+    const ratio = best / p.weight;
+    const pct = percentileFor(ex, s, ratio, "strengthlevel");
+    if (pct == null) return "";
+    const met = topMet(bms, best, p.weight);
+    const metBadge = met ? ` · <b class="rec-bm-met">${escapeHtml(met.label)}</b>` : "";
+    const metTip = met ? ` — meets your “${met.label}” benchmark (${met.unit === "kg" ? `${fmt(met.value)}kg` : `${met.value}× = ${fmt(benchmarkKg(met, p.weight))}kg`})` : "";
+    return `<span class="rec-pct-you-chip" title="${escapeHtml(u.user)}: best ≈ ${fmt(best)}kg ÷ ${fmt(p.weight)}kg bw = ${ratio.toFixed(2)}× → ~${ordinal(pct)} percentile among gym (StrengthLevel) lifters${escapeHtml(metTip)}">${escapeHtml(u.user)} <b>${ratio.toFixed(2)}×</b> ≈ <b>${ordinal(pct)}</b>${metBadge}</span>`;
+  }).filter(Boolean).join("");
+  const totalNote = recordsLift === "total"
+    ? `<div class="rec-pct-sub muted">Total has no single standard — showing Squat. Tap Squat / Bench / Deadlift above to switch.</div>`
+    : "";
+  return `<section class="rec-pct-panel">` +
+    `<div class="rec-pct-head"><span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-lift muted">${escapeHtml(LIFT_LABEL[panelLift])}</span>` +
+    `<span class="rec-pct-est" title="ESTIMATED. The Gym row is seeded from StrengthLevel standards; General & Professional are derived estimates — real data pending (#research).">≈ est</span>` +
+    `<button type="button" class="rec-pct-sex" data-recstdsex title="Toggle sex — the curves are sex-specific">${s === "f" ? "W" : "M"}</button></div>` +
+    `<div class="rec-pct-sub muted">1RM as ×bodyweight at each percentile, by population.</div>` +
+    totalNote +
+    percentileTableHtml(ex, s) +
+    (you ? `<div class="rec-pct-you">${you}</div>` : "") +
+    benchmarksHtml(ex) +
+    `</section>`;
+}
+
+/** The 3-population ×bw curve table for a lift + sex — shared by the World Records page
+ *  and the Index lift card so the two never drift. */
+function percentileTableHtml(exerciseName: string, sex: Sex): string {
+  const headCols = PERCENTILES.map((p) => `<th class="num">${ordinal(p)}</th>`).join("");
+  const rows = (["general", "strengthlevel", "pro"] as Population[]).map((pop) => {
+    const c = curveFor(exerciseName, sex, pop)!;
+    return `<tr class="rec-pct-${pop}"><td>${escapeHtml(POPULATION_LABEL[pop])}</td>${c.map((r) => `<td class="num">${r.toFixed(2)}×</td>`).join("")}</tr>`;
+  }).join("");
+  return `<div class="data-table-wrap"><table class="data-table rec-pct-table"><thead><tr><th>Population</th>${headCols}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/** Index lift-card version of the strength-percentile panel (Phase 4): the curve table
+ *  for the CURRENT athlete's sex, that athlete's own placement, and the per-lift
+ *  benchmarks. Returns "" for lifts we have no standard for (most exercises). */
+function liftPercentileHtml(name: string): string {
+  if (!hasStandards(name)) return "";
+  const me = els.athlete.value;
+  const prof = athProfile(me);
+  const sex: Sex = prof?.sex === "f" ? "f" : "m";
+  const best = bestE1rmByUser(name).get(me);
+  let youHtml = "";
+  if (prof?.weight && best != null) {
+    const ratio = best / prof.weight;
+    const pct = percentileFor(name, sex, ratio, "strengthlevel");
+    if (pct != null) {
+      const met = topMet(benchmarksFor(name), best, prof.weight);
+      const metBadge = met ? ` · <b class="rec-bm-met">${escapeHtml(met.label)}</b>` : "";
+      youHtml = `<div class="rec-pct-you"><span class="rec-pct-you-chip" title="Your best ≈ ${fmt(best)}kg ÷ ${fmt(prof.weight)}kg bw = ${ratio.toFixed(2)}× → ~${ordinal(pct)} percentile among gym (StrengthLevel) lifters">${escapeHtml(athleteLabel())} <b>${ratio.toFixed(2)}×</b> ≈ <b>${ordinal(pct)}</b>${metBadge}</span></div>`;
+    }
+  }
+  return `<details class="ex-group ex-model-fold rec-pct-fold"><summary class="ex-group-hd">📊 <span class="rec-pct-title">Strength percentiles</span> <span class="rec-pct-est" title="ESTIMATED — the Gym row is from StrengthLevel standards; General & Professional are derived estimates, real data pending (#research).">≈ est</span></summary>` +
+    `<div class="ex-group-why muted">Where this lift sits as 1RM ×bodyweight across populations (estimated) and your placement.</div>` +
+    percentileTableHtml(name, sex) +
+    youHtml +
+    `</details>`;
+}
+
+/** The per-lift benchmarks as its OWN collapsible fold (owner: a separate dropdown on the
+ * exercise INFO page). Admins edit here; locked views see read-only chips. Empty for a
+ * non-admin lift with no benchmarks set. */
+function benchmarksFoldHtml(name: string): string {
+  const inner = benchmarksHtml(name);
+  if (!inner) return "";
+  return `<details class="ex-group ex-model-fold"><summary class="ex-group-hd">🎯 <span class="bm-fold-ttl">Benchmarks</span></summary>${inner}</details>`;
+}
 
 /** Each athlete's BEST estimated 1RM for one logged exercise, username → e1rm
  * (kg). Mirrors the leaderboard pipeline so the numbers match that page. */
@@ -10140,7 +12586,8 @@ function renderRecords(): void {
         `<thead><tr><th>Athlete</th><th class="num">Ht</th><th class="num">Lean</th><th class="num">Fat</th><th class="num">Opt&nbsp;wt</th><th class="num">Class</th><th class="num">WR</th><th class="num">Best*</th><th class="num">%WR</th></tr></thead>` +
         `<tbody>${rows}</tbody></table></div>` +
         `<p class="rec-foot muted">Opt&nbsp;wt, Lean &amp; Fat are kg at the estimated natural ceiling (power body-fat). WR = world record for that optimal class. Best* = the athlete's best ESTIMATED 1RM from logged sets (Total = the three summed), so it's a rough gauge, not a meet lift.</p>`
-      : `<p class="muted">No athletes with a height & sex on file to place in a weight class.</p>`);
+      : `<p class="muted">No athletes with a height & sex on file to place in a weight class.</p>`) +
+    recordsPercentileHtml(byLift, roster);
 }
 
 function renderStatsEdit(): void {
@@ -10364,7 +12811,6 @@ function setupLive(): void {
       if (keepPlanned?.length) prof.planned = keepPlanned;
       coachingOverrides[username] = prof;
       saveCoaching();
-      renderLive();
     }
   });
 }
@@ -10508,14 +12954,139 @@ type PriorityLevel = "max" | "active" | "passive" | "maintain";
 const PRIORITY_LEVELS: PriorityLevel[] = ["max", "active", "passive", "maintain"];
 const PRIORITY_LABEL: Record<PriorityLevel, string> = { max: "Max effort", active: "Active", passive: "Passive", maintain: "Maintain" };
 const PRIORITY_ORDER: Record<PriorityLevel, number> = { max: 0, active: 1, passive: 2, maintain: 3 };
-const PRIORITY_MAX = 10;
-interface PriorityEntry { level: PriorityLevel; target: number }
+// How HARD each set is — the target sets number assumes HARD sets by default, but a
+// passive/maintenance lift may only need mid sets (3–8 RIR) or half-rep sets (the
+// maintenance minimum). Stored only when the owner overrides the level's default.
+type PriorityEffort = "hard" | "mid" | "half";
+const EFFORT_LEVELS: PriorityEffort[] = ["hard", "mid", "half"];
+const EFFORT_LABEL: Record<PriorityEffort, string> = { hard: "Hard", mid: "Mid", half: "Half" };
+const EFFORT_HINT: Record<PriorityEffort, string> = { hard: "near failure", mid: "3–8 RIR", half: "½ max reps" };
+const EFFORT_TIP: Record<PriorityEffort, string> = {
+  hard: "Hard sets — taken near failure (0–2 reps in reserve).",
+  mid: "Mid sets — 3–8 reps in reserve, not to failure.",
+  half: "Half sets — about half your max reps, the minimum to maintain.",
+};
+// `rank` = the lift's PRIORITY TIER, a named dial SEPARATE from effort: Top → Second →
+// Optional. The Focus-lifts list sorts by rank FIRST, then effort level — so a lift can
+// be Top priority but only "Maintain". Defaults to "second" when unset.
+type PriorityRank = "top" | "second" | "third" | "optional";
+const PRIORITY_RANKS: PriorityRank[] = ["top", "second", "third", "optional"];
+const RANK_LABEL: Record<PriorityRank, string> = { top: "Top", second: "Second", third: "Third", optional: "Optional" };
+const RANK_ORDER: Record<PriorityRank, number> = { top: 0, second: 1, third: 2, optional: 3 };
+// `order` = manual drag position, used only in the "manual" sort mode (below).
+interface PriorityEntry { level: PriorityLevel; target: number; goalKg?: number; effort?: PriorityEffort; rank?: PriorityRank; order?: number }
+const rankOf = (e: PriorityEntry): PriorityRank => e.rank ?? "second";
+// How the Focus-lifts list is ordered — the owner picks via the ↕ sort pill: by Top
+// (priority tier, then effort), by Effort (level only), or Drag (manual ≡ order). A
+// device-local view pref (rule 41), so it doesn't sync.
+type PrioSort = "rank" | "effort" | "manual";
+const PRIO_SORTS: PrioSort[] = ["rank", "effort", "manual"];
+const PRIO_SORT_LABEL: Record<PrioSort, string> = { rank: "Top", effort: "Effort", manual: "Drag" };
+const PRIO_SORT_KEY = "colosseum.prioSort";
+let prioSortMode: PrioSort = (() => {
+  try { const v = localStorage.getItem(PRIO_SORT_KEY); return v === "effort" || v === "manual" ? v : "rank"; } catch { return "rank"; }
+})();
+const savePrioSort = () => { try { localStorage.setItem(PRIO_SORT_KEY, prioSortMode); } catch { /* ignore */ } };
 const PRIORITIES_KEY = "colosseum.priorities.v1";
 const prioritiesStore = loadJsonObject<Record<string, Record<string, PriorityEntry>>>(PRIORITIES_KEY);
 function savePriorities(): void { saveJson(PRIORITIES_KEY, prioritiesStore); }
 // Which priority rows have their "related lifts" dropdown open (in-session, by lift name).
 const prioExpanded = new Set<string>();
+// Which focus-lift SECTIONS (grouped by rank or level) are COLLAPSED — default open, keyed
+// "<dim>:<key>". In-session, so it survives the plan's re-renders (rule 24).
+const prioSectionCollapsed = new Set<string>();
 function athletePriorities(user: string): Record<string, PriorityEntry> { return prioritiesStore[user] ?? {}; }
+/** Reusable comparator ordering exercise NAMES by the athlete's PLAN priority — the SAME
+ * order the Plan page's default uses (rank Top→Second→Optional → effort level → target).
+ * NON-priority lifts sort AFTER all prioritized ones (stable among themselves). Returns
+ * null when the athlete has no priorities, so callers keep their own order. The ONE source
+ * every grouped view uses to "sort by priority", so they never drift from the plan page. */
+function priorityComparator(user: string): ((a: string, b: string) => number) | null {
+  const pri = prioritiesStore[user];
+  if (!pri || Object.keys(pri).length === 0) return null;
+  return (a, b) => {
+    const pa = pri[a], pb = pri[b];
+    if (!!pa !== !!pb) return pa ? -1 : 1; // prioritized before non-priority
+    if (!pa || !pb) return 0;              // both non-priority → keep input order (stable sort)
+    return (RANK_ORDER[rankOf(pa)] - RANK_ORDER[rankOf(pb)])
+      || (PRIORITY_ORDER[pa.level] - PRIORITY_ORDER[pb.level])
+      || (pb.target - pa.target);
+  };
+}
+/** History view pref (device-local, rule 41): sort exercises within each day/week/month
+ * by the athlete's plan priorities. DEFAULT ON (owner) — only an explicit "0" turns it off. */
+// History exercise SORT mode — the ⚙ pill cycles: priority → recency → volume → logged
+// (owner added recency + volume). Each group's exercises are ordered accordingly.
+const WO_SORT_MODES: readonly HistorySortMode[] = ["priority", "recency", "volume", "logged", "similarity"];
+const WO_SORT_LABEL: Record<HistorySortMode, string> = { priority: "Prio", recency: "Recent", volume: "Volume", logged: "Logged", similarity: "Similar" };
+const WO_SORT_SUB: Record<HistorySortMode, string> = { priority: "priority", recency: "most recent", volume: "volume", logged: "logged order", similarity: "similar grouped" };
+// "similarity" sort — cluster related exercises adjacently rather than chronologically (owner: the
+// daily log mixes sets anyway, so for week/month especially a similarity grouping reads better).
+// Key = body-region order (INDEX_MUSCLES, so neighbouring muscles like shoulders↔forearms sit
+// near each other) ‖ name-family (shared leading word, so every "Handstand …" variant groups) ‖
+// the name itself for a stable tie-break. Sets WITHIN an exercise stay chronological (unaffected).
+const SIM_SKIP_WORDS = new Set(["one", "two", "single", "double", "arm", "arms", "leg", "legs", "dumbbell", "barbell", "cable", "machine", "smith", "seated", "standing", "lying", "incline", "decline", "kneeling", "assisted", "band", "banded", "weighted", "wide", "close", "narrow", "alternating", "bent", "reverse", "front", "back", "side", "the", "with", "of", "a", "to"]);
+function simFamily(name: string): string {
+  const words = name.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(Boolean);
+  for (const w of words) if (!SIM_SKIP_WORDS.has(w)) return w;
+  return words[0] ?? "";
+}
+function similarityKey(name: string): string {
+  const mi = INDEX_MUSCLES.indexOf(muscleGroup(name));
+  return `${String(mi < 0 ? 99 : mi).padStart(2, "0")}|${simFamily(name)}|${name.toLowerCase()}`;
+}
+const WO_SORT_KEY = "colosseum.woSortMode.v1";
+let woSortMode: HistorySortMode = (() => {
+  try {
+    const v = localStorage.getItem(WO_SORT_KEY);
+    if (v && (WO_SORT_MODES as readonly string[]).includes(v)) return v as HistorySortMode;
+    return localStorage.getItem("colosseum.woSortByPriority") === "0" ? "logged" : "priority"; // migrate old boolean
+  } catch { return "priority"; }
+})();
+function saveWoSortMode(): void { try { localStorage.setItem(WO_SORT_KEY, woSortMode); } catch { /* ignore */ } }
+const nextWoSortMode = (m: HistorySortMode): HistorySortMode => WO_SORT_MODES[(WO_SORT_MODES.indexOf(m) + 1) % WO_SORT_MODES.length]!;
+/** Per-exercise sort key from a group's sets (higher = ordered first): "recency" = the
+ * exercise's LAST set position in the day (later logged → higher), "volume" = its total
+ * weight×reps. Used by the history sort pill for the recency / volume orders. */
+function exerciseSortMetric(sets: readonly SetRecord[], mode: HistorySortMode): Map<string, number> {
+  const m = new Map<string, number>();
+  sets.forEach((s, i) => {
+    if (mode === "recency") m.set(s.exerciseName, i); // last occurrence wins (sets are date-ordered)
+    else m.set(s.exerciseName, (m.get(s.exerciseName) ?? 0) + (setVolume(s.weight, s.reps) ?? 0)); // volume
+  });
+  return m;
+}
+// The rank / effort-level pills open a small PICK MENU (not tap-to-cycle, owner request).
+// position:fixed + clamp into the viewport (rule 32), mirroring openLiftMenu.
+function closePrioPickMenu(): void { document.getElementById("prioPickMenu")?.remove(); }
+function openPrioPickMenu(anchor: HTMLElement, ex: string, kind: "rank" | "level" | "both"): void {
+  closePrioPickMenu(); closeLiftMenu();
+  const pri = prioritiesStore[els.athlete.value];
+  if (!pri?.[ex]) return;
+  // One control for BOTH dials (owner): a "both" menu stacks a Rank section over an Effort
+  // section; each option still carries its own kind so the existing data-priopick handler
+  // sets the right dial. A single-kind menu (legacy) just renders that one section.
+  const section = (k: "rank" | "level"): string => {
+    const cur: string = k === "rank" ? rankOf(pri[ex]!) : pri[ex]!.level;
+    const opts: { val: string; label: string; cls: string }[] = k === "rank"
+      ? PRIORITY_RANKS.map((r) => ({ val: r, label: RANK_LABEL[r], cls: `prio-rank-${r}` }))
+      : PRIORITY_LEVELS.map((l) => ({ val: l, label: PRIORITY_LABEL[l], cls: `prio-level-${l}` }));
+    const head = kind === "both" ? `<div class="prio-pick-lbl">${k === "rank" ? "Rank" : "Effort"}</div>` : "";
+    return head + opts.map((o) =>
+      `<button type="button" class="prio-pick-row ${o.cls}${o.val === cur ? " is-on" : ""}" ` +
+      `data-priopick="${escapeHtml(o.val)}" data-priopickex="${escapeHtml(ex)}" data-priopickkind="${k}">${escapeHtml(o.label)}</button>`,
+    ).join("");
+  };
+  const rows = kind === "both" ? section("rank") + section("level") : section(kind);
+  const menu = document.createElement("div");
+  menu.id = "prioPickMenu";
+  menu.className = `prio-pick-menu${kind === "both" ? " is-both" : ""}`;
+  menu.innerHTML = rows;
+  document.body.appendChild(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.round(r.bottom + 4)}px`;
+  menu.style.left = `${Math.round(Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)))}px`;
+}
 /** Weekly target sets a level SUGGESTS — Maintain ≈ keep your recent month average. */
 function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "max") return 6;
@@ -10523,6 +13094,19 @@ function suggestedTarget(level: PriorityLevel, monthAvg: number): number {
   if (level === "passive") return 2;
   return Math.max(1, Math.round(monthAvg)); // maintain = match recent
 }
+/** The set intensity a level ASSUMES by default — hard for Max/Active, easing to mid
+ *  (Passive) and half-rep (Maintain). The owner can override it per lift. */
+function defaultEffort(level: PriorityLevel): PriorityEffort {
+  return level === "maintain" ? "half" : level === "passive" ? "mid" : "hard";
+}
+function effortOf(e: PriorityEntry): PriorityEffort { return e.effort ?? defaultEffort(e.level); }
+/** Step the weekly target. Below 2 it moves in 0.5s so sub-1 frequencies are reachable
+ *  (0.5 = one set every 2 weeks); above 2 it moves in whole sets. Clamped to [0, 20]. */
+function stepTarget(cur: number, dir: number): number {
+  const step = (dir < 0 ? cur <= 2 : cur < 2) ? 0.5 : 1;
+  return Math.round(Math.max(0, Math.min(20, cur + dir * step)) * 2) / 2;
+}
+function fmtTarget(v: number): string { return Number.isInteger(v) ? String(v) : v.toFixed(1); }
 /** Avg sets/week actually done over the trailing 30 days, for one athlete+exercise.
  * A synthetic combinable/comparable lift (e.g. "Squat pattern") has nothing logged
  * under its own name, so aggregate its member lifts' sets — that's its real volume. */
@@ -10533,11 +13117,51 @@ function exerciseMonthAvg(user: string, ex: string): number {
     : setsForUserExercise(activeRecords(), user, ex);
   return weeklySetStats(explodeForCount(recs), todayIso()).monthAvgPerWeek;
 }
+/** The athlete's BEST estimated 1RM (kg) for a lift — across the members for a
+ * synthetic — or null if none. Used to show progress toward a priority's goal. */
+function bestE1rmFor(user: string, ex: string): number | null {
+  const formula = currentFormula();
+  const members = syntheticMembers(ex);
+  const recs = members.length
+    ? members.flatMap((m) => setsForUserExercise(activeRecords(), user, m))
+    : setsForUserExercise(activeRecords(), user, ex);
+  let best: number | null = null;
+  for (const r of recs) { const e = addedWeight1RM(r, formula); if (e !== null && (best === null || e > best)) best = e; }
+  return best;
+}
 function renderWorkoutPlan(): void {
   const user = els.athlete.value;
   const pri = athletePriorities(user);
-  const names = Object.keys(pri).sort((a, b) =>
-    (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b));
+  // Per-lift staleness for the rows: how many days since trained, and how far the lift
+  // has decayed below its all-time peak 1RM (the old "Train today" signal, now inline).
+  const todayD = dayNumber(todayIso());
+  const liveByName = new Map(liveExercises(user, todayD).map((x) => [x.name, x]));
+  const staleOf = (ex: string): { daysAgo: number; drop: number } => {
+    const members = syntheticMembers(ex);
+    if (!members.length) {
+      const lx = liveByName.get(ex);
+      return { daysAgo: lx && Number.isFinite(lx.lastDay) ? todayD - lx.lastDay : 999, drop: lx?.drop ?? 0 };
+    }
+    let lastDay = -Infinity;
+    for (const m of members) { const lx = liveByName.get(m); if (lx) lastDay = Math.max(lastDay, lx.lastDay); }
+    const ref = liveByName.get(referenceMemberFor(ex) ?? "");
+    return { daysAgo: Number.isFinite(lastDay) ? todayD - lastDay : 999, drop: ref?.drop ?? 0 };
+  };
+  // Order the rows by the chosen sort mode (the ↕ pill): Top (rank tier → effort), Effort
+  // (level only), or Drag (manual `order`, falling back to rank for un-dragged entries).
+  const byEffort = (a: string, b: string) =>
+    (PRIORITY_ORDER[pri[a]!.level] - PRIORITY_ORDER[pri[b]!.level]) || (pri[b]!.target - pri[a]!.target) || a.localeCompare(b);
+  const byRank = (a: string, b: string) =>
+    (RANK_ORDER[rankOf(pri[a]!)] - RANK_ORDER[rankOf(pri[b]!)]) || byEffort(a, b);
+  const byManual = (a: string, b: string) => {
+    const oa = pri[a]!.order, ob = pri[b]!.order;
+    const ha = typeof oa === "number", hb = typeof ob === "number";
+    if (ha && hb) return oa! - ob!;
+    if (ha !== hb) return ha ? -1 : 1; // dragged entries first, in their order
+    return byEffort(a, b);             // UN-dragged ones default to EFFORT order (owner: untouched = by effort)
+  };
+  const names = Object.keys(pri).sort(
+    prioSortMode === "effort" ? byEffort : prioSortMode === "manual" ? byManual : byRank);
   // ---- Lift↔pattern relations (CEO: docs/ceo/lift-vs-pattern-overlap.md, Phase 1) ----
   // Every lift stays a FLAT row in its OWN effort order — NOT nested. Each row has a
   // dropdown of related lifts, split by RELATION:
@@ -10561,6 +13185,11 @@ function renderWorkoutPlan(): void {
     // Same-lift (combinable) first, then related patterns.
     return [...map].map(([n, same]) => ({ name: n, same })).sort((a, b) => Number(b.same) - Number(a.same));
   };
+  // Which kind of synthetic GROUP a lift IS (for highlighting): combinable (same-lift
+  // mix) vs comparable (a pattern), or null for a plain lift.
+  const groupKind = (n: string): "combine" | "compare" | null =>
+    effectiveCombinableGroups().some((g) => (g.derivedName ?? g.label) === n) ? "combine"
+    : effectiveComparableGroups().some((g) => (g.derivedName ?? g.label) === n) ? "compare" : null;
   // A COMBINABLE representation of a lift you already track is the SAME lift, so it must
   // NOT be addable (can't plan SQ mix AND Squat). Block those from the suggestions.
   const sameLiftBlocked = new Set<string>();
@@ -10570,23 +13199,41 @@ function renderWorkoutPlan(): void {
   // then individual lifts. Exclude anything already a focus OR a same-lift duplicate.
   const has = new Set(names);
   const addable = (n: string) => !has.has(n) && !sameLiftBlocked.has(n);
+  // For a specific lift that belongs to a COMPARABLE pattern not yet tracked, offer to add
+  // it as that PATTERN ("compare") instead of the specific lift — the owner's "compare vs
+  // specific" choice. null when there's no such pattern (or it's already a focus).
+  const comparePatternFor = (n: string): string | null => {
+    for (const g of comparableGroupsForEx(n)) { const p = g.derivedName ?? g.label; if (!has.has(p)) return p; }
+    return null;
+  };
   const trained = exerciseCounts(activeRecords(), user).map((c) => c.exerciseName);
   const synthSug = availableSyntheticNames(trained).filter(addable);
   const realSug = trained.filter(addable);
-  const suggestions: { name: string; synth: boolean }[] = [
-    ...synthSug.map((name) => ({ name, synth: true })),
-    ...realSug.map((name) => ({ name, synth: false })),
+  const suggestions: { name: string; synth: boolean; cmp: string | null }[] = [
+    ...synthSug.map((name) => ({ name, synth: true, cmp: null })),
+    ...realSug.map((name) => ({ name, synth: false, cmp: comparePatternFor(name) })),
   ].slice(0, 16);
 
   const rowHtml = (ex: string): string => {
     const e = pri[ex]!;
     const mg = mgsFor(ex)[0];
-    const avg = exerciseMonthAvg(user, ex);
+    const st = staleOf(ex);
+    const agoTxt = st.daysAgo >= 999 ? "never" : st.daysAgo === 0 ? "today" : `${st.daysAgo}d`;
+    const staleWarn = st.daysAgo >= 21 || st.drop >= 8;
+    const staleHtml = `<span class="prio-stale${staleWarn ? " is-warn" : ""}" title="Last trained ${st.daysAgo >= 999 ? "never" : `${st.daysAgo}d ago`} · ${st.drop >= 0.5 ? `${st.drop.toFixed(0)}% below your best 1RM (decayed)` : "at your best 1RM"}">${agoTxt}${st.drop >= 0.5 ? ` · ↓${st.drop.toFixed(0)}%` : ""}</span>`;
     const related = relatedOf(ex);
     const open = prioExpanded.has(ex);
-    const caret = related.length
-      ? `<button type="button" class="prio-expand" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="${related.length} related lift${related.length === 1 ? "" : "s"} — tap to ${open ? "hide" : "show"}">${open ? "▾" : "▸"}<span class="prio-rel-n">${related.length}</span></button>`
-      : `<span class="prio-expand is-empty"></span>`;
+    // No caret — the whole row toggles its detail on tap (data-prioexpand on .prio-main).
+    // 1RM GOAL (owner's Phase-2 "add goals"): an optional target kg you chase, shown
+    // against the current best 1RM with a % progress.
+    const best = bestE1rmFor(user, ex);
+    const goal = e.goalKg;
+    const pct = goal && best != null && goal > 0 ? Math.min(100, Math.round((best / goal) * 100)) : null;
+    const goalHtml = open
+      ? `<div class="prio-goal"><span class="prio-goal-lbl">🎯 Goal</span>` +
+        `<input type="number" class="prio-goal-in" data-priogoal="${escapeHtml(ex)}" inputmode="numeric" step="2.5" min="0" value="${goal ?? ""}" placeholder="kg" aria-label="1RM goal (kg) for ${escapeHtml(displayName(ex))}" />` +
+        `<span class="prio-goal-cur muted">${best != null ? `now ~${fmt(best)}kg` : "no 1RM yet"}${goal && best != null ? ` · ${pct}%` : ""}</span></div>`
+      : "";
     const relPanel = open && related.length
       ? `<div class="prio-related">` + related.map(({ name: r, same }) => {
           const rAvg = exerciseMonthAvg(user, r).toFixed(1);
@@ -10600,50 +13247,190 @@ function renderWorkoutPlan(): void {
           return `<button type="button" class="prio-rel-chip${isPat ? " is-synth" : ""}${isPri ? " is-pri" : ""}" data-planopen="${escapeHtml(r)}" title="Related${isPat ? " pattern" : ""}${isPri ? " · already a focus" : ""} — ~${rAvg}/wk. Tap to open.">${isPat ? "✦ " : ""}${escapeHtml(displayName(r))} <span class="prio-rel-avg">~${rAvg}</span></button>`;
         }).join("") + `</div>`
       : "";
-    return `<div class="prio-row${open ? " is-open" : ""}" data-prioex="${escapeHtml(ex)}">` +
-      caret +
-      `<button type="button" class="prio-main" data-planopen="${escapeHtml(ex)}" title="Open ${escapeHtml(displayName(ex))}">` +
-      `<span class="prio-name">${escapeHtml(displayName(ex))}</span>` +
+    const gk = groupKind(ex); // combinable / comparable group → highlight the row
+    // Only the recency badge stays in the row's detail now — the weekly TARGET stepper and
+    // the set INTENSITY pill moved INTO the full exercise card (data-planopen overlay), where
+    // they sit beside the working weights / warm-up they prescribe. The Open-card button
+    // moved up next to the title (header), so the detail is just recency · goal · related.
+    const statsHtml = `<div class="prio-stats">${staleHtml}</div>`;
+    // Drag handle — grab to reorder the focus lifts into a custom order (persisted as
+    // `order`). touch-action:none (CSS) so dragging the grip doesn't scroll the popup.
+    // Drag grip — only in "Drag" (manual) sort mode; touch-action:none (CSS) so dragging
+    // the grip reorders instead of scrolling the popup.
+    const dragH = prioSortMode === "manual"
+      ? `<button type="button" class="prio-drag" data-priodrag="${escapeHtml(ex)}" aria-label="Drag to reorder ${escapeHtml(displayName(ex))}" title="Drag to reorder">≡</button>`
+      : "";
+    return `<div class="prio-row${open ? " is-open" : ""}${gk ? ` is-group is-${gk}` : ""}" data-prioex="${escapeHtml(ex)}">` +
+      dragH +
+      // Tap the name to TOGGLE the row's detail (no caret). Name on its own line (full
+      // width, so it isn't squeezed by the muscle), the body-part as a tiny line below it.
+      `<button type="button" class="prio-main" data-prioexpand="${escapeHtml(ex)}" aria-expanded="${open}" title="Tap to ${open ? "hide" : "show"} ${escapeHtml(displayName(ex))}'s details${gk ? gk === "combine" ? " — a combinable mix (same lift)" : " — a comparable pattern" : ""}">` +
+      `<span class="prio-main-name">${gk ? `<span class="prio-grp-mark" title="${gk === "combine" ? "Combinable mix" : "Comparable pattern"}">✦</span>` : ""}` +
+      `<span class="prio-name">${escapeHtml(displayName(ex))}</span></span>` +
       `${mg ? `<span class="prio-mg muted">${escapeHtml(mg)}</span>` : ""}</button>` +
-      `<button type="button" class="prio-level prio-level-${e.level}" data-priolevel="${escapeHtml(ex)}" title="Priority — tap to cycle: Max effort → Active → Passive → Maintain. It suggests the weekly target and the order.">${PRIORITY_LABEL[e.level]}</button>` +
-      `<span class="prio-stats">` +
-      `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${avg.toFixed(1)}</span>` +
-      `<span class="prio-target" title="Weekly sets you want to do — suggested by the priority, tap −/+ to tune">` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="-1" aria-label="Fewer">−</button>` +
-        `<span class="prio-tgt-val" title="Weekly sets target">${e.target}</span>` +
-        `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(ex)}" data-d="1" aria-label="More">+</button>` +
-      `</span></span>` +
+      // Open-card ⓘ sits right next to the title (always visible, no need to expand) — opens
+      // the full exercise card where the target + intensity dials now live (data-planopen).
+      `<button type="button" class="prio-opencard" data-planopen="${escapeHtml(ex)}" title="Open the full exercise card — how to train, target sets, intensity, warm-up, working weights…" aria-label="Open card">ⓘ</button>` +
+      // CRAM (owner): ONE control around the tags for BOTH dials — rank + effort show as
+      // small TAGS, and tapping opens a single pick-menu with both sections. Replaces the
+      // two full-size pills.
+      `<button type="button" class="prio-meta" data-priometa="${escapeHtml(ex)}" title="Priority rank &amp; effort — tap to choose">` +
+        `<span class="prio-tag prio-rank-${rankOf(e)}">${RANK_LABEL[rankOf(e)]}</span>` +
+        `<span class="prio-tag prio-level-${e.level}">${PRIORITY_LABEL[e.level]}</span>` +
+      `</button>` +
       `<button type="button" class="prio-remove" data-prioremove="${escapeHtml(ex)}" title="Remove from priorities" aria-label="Remove">✕</button>` +
-      relPanel +
+      // The row tap EXPANDS to recency + goal + related; target/intensity moved to the card.
+      (open ? `<div class="prio-detail">` +
+        `${statsHtml}${goalHtml}${relPanel}</div>` : "") +
       `</div>`;
   };
-  const list = names.length
-    ? `<div class="prio-list">${names.map(rowHtml).join("")}</div>`
-    : `<p class="muted prio-empty">No priorities yet. Add up to ${PRIORITY_MAX} exercises you want to focus on — tap a suggestion below.</p>`;
-  const addBlock = (names.length < PRIORITY_MAX && suggestions.length)
-    ? `<div class="prio-add"><div class="prio-add-lbl muted">${names.length ? "Add another" : "Suggested"} (${names.length}/${PRIORITY_MAX})</div>` +
-      `<div class="prio-add-chips">${suggestions.map((s) => {
-        // For real (non-synth) exercises that have a comparable group: show the chip with
-        // an extra ✦ button to add-as-pattern instead of add-as-specific.
-        const patternGroups = s.synth ? [] : comparableGroupsForEx(s.name);
-        const patternName = patternGroups[0] ? (patternGroups[0].derivedName ?? patternGroups[0].label) : null;
-        const patternAddable = patternName && !has.has(patternName) && !sameLiftBlocked.has(patternName);
-        if (!s.synth && patternAddable) {
-          return `<span class="prio-add-pair">` +
-            `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))} specifically">+ ${escapeHtml(displayName(s.name))}</button>` +
-            `<button type="button" class="prio-add-chip is-synth" data-prioadd="${escapeHtml(patternName!)}" title="Add as ${escapeHtml(displayName(patternName!))} (all related exercises)">✦</button>` +
-            `</span>`;
-        }
-        return `<button type="button" class="prio-add-chip${s.synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(s.name)}" title="Add ${escapeHtml(displayName(s.name))}${s.synth ? " — a combinable/comparable group lift" : ""}">${s.synth ? "✦ " : "+ "}${escapeHtml(displayName(s.name))}</button>`;
-      }).join("")}</div></div>`
-    : names.length >= PRIORITY_MAX ? `<p class="muted prio-add-lbl">Priority list full (${PRIORITY_MAX}). Remove one to add another.</p>` : "";
-  els.planBody.innerHTML = list + addBlock;
+  // FREE-SORT state (owner): in Drag mode the list is a FLAT, freely-draggable list.
+  // Until you drag, it's ordered by EFFORT (no manual `order` set); once you've hand-
+  // sorted, those entries carry an `order` and the list shows a "free order" badge.
+  const freeSorted = prioSortMode === "manual" && names.some((ex) => typeof pri[ex]!.order === "number");
+  // Summary line on top: total weekly target sets + the per-level breakdown
+  // (Max effort / Active / Passive / Maintain), each chip in its level colour.
+  const summary = names.length
+    ? (() => {
+        const byLevel: Record<PriorityLevel, number> = { max: 0, active: 0, passive: 0, maintain: 0 };
+        let total = 0;
+        for (const ex of names) { const e = pri[ex]!; byLevel[e.level] += e.target; total += e.target; }
+        const chip = (lvl: PriorityLevel) =>
+          `<span class="prio-sum-chip prio-level-${lvl}" title="${escapeHtml(PRIORITY_LABEL[lvl])} — weekly target sets across these lifts">` +
+          `<span class="prio-sum-lbl">${PRIORITY_LABEL[lvl]}</span> <span class="prio-sum-n">${byLevel[lvl]}</span></span>`;
+        // ↕ Sort pill — cycles how the list is ordered: Top → Effort → Drag (manual).
+        const sortPill = `<button type="button" class="prio-sort wo-dj-btn" data-priosort title="Sort the focus lifts — tap to cycle: Top (priority tier) → Effort (level) → Drag (free order).${prioSortMode === "manual" ? " Drag the ≡ grips to reorder freely." : ""}">↕ ${PRIO_SORT_LABEL[prioSortMode]}</button>`;
+        // In Drag mode, show whether the list is your own FREE order or still the
+        // effort default — with a one-tap reset back to effort once you've sorted.
+        const freeBadge = prioSortMode !== "manual" ? ""
+          : freeSorted
+            ? `<span class="prio-freebadge is-free" title="You've hand-sorted these lifts. Tap ↺ to go back to effort order.">✋ Free order<button type="button" class="prio-freereset" data-prioresetorder title="Reset to effort order" aria-label="Reset to effort order">↺</button></span>`
+            : `<span class="prio-freebadge muted" title="Drag the ≡ grips to set your own order. Until then they're sorted by effort.">by effort · drag to customise</span>`;
+        return `<div class="prio-summary">` +
+          sortPill +
+          freeBadge +
+          `<span class="prio-sum-total" title="Total weekly target sets across all focus lifts">Σ ${total}<span class="prio-sum-unit">/wk</span></span>` +
+          PRIORITY_LEVELS.map(chip).join("") + `</div>`;
+      })()
+    : "";
+  // Focus lifts grouped into collapsible SECTIONS by the CURRENT sort dimension (owner):
+  // sorting by Effort → group by level; by Top/Drag (rank/manual) → group by rank. Each
+  // section is an expandable <details> (default open; collapse state kept in
+  // prioSectionCollapsed across re-renders). `names` is already sorted, so members keep
+  // their sub-order within each section.
+  const groupDim: "rank" | "level" = prioSortMode === "effort" ? "level" : "rank";
+  const groupOrder: string[] = groupDim === "level" ? PRIORITY_LEVELS : PRIORITY_RANKS;
+  const keyOf = (ex: string): string => groupDim === "level" ? pri[ex]!.level : rankOf(pri[ex]!);
+  const groupLabelOf = (k: string): string => groupDim === "level" ? PRIORITY_LABEL[k as PriorityLevel] : RANK_LABEL[k as PriorityRank];
+  // Drag mode = ONE FLAT, freely-sortable list (no rank/level sections), so a lift can
+  // be dragged anywhere; the drag handler writes a global `order` across this list.
+  const list = !names.length
+    ? `<p class="muted prio-empty">No priorities yet. Add the exercises you want to focus on — tap a suggestion below.</p>`
+    : prioSortMode === "manual"
+    ? `<div class="prio-list prio-list--flat">${names.map(rowHtml).join("")}</div>`
+    : groupOrder.map((k) => {
+        const members = names.filter((ex) => keyOf(ex) === k);
+        if (!members.length) return "";
+        const tgt = members.reduce((s, ex) => s + (pri[ex]!.target || 0), 0);
+        const skey = `${groupDim}:${k}`;
+        const cls = groupDim === "level" ? `prio-level-${k}` : `prio-rank-${k}`;
+        return `<details class="prio-section"${prioSectionCollapsed.has(skey) ? "" : " open"}>` +
+          `<summary class="prio-section-sum" data-priosection="${escapeHtml(skey)}">` +
+          `<span class="caret">▸</span><span class="prio-section-lbl ${cls}">${escapeHtml(groupLabelOf(k))}</span>` +
+          `<span class="prio-section-n muted">${members.length}</span>` +
+          `<span class="prio-section-tgt muted">Σ ${tgt}/wk</span></summary>` +
+          `<div class="prio-list">${members.map(rowHtml).join("")}</div></details>`;
+      }).join("");
+  // "Add another" is now a Tier-2 picker (docs/exercise-picker-tiers.md): curated
+  // suggestions by default, but a search box reveals ANY addable lift, not just the top few.
+  const allAddable = [
+    ...realSug.map((n) => ({ name: n, synth: false })),
+    ...synthSug.map((n) => ({ name: n, synth: true })),
+  ];
+  const prioChip = (name: string, synth: boolean) =>
+    `<button type="button" class="prio-add-chip${synth ? " is-synth" : ""}" data-prioadd="${escapeHtml(name)}" title="Add ${escapeHtml(displayName(name))}${synth ? " — a group lift" : ""} to your priorities">${synth ? "✦ " : "+ "}${escapeHtml(displayName(name))}</button>`;
+  // Searching reaches the FULL exercise registry (every lift anyone has logged + custom
+  // defs), not just THIS athlete's trained suggestions — so you can plan a lift they've
+  // never done yet (owner). Still excludes current priorities + same-lift duplicates.
+  const searchPool = [
+    ...selectableExercises(data.records).filter(addable).map((n) => ({ name: n, synth: false })),
+    ...synthSug.map((n) => ({ name: n, synth: true })),
+  ];
+  // The suggestion-pill HTML for a given search query. Factored out so the live search
+  // can refill JUST the pills (PB-23) without rebuilding the whole plan — searchPool +
+  // suggestions don't change while you type, so this closure stays valid until the next
+  // full render reassigns it.
+  const buildAddChips = (rawQuery: string): string => {
+    const prioQ = rawQuery.trim().toLowerCase();
+    return prioQ
+      ? (() => {
+          const hits = searchPool.filter((a) => displayName(a.name).toLowerCase().includes(prioQ) || a.name.toLowerCase().includes(prioQ));
+          return hits.length
+            ? hits.map((a) => prioChip(a.name, a.synth)).join("")
+            : (() => {
+                // #prune sibling of the command-bar Create fix: when no trained lift
+                // matches, offer to add the typed name as a BRAND-NEW focus (start training it).
+                const nm = rawQuery.trim();
+                return `<button type="button" class="prio-add-chip" data-prioadd="${escapeHtml(nm)}" title="Add “${escapeHtml(nm)}” as a new focus lift — start training it">➕ ${escapeHtml(nm)}</button><span class="muted prio-add-none">new focus — no history yet</span>`;
+              })();
+        })()
+      : suggestions.map((s) => {
+          const specific = prioChip(s.name, s.synth);
+          // A specific lift in a comparable pattern → a "⇄ pattern" button to add it as the
+          // COMPARE (whole pattern) instead of the SPECIFIC lift.
+          const compare = s.cmp
+            ? `<button type="button" class="prio-add-cmp" data-prioadd="${escapeHtml(s.cmp)}" title="Add the “${escapeHtml(displayName(s.cmp))}” pattern instead — train the whole movement (compare), not just this specific lift">⇄ ${escapeHtml(displayName(s.cmp))}</button>`
+            : "";
+          return compare ? `<span class="prio-add-pair">${specific}${compare}</span>` : specific;
+        }).join("");
+  };
+  const addChips = buildAddChips(prioAddQuery);
+  // Always offer the search box (even with no curated suggestions) so the full registry
+  // is always reachable. CLOSED dropdown by default (owner) — keep its open state across
+  // the re-render the inner search triggers (rule 24): read the live DOM before rebuild.
+  const existingFold = els.planBody.querySelector<HTMLDetailsElement>(".prio-add");
+  if (existingFold) prioAddOpen = existingFold.open;
+  const addOpen = prioAddOpen || !!prioAddQuery.trim(); // typing a search always reveals it
+  const hasAddBlock = allAddable.length || searchPool.length;
+  const addSumLabel = (rawQuery: string) =>
+    `${names.length ? "Add another" : "Suggested"} (${rawQuery.trim() ? "search" : names.length})`;
+  const addBlock = hasAddBlock
+    ? `<details class="prio-add"${addOpen ? " open" : ""}><summary class="prio-add-sum muted">${addSumLabel(prioAddQuery)}</summary>` +
+      `<input type="search" class="wa-chip-search prio-add-search" placeholder="Search exercises…" aria-label="Search exercises to add" autocomplete="off" value="${escapeHtml(prioAddQuery)}">` +
+      `<div class="prio-add-chips">${addChips}</div></details>`
+    : "";
+  // PB-23: live-search refill. The input is OUTSIDE .prio-add-chips, so refreshing only
+  // the pills (and the summary count) leaves the input — and its focus/caret — untouched,
+  // exactly like the S-ANL / variant-picker / graph-chip searches. No whole-plan rebuild.
+  planAddChipsRefill = hasAddBlock
+    ? (query: string) => {
+        const box = els.planBody.querySelector<HTMLElement>(".prio-add-chips");
+        if (box) box.innerHTML = buildAddChips(query);
+        const sum = els.planBody.querySelector<HTMLElement>(".prio-add-sum");
+        if (sum) sum.textContent = addSumLabel(query);
+      }
+    : null;
+  // The Plan card's summary doubles as its title — name the athlete it's planning for.
+  const planSummary = document.getElementById("waPlanSummary");
+  if (planSummary) planSummary.textContent = `${athleteLabel()} plan`;
+  els.planBody.innerHTML = summary + list + addBlock + planGoalsHtml(user);
 }
 
 function openWorkoutPlan(): void {
-  renderLive(); // the training plan (relocated from the old Live tab) sits at the top
-  renderWorkoutPlan(); // the manual focus-lifts planner below it
-  els.planPage.hidden = false;
+  // Plan is an inline card now (not an overlay): make sure its section is toggled ON
+  // and the fold is open, render it, then scroll it into view.
+  const s = SECTION_TOGGLES.find((x) => x.foldId === "waPlanFold");
+  if (s) {
+    sectionShown[s.key] = true;
+    try { localStorage.setItem(s.key, "1"); } catch { /* storage may be unavailable */ }
+    applySectionToggle(s);
+  }
+  const fold = document.getElementById("waPlanFold") as HTMLDetailsElement | null;
+  if (fold) {
+    fold.open = true;
+    renderWorkoutPlan();
+    fold.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 // Remember which taxonomy sections (Discipline / Muscle group / Tier / Combinable /
 // Comparable) the owner has expanded, per exercise, so the card's re-render after a
@@ -10675,6 +13462,838 @@ function spellingSourcesHtml(name: string, variants: string[]): string {
     `</div><p class="muted ex-spell-help">Tap ✕ to split a spelling into its own lift; tap ＋ to merge one back.</p></div>`
   );
 }
+// ── "How to train" panel ───────────────────────────────────────────────────
+// The training brief shown at the TOP of a lift's info overlay (opened by tapping
+// a Focus-lift in the Priorities popup): warmup ramp, current working weights,
+// a hard-set suggestion, the Nuzzo reps↔%1RM curve, free-text setup notes, and
+// antagonist lifts. All numbers come from the SAME tested compute the rest of the
+// app trusts (prescription.ts / metrics.ts / the plan's decay model) — no new
+// strength model here, only presentation.
+
+// Per-lift free-text setup notes (e.g. "rack height 7, safeties at 4"). Net-new
+// store, same device-local layering pattern as codes/coeffs. A lift can have SEVERAL setup
+// notes (owner: addable / deletable / editable), so each value is a string[]. Legacy single
+// strings (v1 shape) are migrated to a one-element array on load.
+// Per-athlete free-text GOALS shown in the Plan overlay alongside the focus lifts (owner:
+// "let me add notes in the plan section — general goals"). Synced like other per-user data.
+const PLAN_GOALS_KEY = "colosseum.planGoals.v1";
+const planGoals: Record<string, string[]> = (() => {
+  const raw = loadJsonObject<Record<string, unknown>>(PLAN_GOALS_KEY) ?? {};
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) { const a = v.filter((x): x is string => typeof x === "string" && x.trim() !== ""); if (a.length) out[k] = a; }
+  }
+  return out;
+})();
+function goalsFor(user: string): string[] { return planGoals[user] ?? []; }
+function saveGoals(user: string, list: string[]): void {
+  const clean = list.map((g) => g.trim()).filter(Boolean);
+  if (clean.length) planGoals[user] = clean; else delete planGoals[user];
+  saveJson(PLAN_GOALS_KEY, planGoals);
+}
+function addGoal(user: string, text: string): void { if (text.trim()) saveGoals(user, [...goalsFor(user), text]); }
+function removeGoalAt(user: string, idx: number): void { const l = goalsFor(user).slice(); l.splice(idx, 1); saveGoals(user, l); }
+/** The Plan overlay's Goals block: the athlete's general goals, each removable, plus an
+ * input + "＋" to add a new one. */
+function planGoalsHtml(user: string): string {
+  const goals = goalsFor(user);
+  const items = goals.length
+    ? goals.map((g, i) => `<li class="plan-goal"><span class="plan-goal-txt">${escapeHtml(g)}</span><button type="button" class="plan-goal-del" data-goaldel="${i}" title="Remove this goal" aria-label="Remove goal">✕</button></li>`).join("")
+    : `<li class="plan-goal-empty muted">No goals yet — add one below.</li>`;
+  return (
+    `<div class="plan-goals"><div class="plan-goals-hd">Goals</div>` +
+    `<ul class="plan-goals-list">${items}</ul>` +
+    `<div class="plan-goal-add"><input class="plan-goal-input" type="text" placeholder="add a goal…" aria-label="New goal" autocomplete="off" />` +
+    `<button type="button" class="plan-goal-addbtn" data-goaladd title="Add goal" aria-label="Add goal">＋</button></div></div>`
+  );
+}
+const SETUP_NOTES_KEY = "colosseum.exerciseSetupNotes.v1";
+const setupNotes: Record<string, string[]> = (() => {
+  const raw = loadJsonObject<Record<string, unknown>>(SETUP_NOTES_KEY) ?? {};
+  const out: Record<string, string[]> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) { const a = v.filter((x): x is string => typeof x === "string"); if (a.length) out[k] = a; }
+    else if (typeof v === "string" && v.trim()) out[k] = [v];
+  }
+  return out;
+})();
+function setupNotesFor(name: string): string[] { return setupNotes[name] ?? []; }
+function saveSetupNotes(name: string, list: string[]): void {
+  if (list.length) setupNotes[name] = list; else delete setupNotes[name];
+  saveJson(SETUP_NOTES_KEY, setupNotes);
+}
+/** Edit one note in place (keeps empties so the textarea indices stay stable while typing). */
+function setSetupNoteAt(name: string, idx: number, text: string): void {
+  const list = setupNotesFor(name).slice();
+  while (list.length <= idx) list.push("");
+  list[idx] = text;
+  saveSetupNotes(name, list);
+}
+function addSetupNote(name: string): void { saveSetupNotes(name, [...setupNotesFor(name), ""]); }
+function deleteSetupNote(name: string, idx: number): void {
+  const list = setupNotesFor(name).slice();
+  list.splice(idx, 1);
+  saveSetupNotes(name, list);
+}
+/** The Setup-notes editor: one row (textarea + ✕ delete) per note, then a "+ note" button. */
+function setupNotesHtml(name: string): string {
+  const rows = setupNotesFor(name).map((n, i) =>
+    `<div class="lt-note-row"><textarea class="lt-note" rows="1" placeholder="e.g. rack height 7, safeties at 4, feet stance…" data-setupnote="${escapeHtml(name)}" data-noteidx="${i}">${escapeHtml(n)}</textarea>` +
+    `<button type="button" class="lt-note-del" data-notedel="${escapeHtml(name)}|${i}" title="Delete note" aria-label="Delete note">✕</button></div>`
+  ).join("");
+  return `<div class="lt-notes">${rows}<button type="button" class="lt-note-add" data-noteadd="${escapeHtml(name)}">+ note</button></div>`;
+}
+
+// Owner's 5-level pairing grade (super → no way). Glyph + label live in ONE place
+// (the chip glyph AND the mini-menu popup both read this). The grade is set per
+// DIRECTIONAL pair on a LAYER (gym vs personal) — see the pairShared/pairPersonal
+// stores and pairing.ts below.
+type PairGrade = "super" | "good" | "neutral" | "difficult" | "noway";
+const PAIR_GRADES: { id: PairGrade; label: string; glyph: string }[] = [
+  { id: "super",     label: "Super",     glyph: "🔥" },
+  { id: "good",      label: "Good",      glyph: "★" },
+  { id: "neutral",   label: "Neutral",   glyph: "⚐" },
+  { id: "difficult", label: "Difficult", glyph: "⚑" },
+  { id: "noway",     label: "No way",    glyph: "✕" },
+];
+function pairGradeMeta(g: PairGrade) { return PAIR_GRADES.find((x) => x.id === g)!; }
+// Pairing is DIRECTIONAL + TWO-LAYER (CEO plan: docs/ceo/exercise-pairing.md). The
+// pure model lives in pairing.ts; here we hold the two synced stores and thin glue.
+//   • pairShared  — the GYM truth everyone sees (one shared pool, no named gyms yet).
+//   • pairPersonal — per-user vetoes that shadow the gym flag for that user only.
+// Both are colosseum.* keys, so they ride the cacheSync kv mirror to every user
+// automatically (no backend wiring). Pairings are STRICTLY per-(from)-exercise: an
+// earlier build migrated old context-free flags into cross-exercise `*→to` wildcards
+// that LEAKED a flag onto every lift's card (owner bug) — on load we PURGE any such
+// wildcard so each pairing stays unique to the exercise it was made on.
+const PAIR_SHARED_KEY = "colosseum.pairShared.v1";    // gym truth (synced to everyone)
+const PAIR_PERSONAL_KEY = "colosseum.pairPersonal.v1"; // per-user overrides (synced as one blob)
+let pairShared: PairMap = (() => {
+  const r = stripWildcards(loadJsonObject<PairMap>(PAIR_SHARED_KEY) ?? {});
+  if (r.changed) saveJson(PAIR_SHARED_KEY, r.map); // persist the one-time cleanup (syncs the removal)
+  return r.map;
+})();
+let pairPersonal: PersonalPairMap = (() => {
+  const r = stripWildcardsPersonal(loadJsonObject<PersonalPairMap>(PAIR_PERSONAL_KEY) ?? {});
+  if (r.changed) saveJson(PAIR_PERSONAL_KEY, r.map);
+  return r.map;
+})();
+/** Who is "you" for a personal override — the viewed athlete (matches priorities). */
+function pairUser(): string { return els.athlete.value; }
+/** Effective grade for a directional pair (from → to), for the current user. */
+function pairGradeFor(from: string, to: string): PairGrade {
+  return resolvePairGrade(from, to, pairShared, pairPersonal, pairUser()).grade;
+}
+function setPairGrade(from: string, to: string, g: PairGrade, layer: "shared" | "personal"): void {
+  const out = applyPairGrade({ from, to, grade: g, layer, user: pairUser(), shared: pairShared, personal: pairPersonal });
+  pairShared = out.shared; pairPersonal = out.personal;
+  saveJson(PAIR_SHARED_KEY, pairShared);
+  saveJson(PAIR_PERSONAL_KEY, pairPersonal);
+}
+/** The single-origin pairing-grade flag button — opens the mini grade menu on tap
+ * (NOT a cycling toggle, per the owner: cycling + auto-sort is confusing). Carries the
+ * directional edge (from → to) and shows a 👤 badge when YOUR override is in force. */
+function pairFlagBtn(from: string, to: string): string {
+  const { grade: g, layer } = resolvePairGrade(from, to, pairShared, pairPersonal, pairUser());
+  const meta = pairGradeMeta(g);
+  const badge = layer === "personal" ? `<span class="pg-layer" title="Your personal override">👤</span>` : "";
+  return `<button type="button" class="lt-pairflag pg-${g}" data-pairfrom="${escapeHtml(from)}" data-pairto="${escapeHtml(to)}" title="${escapeHtml(displayName(from))} → ${escapeHtml(displayName(to))}: ${meta.label} (${layer === "personal" ? "your override" : "gym"}) — tap to grade" aria-label="Pairing grade: ${meta.label}">${meta.glyph}${badge}</button>`;
+}
+let pairMenuFrom: string | null = null;
+let pairMenuTo: string | null = null;
+let pairMenuLayer: "shared" | "personal" = "shared";
+let pairMenuAnchor: HTMLElement | null = null;
+/** Mini popup menu to PICK a pairing grade (super → no way) on a chosen LAYER (gym vs
+ * just-me). Floats via clampMenuIntoView (rule 32). */
+function openPairGradeMenu(from: string, to: string, anchor: HTMLElement): void {
+  pairMenuFrom = from; pairMenuTo = to; pairMenuAnchor = anchor;
+  // Default the editing layer to where the current value already lives.
+  pairMenuLayer = resolvePairGrade(from, to, pairShared, pairPersonal, pairUser()).layer === "personal" ? "personal" : "shared";
+  renderPairGradeMenu();
+}
+function renderPairGradeMenu(): void {
+  if (!pairMenuFrom || !pairMenuTo || !pairMenuAnchor) return;
+  const from = pairMenuFrom, to = pairMenuTo;
+  let m = document.getElementById("pairGradeMenu");
+  if (!m) { m = document.createElement("div"); m.id = "pairGradeMenu"; m.className = "pair-grade-menu"; document.body.appendChild(m); }
+  // Highlight the grade stored ON the chosen layer, so the tick matches what a tap edits.
+  const onLayer = pairMenuLayer === "personal" ? (pairPersonal[pairUser()] ?? {})[pairEdge(from, to)] : pairShared[pairEdge(from, to)];
+  const cur = onLayer ?? "neutral";
+  m.innerHTML =
+    `<div class="pair-grade-hd">${escapeHtml(displayName(from))} → ${escapeHtml(displayName(to))}</div>` +
+    `<div class="pair-layer-row">` +
+      `<button type="button" class="pair-layer-pill${pairMenuLayer === "shared" ? " is-on" : ""}" data-pairlayer="shared" title="Set the gym-wide flag everyone here sees">👥 Gym</button>` +
+      `<button type="button" class="pair-layer-pill${pairMenuLayer === "personal" ? " is-on" : ""}" data-pairlayer="personal" title="Override just for you — shadows the gym flag">👤 Just me</button>` +
+    `</div>` +
+    PAIR_GRADES.map((g) => `<button type="button" class="pair-grade-opt pg-${g.id}${g.id === cur ? " is-on" : ""}" data-setgrade="${g.id}"><span class="pgo-glyph">${g.glyph}</span><span>${g.label}</span></button>`).join("");
+  m.hidden = false;
+  clampMenuIntoView(m, pairMenuAnchor);
+}
+function closePairGradeMenu(): void {
+  const m = document.getElementById("pairGradeMenu");
+  if (m) m.hidden = true;
+  pairMenuFrom = null; pairMenuTo = null; pairMenuAnchor = null;
+}
+/** Rough "easy to pair up" score (lower = easier), used only as a secondary
+ *  tiebreaker behind priority and the user's own flags. Portable kit (dumbbell /
+ *  kettlebell / band) is easiest; a fixed station (machine / smith / press) is
+ *  hardest; barbell & bodyweight sit in the middle. */
+/** This athlete's CURRENT (decay-faded) estimated 1RM for one lift — the same
+ *  per-day-best → decayingStrengthPoints model the live plan uses, so the brief
+ *  agrees with the plan. null when they've never logged it. */
+function currentLiftE1RM(username: string, name: string, formula: OneRepMaxFormula): number | null {
+  const byDay = new Map<number, number>();
+  for (const r of cardLiftRecords(name)) {
+    if (r.username !== username || !r.date) continue;
+    if (addedWeight1RM(r, formula) === null) continue; // skip un-scorable (e.g. >15-rep) sets
+    const e = estimate1RM(r.weight, r.reps, formula);
+    if (e === null) continue;
+    const d = dayNumber(r.date);
+    byDay.set(d, Math.max(byDay.get(d) ?? -Infinity, e));
+  }
+  if (!byDay.size) return null;
+  const pts = [...byDay.entries()].map(([d, y]) => ({ x: d * MS_PER_DAY_RIR, y }));
+  const series = decayingStrengthPoints(pts);
+  return series.length ? series[series.length - 1]!.y : Math.max(...pts.map((p) => p.y));
+}
+
+/** Graph-scope lens active for this lift (merged or separated group view). */
+function cardGroupLensActive(name: string): boolean {
+  return !!(chosenGroup("graph", name, "combine") || chosenGroup("graph", name, "compare"));
+}
+
+/** Exercise names plotted on this lift's info card — same lens rules as Analysis graph. */
+function cardPlotExerciseNames(name: string): string[] {
+  return lensExpand("graph", [name]);
+}
+
+/** The current athlete's computed records for this lift's info card (curve, 1RM, volume). */
+function cardLiftRecords(name: string): SetRecord[] {
+  const user = els.athlete.value;
+  const plotNames = cardPlotExerciseNames(name);
+  return filterCardLiftRecords(computedRecordsAllLifts(), user, name, plotNames, cardGroupLensActive(name));
+}
+
+/** Compact lens picker above the exercise-info graph — same ⊕/⇄ choices as Analysis. */
+function exInfoLensBarHtml(name: string): string {
+  if (!allGroupsForEx(name).length) return "";
+  const cg = chosenGroup("graph", name, "combine");
+  const pg = chosenGroup("graph", name, "compare");
+  let label: string;
+  let hint: string;
+  if (cg) {
+    label = `⊕ ${escapeHtml(cg.derivedName ?? cg.label)}`;
+    hint = "Merged pattern mix — loads scaled to a common equivalent. Tap to change or pick one member.";
+  } else if (pg) {
+    label = `⇄ ${escapeHtml(pg.derivedName ?? pg.label)}`;
+    hint = "Separated members — each lift at its own load. Tap to change or pick one member.";
+  } else {
+    label = `${escapeHtml(displayName(name))}<span class="exinfo-lens-only"> only</span>`;
+    hint = "This lift only — not the pattern mix. Tap to merge or separate group members.";
+  }
+  return (
+    `<div class="exinfo-lens-bar">` +
+    `<span class="exinfo-lens-lbl muted">Showing</span>` +
+    `<button type="button" class="exinfo-lens-pick wa-title-lift${lensClass("graph", name)}" data-liftmenu="${escapeHtml(name)}" data-liftscope="graph" title="${escapeHtml(hint)}">${label} ▾</button>` +
+    `</div>`
+  );
+}
+
+/** One logged set in the card graph's ADDED-weight space: x = the plate you added
+ *  (negative = assisted), y = reps; date + setNumber drive the same-day connector. */
+type CardNuzzoSet = { date: string; setNumber: number; added: number; reps: number };
+
+/** Every logged set for this lift in the card graph's ADDED-weight space (x = added
+ * plate, negative = assisted). The added weight mirrors addedWeight1RM's convention:
+ * the bar-only lift's whole load IS added (origWeight undefined), else the entered
+ * plate (origWeight). Reps 1..60 (matches the curve range, PB-30). `weight` is the
+ * EFFECTIVE bodyweight-folded load (computed records). */
+function cardNuzzoRealSets(name: string): CardNuzzoSet[] {
+  const out: CardNuzzoSet[] = [];
+  for (const s of cardLiftRecords(name)) {
+    const reps = s.reps;
+    if (reps == null || reps < 1 || reps > 60) continue;
+    if (s.weight == null || !(s.weight > 0)) continue; // need a real effective load
+    const added = s.origWeight === undefined ? s.weight : (s.origWeight ?? 0);
+    out.push({ date: s.date, setNumber: s.setNumber, added: Math.round(added * 10) / 10, reps });
+  }
+  return out;
+}
+
+// ── Sets-map "table" ─────────────────────────────────────────────────────────
+// The Curve scatter (weight × reps) laid FLAT as a map on a table, with each point
+// raised by how many sets were logged there over time — a 3D terrain of green pins.
+
+interface SetsMap {
+  /** Each occupied cell: tiers = the count split by RECENCY (recent→old) so the bar can fade
+   *  the older portion (opaque recent at the bottom, faint old on top). count = Σ tiers. */
+  pts: { w: number; reps: number; count: number; repLabel?: string; tiers: number[] }[];
+  loW: number; hiW: number; maxReps: number; maxCount: number;
+  /** The chosen weight-bin (kg) and rep-bin sizes — drive the bin grid. */
+  binW: number; binR: number;
+  /** The Nuzzo strength curve (weight you could do for N reps), drawn on the floor. */
+  curve?: { reps: number; w: number }[];
+}
+/** Recency tiers (days-ago upper bound) + the opacity each gets — recent solid → old faint. */
+const MAP_TIER_DAYS = [14, 30, 91, 182, 365, Infinity];
+const MAP_TIER_OP = [1, 0.8, 0.62, 0.46, 0.33, 0.22];
+
+/** Count a lift's sets per (weight-bin, reps) cell — the height of each map bar. */
+function cardSetsMapData(name: string): SetsMap | null {
+  const all = cardNuzzoRealSets(name);
+  if (all.length === 0) return null;
+  // Time range: keep only sets within the chosen window (anchored to now).
+  const RANGE_DAYS: Record<Vol3dRange, number> = { "1w": 7, "2w": 14, "1mo": 30, "3mo": 91, "6mo": 182, "12mo": 365, all: 0 };
+  const cutoff = RANGE_DAYS[vol3dRange] ? Date.now() - RANGE_DAYS[vol3dRange] * 86_400_000 : 0;
+  const sets = cutoff ? all.filter((s) => { const t = Date.parse(s.date); return Number.isFinite(t) && t >= cutoff; }) : all;
+  const bin = vol3dWtBin > 0 ? vol3dWtBin : 5;
+  const sz = vol3dRepBin > 1 ? vol3dRepBin : 1;
+  // Bin a set-list into per-rep OCCURRENCE cells: at (weight, rep-position k) the height =
+  // how many TIMES that rep was performed at that weight — i.e. how many sets reached rep k
+  // (one set of R reps does rep 1 once, rep 2 once … rep R once). So "60kg rep 1" counts every
+  // 60kg set, "60kg rep 7" only the 60kg sets that got to a 7th rep — rep 1 is tallest, tapering
+  // up. (Owner: "count how many of EACH rep was done; a 16-rep set did the 1st rep only once" —
+  // the old sets/total-reps toggle is gone.)
+  type Pt = { w: number; reps: number; count: number; repLabel?: string; tiers: number[] };
+  const now = Date.now();
+  const tierOf = (ageDays: number): number => { for (let i = 0; i < MAP_TIER_DAYS.length; i++) if (ageDays <= MAP_TIER_DAYS[i]!) return i; return MAP_TIER_DAYS.length - 1; };
+  const binSets = (list: typeof sets): { pts: Pt[]; loW: number; hiW: number; maxReps: number; maxCount: number } => {
+    const byW = new Map<number, { reps: number; tier: number }[]>();
+    let loW = Infinity, hiW = -Infinity;
+    for (const s of list) {
+      const w = Math.round(s.added / bin) * bin;
+      loW = Math.min(loW, w); hiW = Math.max(hiW, w);
+      const t = Date.parse(s.date); const ageDays = Number.isFinite(t) ? (now - t) / 86_400_000 : 0;
+      const e = { reps: s.reps, tier: tierOf(ageDays) };
+      const a = byW.get(w); if (a) a.push(e); else byW.set(w, [e]);
+    }
+    const pts: Pt[] = [];
+    let maxReps = 1, maxCount = 1;
+    for (const [w, list2] of byW) {
+      const wMax = Math.max(...list2.map((x) => x.reps));
+      const nBins = Math.max(1, Math.ceil(wMax / sz));
+      for (let k = 1; k <= nBins; k++) {
+        const binLow = (k - 1) * sz + 1;
+        const reaching = list2.filter((x) => x.reps >= binLow); // sets that performed this rep
+        if (reaching.length === 0) continue;
+        const tiers = new Array(MAP_TIER_OP.length).fill(0) as number[];
+        for (const x of reaching) tiers[x.tier]!++;
+        const count = reaching.length; // how many TIMES this rep was done at this weight
+        const repCoord = k * sz;
+        pts.push({ w, reps: repCoord, count, repLabel: sz > 1 ? `${binLow}–${repCoord}` : `${k}`, tiers });
+        maxReps = Math.max(maxReps, repCoord);
+        maxCount = Math.max(maxCount, count);
+      }
+    }
+    return { pts, loW, hiW, maxReps, maxCount };
+  };
+  // FRAME (axes) is computed from ALL sets so the X/Y/Z extents stay FIXED when you filter by
+  // time — a sparse window then shows shorter bars on the same scale, so you can SEE the
+  // difference (owner). The displayed bars come from the time-filtered subset.
+  const frame = binSets(all);
+  const disp = cutoff ? binSets(sets) : frame;
+  let loW = frame.loW, hiW = frame.hiW;
+  if (hiW === loW) hiW = loW + bin;
+  // Nuzzo strength curve on the floor: the added weight you could lift for N reps, from the
+  // best-fit 1RM (bodyweight folded in via bodyShare, then peeled back to added like the card).
+  let curve: { reps: number; w: number }[] | undefined;
+  const fit = bestFitNuzzo1RM(nuzzoRepMaxes(cardLiftRecords(name)));
+  if (fit != null) {
+    const bodyShare = Math.max(0, coeffFor(name) * (athProfile(els.athlete.value)?.weight ?? 0));
+    const pts: { reps: number; w: number }[] = [];
+    for (let r = 1; r <= frame.maxReps; r++) { const w = nuzzoAddedWeightForReps(fit - bodyShare, bodyShare, r); if (w != null) pts.push({ reps: r, w }); }
+    if (pts.length > 1) curve = pts;
+  }
+  return { pts: disp.pts, loW, hiW, maxReps: frame.maxReps, maxCount: frame.maxCount, binW: bin, binR: sz, ...(curve ? { curve } : {}) };
+}
+
+/** Render the sets-map as an SVG string: a faint table grid (weight × reps) with a
+ *  green pin standing at each logged point, its height = #sets done there over time. */
+function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
+  const svgW = 400, svgH = 330, margin = 18;     // taller 3D space (owner) so the city has headroom
+  const Wd = 6, Dp = 5, maxBarH = 3.2;           // table width (weight), depth (reps), max pin height
+  const cy0 = -maxBarH / 2;                       // table sits at the bottom
+
+  const cosY = Math.cos(yaw), sinY = Math.sin(yaw);
+  const cosP = Math.cos(pitch), sinP = Math.sin(pitch);
+  const rot = (x: number, y: number, z: number) => {
+    const x1 = x * cosY + z * sinY;
+    const z1 = -x * sinY + z * cosY;
+    const y2 = y * cosP - z1 * sinP;
+    const z2 = y * sinP + z1 * cosP;
+    return { X: x1, Y: y2, Z: z2 };
+  };
+  // World mappers (centred on the origin).
+  const mapX = (w: number) => Wd / 2 - ((w - d.loW) / (d.hiW - d.loW)) * Wd; // weight increases to the RIGHT (owner)
+  const mapZ = (r: number) => (r / d.maxReps) * Dp - Dp / 2;
+  const mapH = (c: number) => (c / d.maxCount) * maxBarH;
+  // Cell pitch on the floor: bars (and empty markers) now FILL their (weight-bin × rep)
+  // cell instead of being thin sticks, so there's no white floor between them (owner);
+  // a small gap remains so the bin grid lines read between bars. Aligned to the actual
+  // bins, so spacing tracks the wt/reps merge settings.
+  const wStep = d.binW > 0 ? d.binW : Math.max(1, d.hiW - d.loW);
+  const rStep = d.binR > 0 ? d.binR : Math.max(1, d.maxReps);
+  const nW = Math.max(1, Math.round((d.hiW - d.loW) / wStep));
+  const nR = Math.max(1, Math.round(d.maxReps / rStep));
+  const CELL_FILL = 0.9; // 0..1 of the cell the bar occupies (the rest is the grid gap)
+  const cellHX = (Wd / nW) / 2 * CELL_FILL;
+  const cellHZ = (Dp / nR) / 2 * CELL_FILL;
+
+  // BARS: a THIN 3D stick per (weight, rep) cell. Every face is shaded by its orientation
+  // along a warm-light → cool-shadow gradient so the perspective reads (flat identical teal
+  // was unreadable), with a darker edge. (Owner: "2× thinner, top spheres → cubes 2× thicker
+  // than the bar but smaller, light shadows + different side shadings, darker edges, real
+  // colour theory". Ground ellipses removed — owner: black circles looked like dirt.)
+  type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
+  type BarColor = { r: number; g: number; b: number };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number };
+  // COLOUR: a cool→warm ramp (deep teal → warm brick-red) where RED = a TALLER bar — that rep
+  // was done MORE times in the window (owner: "the color shows the height of each bar, not the
+  // 1RM"). So the most-repeated cells glow red; rarely-hit cells stay teal — normalised across
+  // the counts shown. World-fixed light then shades each face. (Was: red = estimated 1RM.)
+  const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+  const COOL: [number, number, number] = [40, 132, 150];
+  const WARM: [number, number, number] = [198, 74, 52];
+  let cntLo = Infinity, cntHi = -Infinity;
+  for (const p of d.pts) { if (p.count < cntLo) cntLo = p.count; if (p.count > cntHi) cntHi = p.count; }
+  const cntRange = Math.max(1e-6, cntHi - cntLo);
+  const barColor = (count: number): BarColor => {
+    const rf = clamp01((count - cntLo) / cntRange); // RED = taller bar (more reps done)
+    return { r: COOL[0] + (WARM[0] - COOL[0]) * rf, g: COOL[1] + (WARM[1] - COOL[1]) * rf, b: COOL[2] + (WARM[2] - COOL[2]) * rf };
+  };
+  const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
+  const faceFill = (c: BarColor, t: number) => { const f = 0.55 + 0.62 * t; return `rgb(${cl(c.r * f)},${cl(c.g * f)},${cl(c.b * f)})`; };
+  const edgeFill = (c: BarColor) => `rgb(${cl(c.r * 0.6)},${cl(c.g * 0.6)},${cl(c.b * 0.6)})`; // lighter than before (owner: corners too black)
+  // WORLD-FIXED light from an ANGLE (upper-front-right), NOT rotated into screen space — so
+  // spinning the model moves which faces are lit (owner: "light stays the same, rotating
+  // changes shadow position; from an angle, not overhead"). Face normals are world-fixed.
+  const Lw = (() => { const n = Math.hypot(0.55, 0.6, 0.45); return { x: 0.55 / n, y: 0.6 / n, z: 0.45 / n }; })();
+  const faceT = (nx: number, ny: number, nz: number): number => 0.3 + 0.7 * Math.max(0, nx * Lw.x + ny * Lw.y + nz * Lw.z);
+  const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
+  const hwx = cellHX, hwz = cellHZ;      // fill the cell (no white gaps) — owner
+  // Append one box's lit faces (4 sides + optional top) to `faces` at opacity `op`; returns
+  // its 8 corners. `skipTop` omits the top face (for stacked recency segments, where an
+  // intermediate top would be hidden under the segment above and only muddy the transparency).
+  const addBox = (faces: Face[], cx: number, cz: number, yLo: number, yHi: number, hx: number, hz: number, op = 1, skipTop = false): { X: number; Y: number; Z: number }[] => {
+    const cn = (dx: number, dz: number, y: number) => rot(cx + dx, y, cz + dz);
+    const bot = [cn(-hx, -hz, yLo), cn(hx, -hz, yLo), cn(hx, hz, yLo), cn(-hx, hz, yLo)];
+    const top = [cn(-hx, -hz, yHi), cn(hx, -hz, yHi), cn(hx, hz, yHi), cn(-hx, hz, yHi)];
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4, f = [bot[i]!, bot[j]!, top[j]!, top[i]!], n = SIDE_N[i]!;
+      faces.push({ pts: f, z: (f[0]!.Z + f[1]!.Z + f[2]!.Z + f[3]!.Z) / 4, t: faceT(n[0], n[1], n[2]), op });
+    }
+    if (!skipTop) faces.push({ pts: top, z: (top[0]!.Z + top[1]!.Z + top[2]!.Z + top[3]!.Z) / 4 + 0.02, t: faceT(0, 1, 0), op });
+    return [...bot, ...top];
+  };
+  const bars: Bar[] = [];
+  for (const p of d.pts) {
+    const cx = mapX(p.w), cz = mapZ(p.reps), topY = cy0 + mapH(p.count);
+    const faces: Face[] = [];
+    // Stick = stacked RECENCY segments (recent at the bottom solid, older above and fading):
+    // a tier of t occurrences is mapH(t) tall, at that tier's opacity (owner: older = fainter).
+    let cum = 0; const lastTier = p.tiers.reduce((m, c, i) => (c > 0 ? i : m), 0);
+    const stick = addBox(faces, cx, cz, cy0, topY, hwx, hwz, MAP_TIER_OP[0]); // for corners/bounds
+    faces.length = 0; // rebuilt as recency segments below (no cube head anymore — owner)
+    for (let i = 0; i < p.tiers.length; i++) {
+      const c = p.tiers[i]!; if (c <= 0) continue;
+      const yLo = cy0 + mapH(cum), yHi = cy0 + mapH(cum + c);
+      addBox(faces, cx, cz, yLo, yHi, hwx, hwz, MAP_TIER_OP[i] ?? 0.22, i !== lastTier);
+      cum += c;
+    }
+    const hd = rot(cx, topY, cz);
+    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.count), cx, cz, topY });
+  }
+
+  // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
+  const gx0 = -Wd / 2, gx1 = Wd / 2, gz0 = -Dp / 2, gz1 = Dp / 2;
+  const grid: { ax: number; ay: number; bx: number; by: number }[] = [];
+  // A grid line at EACH weight-bin boundary and EACH rep boundary (owner: "weight and
+  // reps lines so I see where each bar is"), so the lattice frames every bar's cell
+  // instead of an arbitrary 4×4. Boundaries sit in the gap between filled bars.
+  for (let w = d.loW - wStep / 2; w <= d.hiW + wStep / 2 + 1e-6; w += wStep) {
+    const x = mapX(w);
+    const a = rot(x, cy0, gz0), b = rot(x, cy0, gz1);
+    grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
+  }
+  for (let r = rStep / 2; r <= d.maxReps + rStep / 2 + 1e-6; r += rStep) {
+    const z = mapZ(r);
+    const a = rot(gx0, cy0, z), b = rot(gx1, cy0, z);
+    grid.push({ ax: a.X, ay: a.Y, bx: b.X, by: b.Y });
+  }
+
+  // Axis anchors.
+  const axO = rot(gx0, cy0, gz0);
+  const axW = rot(gx1, cy0, gz0);
+  const axR = rot(gx0, cy0, gz1);
+  const axS = rot(gx0, cy0 + maxBarH, gz0);
+
+  // Live bounds — used only to CENTRE the city (so it stays put as you spin).
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const see = (X: number, Y: number) => { if (X < minX) minX = X; if (X > maxX) maxX = X; if (Y < minY) minY = Y; if (Y > maxY) maxY = Y; };
+  for (const bar of bars) for (const c of bar.corners) see(c.X, c.Y);
+  for (const g of grid) { see(g.ax, g.ay); see(g.bx, g.by); }
+  for (const q of [axO, axW, axR, axS]) see(q.X, q.Y);
+  const ctrX = (minX + maxX) / 2, ctrY = (minY + maxY) / 2;
+  // FROZEN scale: fit the full world box at the DEFAULT camera angle, then keep that zoom
+  // CONSTANT at every rotation — the old per-frame fit re-measured the live silhouette, so
+  // tilting blew the span up and shrank everything (owner: "when I rotate it becomes very
+  // zoomed out"). Since the data always spans the whole box (maxCount→maxBarH, loW..hiW,
+  // 0..maxReps), this reference fit equals the nice default view and never zooms out.
+  const REF_Y = -0.62, REF_P = 0.52;
+  const rcY = Math.cos(REF_Y), rsY = Math.sin(REF_Y), rcP = Math.cos(REF_P), rsP = Math.sin(REF_P);
+  const refProj = (x: number, y: number, z: number) => {
+    const x1 = x * rcY + z * rsY, z1 = -x * rsY + z * rcY;
+    return { X: x1, Y: y * rcP - z1 * rsP };
+  };
+  let rMinX = Infinity, rMaxX = -Infinity, rMinY = Infinity, rMaxY = -Infinity;
+  for (const bx of [-Wd / 2, Wd / 2]) for (const by of [cy0, cy0 + maxBarH]) for (const bz of [-Dp / 2, Dp / 2]) {
+    const q = refProj(bx, by, bz);
+    if (q.X < rMinX) rMinX = q.X; if (q.X > rMaxX) rMaxX = q.X; if (q.Y < rMinY) rMinY = q.Y; if (q.Y > rMaxY) rMaxY = q.Y;
+  }
+  const refSpanX = Math.max(0.001, rMaxX - rMinX), refSpanY = Math.max(0.001, rMaxY - rMinY);
+  const scale = Math.min((svgW - 2 * margin) / refSpanX, (svgH - 2 * margin) / refSpanY);
+  const offX = svgW / 2 - ctrX * scale;
+  const offY = svgH / 2 + ctrY * scale;
+  const sx = (X: number) => X * scale + offX;
+  const sy = (Y: number) => -Y * scale + offY;
+
+  let out = "";
+  // Table grid first (under everything).
+  for (const g of grid)
+    out += `<line x1="${sx(g.ax).toFixed(1)}" y1="${sy(g.ay).toFixed(1)}" x2="${sx(g.bx).toFixed(1)}" y2="${sy(g.by).toFixed(1)}" stroke="var(--line)" stroke-width="1" opacity="0.5"/>`;
+
+  // GRAY empty-cell markers (owner): every (weight-bin, rep) cell with NO data gets a faint
+  // gray flat footprint on the floor (a 0-height bar), so gaps in the grid are visible.
+  const have = new Set(d.pts.map((p) => `${p.w}|${p.reps}`));
+  for (let w = d.loW; w <= d.hiW + 1e-6; w += d.binW) {
+    for (let k = 1; k * d.binR <= d.maxReps + 1e-6; k++) {
+      const repCoord = k * d.binR;
+      if (have.has(`${w}|${repCoord}`)) continue;
+      const cx = mapX(w), cz = mapZ(repCoord);
+      const q = [rot(cx - cellHX, cy0, cz - cellHZ), rot(cx + cellHX, cy0, cz - cellHZ), rot(cx + cellHX, cy0, cz + cellHZ), rot(cx - cellHX, cy0, cz + cellHZ)];
+      out += `<polygon points="${q.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ")}" fill="#9aa6b0" opacity="0.18"/>`;
+    }
+  }
+
+  // NUZZO strength curve on the floor (owner: "see the nuzzo curve on the 2D bottom map") —
+  // the weight you could do for each rep count, projected onto the weight×rep floor UNDER the
+  // bars (drawn before them). Clipped to the weight frame.
+  if (d.curve && d.curve.length > 1) {
+    const cpts = d.curve
+      .filter((c) => c.w >= d.loW - d.binW && c.w <= d.hiW + d.binW)
+      .map((c) => { const q = rot(mapX(c.w), cy0 + 0.012, mapZ(c.reps)); return `${sx(q.X).toFixed(1)},${sy(q.Y).toFixed(1)}`; });
+    if (cpts.length > 1) out += `<polyline points="${cpts.join(" ")}" fill="none" stroke="#e0573a" stroke-width="1.8" stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+
+  // Far→near: each bar's faces sorted far→near so near faces overpaint far ones (painter's).
+  bars.sort((a, b) => a.depth - b.depth);
+  for (const bar of bars) {
+    bar.faces.sort((a, b) => a.z - b.z);
+    const edge = edgeFill(bar.color);
+    for (const f of bar.faces) {
+      const poly = f.pts.map((c) => `${sx(c.X).toFixed(1)},${sy(c.Y).toFixed(1)}`).join(" ");
+      out += `<polygon points="${poly}" fill="${faceFill(bar.color, f.t)}" fill-opacity="${f.op.toFixed(2)}" stroke="${edge}" stroke-width="0.5" stroke-opacity="${f.op.toFixed(2)}" stroke-linejoin="round"/>`;
+    }
+    // (Owner removed the white cross-section rings that segmented each tower — solid bars now.)
+    // Transparent hit-circle at the bar top carries the hover tooltip (count is in the tip).
+    out += `<circle cx="${sx(bar.head.X).toFixed(1)}" cy="${sy(bar.head.Y).toFixed(1)}" r="8" fill="transparent"><title>${bar.tip}</title></circle>`;
+  }
+
+  // Axis lines + labels.
+  const axLine = (to: { X: number; Y: number }) => `<line x1="${sx(axO.X).toFixed(1)}" y1="${sy(axO.Y).toFixed(1)}" x2="${sx(to.X).toFixed(1)}" y2="${sy(to.Y).toFixed(1)}" stroke="var(--muted)" stroke-width="1" opacity="0.7"/>`;
+  const lbl = (a: { X: number; Y: number }, dx: number, dy: number, text: string) =>
+    `<text x="${(sx(a.X) + dx).toFixed(1)}" y="${(sy(a.Y) + dy).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#46647f" paint-order="stroke" stroke="#fff" stroke-width="2.5" stroke-linejoin="round">${text}</text>`;
+  out += axLine(axW) + axLine(axR) + axLine(axS);
+  out += lbl(axW, 0, 13, `${d.loW}kg`);
+  out += lbl(axO, 0, 13, `${d.hiW}kg`);
+  out += lbl(axR, 0, 13, `${d.maxReps} reps`);
+  out += lbl(axS, 0, -5, `${d.maxCount}× done`);
+  // Intermediate NUMBERS along the weight (front) and reps (side) axes (owner: "I don't see
+  // numbers along the x and y axes") — at ¼/½/¾ between the corners, so each bar's weight/rep
+  // is readable. White-haloed (lbl) so they read over the towers.
+  for (let i = 1; i <= 3; i++) {
+    const w = d.loW + (d.hiW - d.loW) * (i / 4);
+    out += lbl(rot(mapX(w), cy0, gz0), 0, 13, `${Math.round(w)}`);
+    const r = (d.maxReps * i) / 4;
+    out += lbl(rot(gx0, cy0, mapZ(r)), 0, 13, `${Math.round(r)}`);
+  }
+  return out;
+}
+
+/** The Map-tab merge/range/height control pills (one compact sideways-scrolling row). */
+function cardMapCtrlsHtml(): string {
+  const repLbl = vol3dRepBin > 1 ? `reps: by ${vol3dRepBin}` : "reps: each";
+  const RANGE_LBL: Record<Vol3dRange, string> = { "1w": "1 week", "2w": "2 weeks", "1mo": "1 month", "3mo": "3 months", "6mo": "6 months", "12mo": "12 months", all: "all time" };
+  const rangeLbl = RANGE_LBL[vol3dRange];
+  return `<div class="lt-map-ctrls">` +
+    `<button type="button" class="lt-map-pill" data-mapwt title="Merge weights into bins — tap to cycle 1 / 2 / 5 / 10 / 15 / 20 kg">wt: ${vol3dWtBin}kg</button>` +
+    `<button type="button" class="lt-map-pill" data-maprep title="Merge reps — tap to cycle 1 / 2 / 3 / 4 / 5">${repLbl}</button>` +
+    `<button type="button" class="lt-map-pill" data-maprange title="Time range — tap to cycle 1w / 2w / 1mo / 3mo / 6mo / 12mo / all">${rangeLbl}</button>` +
+    `</div>`;
+}
+/** Sets-map tab body. */
+function cardSetsMapHtml(name: string): string {
+  const d = cardSetsMapData(name);
+  const ctrls = cardMapCtrlsHtml();
+  if (!d) return ctrls + `<p class="muted" style="padding:1rem 0">No logged sets yet.</p>`;
+  const range = vol3dRange === "all" ? "over all time" : ({ "1w": "in the last week", "2w": "in the last 2 weeks", "1mo": "in the last month", "3mo": "in the last 3 months", "6mo": "in the last 6 months", "12mo": "in the last 12 months", all: "over all time" } as Record<Vol3dRange,string>)[vol3dRange];
+  return `<div class="lt-vol-wrap">` + ctrls +
+    `<svg class="lt-vol-svg lt-vol3d" data-map3d viewBox="0 0 400 330" xmlns="http://www.w3.org/2000/svg">` +
+    renderSetsMap3d(d, vol3dYaw, vol3dPitch) +
+    `</svg>` +
+    `<div class="lt-vol-note muted">Drag to rotate · floor = weight × rep number · bar height = how many times that rep was done ${range} (so rep 1 is tallest); axes stay fixed across time filters</div>` +
+    `</div>`;
+}
+
+/** Wire pointer-drag rotation onto a mounted 3D SVG. Re-rendered in place (innerHTML
+ *  swap) on a coalesced rAF so dragging stays snappy (rule 17). Shared by both 3D tabs. */
+function mount3dDrag(svg: SVGSVGElement, render: () => string): void {
+  let dragging = false, lastX = 0, lastY = 0, raf = 0;
+  const redraw = () => { raf = 0; svg.innerHTML = render(); };
+  svg.addEventListener("pointerdown", (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    try { svg.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    e.preventDefault();
+  });
+  svg.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    vol3dYaw += (e.clientX - lastX) * 0.01;
+    vol3dPitch = Math.max(0.12, Math.min(1.45, vol3dPitch + (e.clientY - lastY) * 0.01));
+    lastX = e.clientX; lastY = e.clientY;
+    if (!raf) raf = requestAnimationFrame(redraw);
+    e.preventDefault();
+  });
+  const end = (e: PointerEvent) => {
+    dragging = false;
+    try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  svg.addEventListener("pointerup", end);
+  svg.addEventListener("pointercancel", end);
+}
+
+function mountSetsMap(name: string): void {
+  const svg = els.exInfoBody.querySelector<SVGSVGElement>("[data-map3d]");
+  const d = cardSetsMapData(name);
+  if (svg && d) mount3dDrag(svg, () => renderSetsMap3d(d, vol3dYaw, vol3dPitch));
+}
+
+/** Set the exercise-info card HTML AND mount its charts — the single chokepoint every
+ *  card (re)render funnels through, so the embedded svgChart is never left un-mounted. */
+function paintExInfo(name: string): void {
+  const tab = (id: string, label: string) =>
+    `<button class="lt-tab${exInfoTab === id ? " is-on" : ""}" data-exitab="${id}">${label}</button>`;
+  const tabs = `<div class="lt-tabs">${tab("curve", "Curve")}${tab("volume", "Volume")}</div>`;
+  if (exInfoTab === "volume") {
+    els.exInfoBody.innerHTML = tabs + cardSetsMapHtml(name);
+    mountSetsMap(name);
+  } else {
+    els.exInfoBody.innerHTML = tabs + exerciseInfoHtml(name);
+    renderExInfoGraph(name);
+  }
+}
+
+/** The "How to train" brief for one lift — six panels, prepended to the info card. */
+function liftTrainingHtml(name: string): string {
+  const formula = currentFormula();
+  const user = els.athlete.value;
+  // FOCUS dials — moved here from the Priorities-row detail (owner): when this lift is one
+  // of the athlete's focus lifts, the card shows its weekly-set TARGET stepper and its set
+  // INTENSITY pill, beside the avg sets/week actually done. Reuses the same data-priotgt /
+  // data-prioeffort markup so the existing global handlers drive it (the intensity handler
+  // also calls refreshExerciseInfo so the pill updates here). Empty for non-focus lifts.
+  const focusE = athletePriorities(user)[name];
+  const focusEff = focusE ? effortOf(focusE) : "hard";
+  const focusHtml = focusE
+    ? `<div class="lt-focus">` +
+        `<span class="prio-target" title="Weekly sets you want to do — tap −/+ to tune">` +
+          `<span class="prio-tgt-lbl muted">target</span>` +
+          `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(name)}" data-d="-1" aria-label="Fewer">−</button>` +
+          `<span class="prio-tgt-val">${fmtTarget(focusE.target)}</span>` +
+          `<button type="button" class="prio-tgt-btn" data-priotgt="${escapeHtml(name)}" data-d="1" aria-label="More">+</button>` +
+        `</span>` +
+        `<span class="prio-avg muted" title="Avg sets/week you've actually done over the last month">~${exerciseMonthAvg(user, name).toFixed(1)}/wk</span>` +
+        `<span class="prio-eff-inline"><span class="prio-eff-lbl muted">intensity</span>` +
+          `<button type="button" class="prio-effort prio-effort-${focusEff}" data-prioeffort="${escapeHtml(name)}" title="${EFFORT_TIP[focusEff]} Tap to cycle Hard → Mid → Half.">${EFFORT_LABEL[focusEff]}</button>` +
+          `<span class="prio-eff-hint muted">${EFFORT_HINT[focusEff]}</span></span>` +
+      `</div>`
+    : "";
+  const loggedE1rm = currentLiftE1RM(user, name, formula);
+  // A manual weight×reps typed on the card OVERRIDES the logged best — so a never-logged
+  // lift can still compute a 1RM + warm-up + working sets right here (PB-21 parity).
+  const mw = parseFloat(cardCalc.weight), mr = parseFloat(cardCalc.reps);
+  const manualOrm = (Number.isFinite(mw) && mw > 0 && Number.isFinite(mr) && mr >= 1) ? estimate1RM(mw, mr, formula) : null;
+  // The lift's real rep-maxes (for the Nuzzo fit-graph) and the 1RM that best fits them
+  // to the curve. When sets are logged, the card's 1RM is the adjustable slider value
+  // (cardOrm) — defaulting to the logged best — instead of the kg×reps mini-calculator.
+  // cardLiftRecords: EFFECTIVE (bodyweight-folded) loads, synthetic combine/compare lifts
+  // included, AND spelling-merge variants (chin-ups under pull-ups) matched — so the fit is
+  // right for bodyweight lifts and composite/variant lifts have rep-maxes to fit + a graph.
+  const repMaxes = nuzzoRepMaxes(cardLiftRecords(name));
+  const bestFit = bestFitNuzzo1RM(repMaxes); // EFFECTIVE 1RM (bodyweight folded in)
+  const hasLogged = repMaxes.length > 0;
+  // BODYWEIGHT-aware 1RM (#major): the graph + slider work in ADDED-weight space — the
+  // plate you add, negative when assisted — while the rest of the card keeps the EFFECTIVE
+  // 1RM. bodyShare = the body's contribution to this lift (coeff × bodyweight); 0 for
+  // bar-only lifts, so they're unchanged. cardOrm now stores the ADDED 1RM.
+  const bodyShare = Math.max(0, coeffFor(name) * (athProfile(user)?.weight ?? 0));
+  const loggedAdded = loggedE1rm != null ? loggedE1rm - bodyShare : null;
+  const bestFitAdded = bestFit != null ? bestFit - bodyShare : null;
+  // The hand-set "custom set strength" (rule 55): the 1RM the owner dialed in by dragging
+  // the Nuzzo fit — persisted per (athlete,exercise) and SHARED with the analysis reps×kg
+  // fit (ONE SSOT). It's the most-accurate estimate, so it wins over the auto best-fit here.
+  const customEff = rvwFitOf(name);
+  const persistedAdded = customEff != null ? customEff - bodyShare : null;
+  const addedBase = hasLogged
+    ? (cardOrm ?? persistedAdded ?? bestFitAdded ?? loggedAdded)
+    : (manualOrm != null ? manualOrm - bodyShare : null);
+  // Effective 1RM drives the working weights / warm-up / suggested set (same load space
+  // as the logged sets). = added 1RM + the body share.
+  const e1rm = addedBase != null ? addedBase + bodyShare : null;
+  const fmt = (n: number) => String(Math.round(n * 10) / 10);
+  const sec = (title: string, body: string) =>
+    `<div class="lt-sec"><div class="lt-sec-h">${escapeHtml(title)}</div>${body}</div>`;
+  const pill = (label: string, value: string) =>
+    `<span class="lt-pill"><span class="lt-pl">${escapeHtml(label)}</span><span class="lt-pv">${value}</span></span>`;
+  // Inline mini-calculator: type a weight × reps to compute the 1RM that drives this card
+  // (defaults to the logged best when blank). The card is the calculator now (owner).
+  const calcRow = `<div class="lt-calc">` +
+    `<input type="number" class="lt-calc-in lt-calc-w" inputmode="decimal" step="0.5" min="0" placeholder="kg" value="${escapeHtml(cardCalc.weight)}" aria-label="Weight" data-cardcalc="w">` +
+    `<span class="lt-calc-x">×</span>` +
+    `<input type="number" class="lt-calc-in lt-calc-r" inputmode="numeric" step="1" min="1" placeholder="reps" value="${escapeHtml(cardCalc.reps)}" aria-label="Reps" data-cardcalc="r">` +
+    (e1rm != null && e1rm > 0
+      ? `<span class="lt-calc-orm">≈ <b>${fmt(e1rm)}</b> kg 1RM${manualOrm != null ? "" : loggedE1rm != null ? ` <span class="muted">(logged)</span>` : ""}</span>`
+      : `<span class="muted lt-calc-hint">type a set to calc</span>`) +
+    `</div>`;
+
+  if (e1rm === null || !(e1rm > 0)) {
+    // No logged data AND nothing typed — show the inline calculator (so a never-logged lift
+    // still works) + the always-editable setup notes.
+    return `<div class="lt-wrap">` +
+      focusHtml +
+      sec("Calculate", calcRow) +
+      sec("Setup notes", setupNotesHtml(name)) +
+      `</div>`;
+  }
+
+  // Suggested hard set: 5 reps @ RIR 2 (a sensible default working set).
+  const hs = hardSetWeight(e1rm, { kind: "repsRIR", reps: 5, rir: 2 }, formula);
+  const unit = bodyShare > 0 ? "kg added" : "kg";
+  // The dots' source data — EVERY logged set now (owner: "all points, not just top 10"),
+  // heaviest-added first, in a collapsed list so the cloud behind the teal dots is legible.
+  const allSets = currentExInfo === name ? cardNuzzoRealSets(name) : [];
+  const sortedSets = [...allSets].sort((p, q) => q.added - p.added || q.reps - p.reps);
+  const realSrc = sortedSets.length
+    ? `<details class="lt-realsrc"><summary class="lt-realsrc-sum muted">Real lifts on the graph <span class="lt-realsrc-cnt">${sortedSets.length}</span></summary>` +
+        `<div class="lt-realsrc-list">` +
+        sortedSets.map((s) => {
+          const pct = e1rm && e1rm > 0 ? Math.round(((s.added + bodyShare) / e1rm) * 100) : 0;
+          return `<div class="lt-realsrc-row"><span class="lt-realsrc-w">${fmt(s.added)} ${unit} × ${s.reps}</span><span class="muted">${pct}%</span></div>`;
+        }).join("") +
+        `</div></details>`
+    : "";
+  const graphHost = `<div class="exinfo-graph-host" data-exinfograph="${escapeHtml(name)}"></div>`;
+  const graphBlock = graphHost + realSrc;
+  // Working weights: true rep-maxes for common targets (load to FAILURE at N reps). Computed
+  // on the EFFECTIVE 1RM, shown as ADDED weight (rule 49) — bodyShare 0 leaves bar lifts as-is.
+  const repTargets = [3, 5, 8, 12];
+  const workPills = repTargets.map((reps) => {
+    const w = weightForReps(e1rm, reps, formula);
+    return w === null ? "" : pill(`${reps}RM`, `${fmt(w - bodyShare)}kg`);
+  }).join("");
+  // Warm-up + working sets — the SAME rich table + plan pickers as the calculator (owner:
+  // the card should have everything the calculator has). The pills open the shared tabbed
+  // popups; lastWuCalc/lastWuRerender let the popup compute + refresh THIS card.
+  if (hs && currentExInfo === name) {
+    // ADDED 1RM + ADDED work + the bodyweight share, so the plan popup matches the card's
+    // own warm-up table (rule 49: effective maths, added-weight display). bar lift = share 0.
+    lastWuCalc = { orm: e1rm - bodyShare, work: hs.weightKg - bodyShare, reps: hs.reps, formula, increment: 2.5, bwl: bodyShare };
+    lastWuRerender = () => { if (currentExInfo) paintExInfo(currentExInfo); };
+  }
+  const warmRows = hs
+    ? `<div class="lt-warm-block"><div class="lt-warm-pills">${planPillsHtml()}</div>${warmupTableHtml(e1rm - bodyShare, hs.weightKg - bodyShare, hs.reps, formula, 2.5, bodyShare, name)}</div>`
+    : `<p class="muted lt-mini">—</p>`;
+
+  // PAIR-WITH lifts: the athlete's own lifts that use NONE of this lift's muscles — so
+  // you can superset them (train one while these muscles rest). Ordered by (1) the
+  // athlete's PRIORITY for that lift (focus level first), then (2) how easy it is to
+  // pair up (the user's own flag wins, the auto-ease guess only breaks ties). "Avoid"
+  // flagged lifts sink to the end, struck, so they can still be un-flagged.
+  const myMuscles = new Set(mgsFor(name));
+  const todayD = dayNumber(todayIso());
+  const pri = athletePriorities(user);
+  const focusRank = (le: { name: string }): number => {
+    const p = pri[le.name];
+    return p ? PRIORITY_ORDER[p.level] : 9; // focus lifts (max=0…maintain=3) before the rest
+  };
+  // The grid does NOT re-sort by pairing grade — re-sorting made the chip you just
+  // tapped JUMP (owner: confusing). Grade is set via the mini menu; order stays stable.
+  // The owner-chosen SORT key + HIDE-avoid toggle apply only here, on render.
+  type PairCand = { name: string; muscles: string[]; sets: number };
+  const pairCmp = (p: PairCand, q: PairCand): number => {
+    switch (pairSort) {
+      case "muscle": // by primary muscle group, then name
+        return (mgsFor(p.name)[0] ?? "").localeCompare(mgsFor(q.name)[0] ?? "") ||
+          displayName(p.name).localeCompare(displayName(q.name));
+      case "name":
+        return displayName(p.name).localeCompare(displayName(q.name));
+      case "trained": // most-trained first
+        return (q.sets - p.sets) || displayName(p.name).localeCompare(displayName(q.name));
+      default: // "practical": priority → real station/setup practicality of pairing with
+        // THIS lift (Phase-5 model) → most-trained.
+        return (focusRank(p) - focusRank(q)) ||
+          (pairPracticalityScore(name, p.name) - pairPracticalityScore(name, q.name)) ||
+          (q.sets - p.sets);
+    }
+  };
+  const allPairCands = liveExercises(user, todayD)
+    .filter((le) => le.name !== name && le.muscles.length > 0 && !le.muscles.some((m) => myMuscles.has(m)));
+  // "Hide avoid": drop the no-way-graded suggestions (kept count so the toggle shows it).
+  const avoidCount = allPairCands.filter((le) => pairGradeFor(name, le.name) === "noway").length;
+  const pairCands = (pairHideAvoid ? allPairCands.filter((le) => pairGradeFor(name, le.name) !== "noway") : allPairCands)
+    .sort(pairCmp);                            // tiebreak: most-trained
+  const pairChip = (le: { name: string }): string =>
+    `<span class="lt-paircell pg-${pairGradeFor(name, le.name)}">` +
+    `<button type="button" class="lt-antex" data-trainex="${escapeHtml(le.name)}" title="${escapeHtml(displayName(le.name))} — uses different muscles, good to superset while ${escapeHtml(displayName(name))}'s rest · ${escapeHtml(pairPracticalityHint(name, le.name))}">${escapeHtml(shortFor(le.name))}</button>` +
+    pairFlagBtn(name, le.name) +
+    `</span>`;
+  // Item 3: the SUPER/GOOD pairs (directional name → candidate), surfaced near the top.
+  const topPairs = pairCands.filter((le) => pairGradeFor(name, le.name) === "super" || pairGradeFor(name, le.name) === "good");
+  const topPairsHtml = `<div class="lt-toppairs">` + topPairs.map((le) => {
+    const meta = pairGradeMeta(pairGradeFor(name, le.name));
+    return `<button type="button" class="lt-toppair pg-${pairGradeFor(name, le.name)}" data-trainex="${escapeHtml(le.name)}" title="${meta.label} pair — tap to open"><span class="pgo-glyph">${meta.glyph}</span> ${escapeHtml(shortFor(le.name))}</button>`;
+  }).join("") + `</div>`;
+  const antBody = pairCands.length
+    ? `<div class="lt-ant">` + pairCands.map(pairChip).join("") + `</div>`
+    : `<p class="muted lt-mini">${pairHideAvoid && avoidCount ? "All pairs are avoid-flagged (hidden)." : "No non-overlapping lift logged yet."}</p>`;
+  // Sort key cycles through one pill (rule 15 #toggle); Hide-avoid is an on/off pill.
+  const SORT_LABEL: Record<PairSort, string> = { practical: "Practical", muscle: "Muscle", name: "A–Z", trained: "Trained" };
+  const pairCtrls =
+    `<div class="lt-pairctrls">` +
+      `<button type="button" class="lt-pairsort" data-pairsort title="Sort pairs">⇅ ${SORT_LABEL[pairSort]}</button>` +
+      `<button type="button" class="lt-pairhide${pairHideAvoid ? " is-on" : ""}" data-pairhide aria-pressed="${pairHideAvoid}" title="Hide avoid-flagged pairs">⊘${avoidCount ? ` ${avoidCount}` : ""}</button>` +
+    `</div>`;
+  // The pills are COLLAPSED under a dropdown by default (owner: the wall dominated the
+  // card) — opening it reveals ALL pair candidates; the sort/hide controls live inside.
+  const pairSecHtml =
+    `<details class="lt-sec lt-pair-fold"${pairFoldOpen ? " open" : ""}>` +
+      `<summary class="lt-pair-sum">Pair with <span class="lt-pair-n">${pairCands.length}</span></summary>` +
+      `<div class="lt-pair-body">${pairCtrls}${antBody}</div>` +
+    `</details>`;
+
+  return `<div class="lt-wrap">` +
+    exInfoLensBarHtml(name) +
+    (hasLogged
+      ? sec("Graph", graphBlock)
+      : sec("Calculate", calcRow) + sec("Graph", graphHost)) +
+    focusHtml +
+    sec("Working weights", `<div class="lt-row"><span class="lt-now">now ~${fmt(e1rm)}kg 1RM</span>${workPills}</div>`) +
+    (topPairs.length ? sec("Top pairs", topPairsHtml) : "") +
+    sec("Warmup", warmRows) +
+    sec("Setup notes", setupNotesHtml(name)) +
+    pairSecHtml +
+    `</div>`;
+}
+
 function exerciseInfoHtml(name: string): string {
   const formula = currentFormula();
   // The info card shows THIS lift's real data — unfiltered, so a lift hidden by the
@@ -10813,6 +14432,38 @@ function exerciseInfoHtml(name: string): string {
     `<input class="ex-edit-coeff-max" type="number" step="0.05" min="0" max="2" value="${cr.max}" data-editex="${escapeHtml(name)}" aria-label="Bodyweight part max for ${escapeHtml(name)}" />` +
     `<span class="ex-coeff-avg" title="Average of the range — this is what the 1RM uses">avg ${coeff}</span>` +
     `</span>`;
+  // Default range of motion (%) — every exercise is assumed 90% unless customised
+  // here. Tracked/displayed only (does not rescale 1RMs). (ROM feature, owner.)
+  const romInput =
+    `<span class="ex-rom-range">` +
+    `<input class="ex-edit-rom" type="number" step="5" min="10" max="100" value="${romDefaultFor(name)}" data-editex="${escapeHtml(name)}" aria-label="Default range of motion percent for ${escapeHtml(name)}" />` +
+    `<span class="ex-rom-unit">% of full ROM</span>` +
+    `</span>`;
+  // Machine base weight (kg) — a hidden resistance the machine adds even at the lowest
+  // pin (e.g. Leg Extension ≈ 20). Folded into strength/1RM only; 0 = none. Blank to reset.
+  const mwInput =
+    `<span class="ex-mw-range">` +
+    `<input class="ex-edit-mw" type="number" step="1" min="0" max="200" value="${machineWeightFor(name) || ""}" placeholder="0" data-editex="${escapeHtml(name)}" aria-label="Machine base weight (kg) for ${escapeHtml(name)}" />` +
+    `<span class="ex-mw-unit">kg base</span>` +
+    `</span>`;
+  // Machine multiplier (the ÷ divisor): an assisted machine's dial over-reads the real help
+  // by this factor (default 2 → −20 reads as −10). Editable here (owner). Shown only for
+  // assisted-machine lifts, where the −20/2 formula uses it.
+  const mmInput =
+    `<span class="ex-mw-range">` +
+    `<span class="ex-mm-pre">÷</span>` +
+    `<input class="ex-edit-mm" type="number" step="0.1" min="0.5" max="5" value="${fmt(machineMultFor(name))}" placeholder="2" data-editex="${escapeHtml(name)}" aria-label="Machine multiplier (dial over-read factor) for ${escapeHtml(name)}" />` +
+    `<span class="ex-mw-unit">dial over-read</span>` +
+    `</span>`;
+  // Experimental toggle (owner): a scratchpad lift while exploring — its sets are excluded from
+  // every metric/graph. A pressable pill showing its state (rule #toggle). The built-in
+  // Experimentation lift is always experimental, so its pill is locked on.
+  const expOn = isExperimental(name);
+  const expLocked = name === EXPERIMENTATION_EXERCISE;
+  const expToggle =
+    `<button type="button" class="ex-exp-toggle${expOn ? " is-on" : ""}" data-editex="${escapeHtml(name)}"${expLocked ? " disabled" : ""} aria-pressed="${expOn}" ` +
+    `title="Experimental — a scratchpad while exploring; its sets are excluded from all 1RM, volume, graphs and leaderboards${expLocked ? " (the built-in Experimentation lift is always experimental)" : ""}">` +
+    `${expOn ? "experimental" : "not experimental"}</button>`;
 
   // Code + Short name share one row (two compact columns) — they're the two tiny
   // name fields, so side-by-side reads tighter than two stacked rows.
@@ -10840,6 +14491,30 @@ function exerciseInfoHtml(name: string): string {
   const combineHint = combinableGroupsForEx(name).map((g) => g.label).join(", ");
   const compareHint = comparableGroupsForEx(name).map((g) => g.label).join(", ");
 
+  // VARIATION TAGS (owner: "I should see not just ROM, but every single tag and how it affects
+  // the exercise, what options it has"). For a modelled lift, list every dimension and ALL its
+  // options with their difficulty ×factor (band shows the −kg assist), the default ★, the
+  // grayed/obvious levels muted, and each option's plain explanation. Empty for an unmodelled lift.
+  const varFam = familyOf(name);
+  const varDims = varFam ? famDimOrder(varFam) : [];
+  const variationsBody = varDims.map((dim) => {
+    const levels = famLevels(varFam!, dim);
+    const opts = Object.keys(levels).map((l) => {
+      const factor = dim === "band" ? (l === "none" ? "0kg" : `−${bandAssistKg(varFam!, l)}kg`) : `×${levels[l]}`;
+      const isDef = famDefaultLevel(varFam!, dim) === l;
+      const gray = isGray(varFam!, dim, l);
+      const hint = afLevelHint(dim, l);
+      return (
+        `<span class="ex-var-opt${isDef ? " is-default" : ""}${gray ? " is-gray" : ""}">` +
+        `<span class="ex-var-opt-name">${escapeHtml(afLevelText(dim, l, varFam!))}${isDef ? " ★" : ""}</span>` +
+        `<span class="ex-var-opt-f">${escapeHtml(factor)}</span>` +
+        (hint ? `<span class="ex-var-opt-hint">${escapeHtml(hint)}</span>` : "") +
+        `</span>`
+      );
+    }).join("");
+    return `<div class="ex-var-dimrow"><span class="ex-var-dimname">${escapeHtml(dimLabel(dim, varFam))}</span><div class="ex-var-opts">${opts}</div></div>`;
+  }).join("");
+
   const rows = [
     codeShortRow,
     foldSection("disc", "Discipline", discHint, discChips),
@@ -10849,6 +14524,11 @@ function exerciseInfoHtml(name: string): string {
     compareChips ? foldSection("compare", "Comparable", compareHint, compareChips) : "",
     displayChips ? item("Show in picker", displayChips) : "",
     item("Bodyweight part", coeffInput),
+    variationsBody ? foldSection("variations", "Variation tags", `${varDims.length} tag${varDims.length === 1 ? "" : "s"} — tap to see options`, variationsBody) : "",
+    item("Default ROM", romInput),
+    item("Machine weight", mwInput),
+    isAssistedMachine(name) ? item("Machine ÷", mmInput) : "",
+    item("Experimental", expToggle),
     item("Total sets", setCount.toLocaleString()),
     item("Athletes", `${athletes.size} — ${escapeHtml([...athletes.values()].join(", ")) || "—"}`),
     best
@@ -10996,7 +14676,17 @@ function exerciseInfoHtml(name: string): string {
     `<button type="button" class="ex-force${excl ? " is-off" : ""}" data-asexclude="${escapeHtml(name)}">${excl ? "✓ Always hide" : "Always hide"}</button>` +
     `</div>`;
 
-  return `<div class="ex-info">${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${worldRecordEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}</div>`;
+  // Two views in one card: the "How to train" INFO brief shows by default; the editable
+  // INDEX entry (code, tags, tier, groups, data) is folded away behind a tap — they're
+  // separate concerns (owner: "info ≠ index, two views"). Open state is remembered so
+  // editing a tag inside doesn't snap the fold shut.
+  const indexPart = `${groupBanner}${rows}<p class="muted ex-edit-help">Blue = editable, gold = calculated. Clear a box to reset. Saved on this device.</p>${mergePanel}${groupHtml}${selfGroupHtml}${modelFactorsEditorHtml(name)}${variationsEditorHtml(name, recs)}${taxonomyEditorHtml(name)}${graphPermsHtml(name)}${activeHtml}`;
+  // World records · Benchmarks · Statistics live ON the info page now (owner) — three
+  // collapsible dropdowns right under the training brief, editable in place (admin).
+  return `<div class="ex-info">${liftTrainingHtml(name)}` +
+    worldRecordEditorHtml(name) + benchmarksFoldHtml(name) + liftPercentileHtml(name) +
+    `<details class="ex-index-fold"${exIndexFoldOpen ? " open" : ""}><summary class="ex-index-sum">✎ Index entry — code, tags, groups &amp; data</summary>` +
+    `<div class="ex-index-body">${indexPart}</div></details></div>`;
 }
 
 /** Review panel: which graph metrics this exercise is ALLOWED to plot. Default is
@@ -11085,17 +14775,17 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
     );
   };
   const isLadder = (effVec.support ?? "free") === "ladder";
-  // Back-to-wall only: how far the shoulders sit off the wall (cm). "blue" = the 6cm block,
-  // which shows a reference diagram/photo (the owner stands on a known-thickness block).
+  // Back-to-wall only: the BACK SUPPORT — how far the back sits off the wall (cm).
+  // "blue" = the 6cm block (shows a reference diagram/photo); 30/45cm = a taller box.
   const isB2W = (effVec.support ?? "free") === "back_to_wall" && Object.keys(famLevels(fam, "shoulderDist") ?? {}).length > 0;
-  const SHD_LBL: Record<string, string> = { "0cm": "0cm (wall)", blue: "blue 6cm" };
+  const SHD_LBL: Record<string, string> = { "0cm": "0cm (wall)", blue: "blue 6cm", "30cm": "30cm", "45cm": "45cm" };
   const shdRef = isB2W && String(effVec.shoulderDist ?? "0cm") === "blue" ? hspuShoulderRef() : "";
   const supPicked = override.support !== undefined || override.ladderGrip !== undefined || override.ladderH !== undefined || override.shoulderDist !== undefined;
   const supportBlock =
     `<div class="ex-var-dim${supPicked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">support</span>` +
     `<div class="ex-var-selrow">${vecSelect("support", SUPPORT_LBL)}` +
     (isLadder ? vecSelect("ladderGrip", GRIP_LBL) + vecSelect("ladderH", HT_LBL) : "") +
-    (isB2W ? `<span class="ex-shd-lbl muted">shoulders</span>${vecSelect("shoulderDist", SHD_LBL)}` : "") +
+    (isB2W ? `<span class="ex-shd-lbl muted">back support</span>${vecSelect("shoulderDist", SHD_LBL)}` : "") +
     `</div>${shdRef}</div>`;
   // ROM (depth, ↓) × LEAN (forward, →) are two directions of one body position, set
   // with a VERTICAL depth slider + a HORIZONTAL lean slider (each step = a defined
@@ -11137,7 +14827,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `data-romkeys="${escapeHtml(romKeys.join("|"))}" data-leankeys="${escapeHtml(dataLeanKeys.join("|"))}"`;
     const readout = noLean
       ? `depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`
-      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(lk)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
+      : `lean <b class="ex-sl-lf">×${leanF}</b> × depth <b class="ex-sl-rf">×${romF}</b> = <b class="ex-sl-mult">×${mult}</b> <span class="muted">(<span class="ex-sl-lk">${escapeHtml(`${leanFingertipCm(lk, els.athlete.value)}cm`)}</span> · <span class="ex-sl-rk">${escapeHtml(rk)}</span>)</span>`;
     return (
       `<div class="ex-var-dim ex-pad-dim${picked ? " is-picked" : ""}${noLean ? " ex-pad-nolean" : ""}"><span class="ex-var-dim-lbl">${noLean ? "depth (free — no lean)" : "depth × lean"}</span>` +
       `<div class="ex-pad-readout">${readout}</div>` +
@@ -11152,7 +14842,7 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
       `</div></div>`
     );
   };
-  const dims = Object.keys(FAMILIES[fam]!.dims)
+  const dims = famDimOrder(fam)
     // ladderGrip/ladderH live in the support block; lean is folded into the rom grid.
     .filter((dim) => dim !== "ladderGrip" && dim !== "ladderH" && dim !== "shoulderDist" && !(hasGrid && dim === "lean"))
     .map((dim) => {
@@ -11171,12 +14861,19 @@ function notePickerHtml(name: string, note: string, extraFactor = 1): string {
         return `<div class="ex-var-dim"><span class="ex-var-dim-lbl">band</span><div class="ex-var-dim-chips">${noneChip}${bandedBtn}</div></div>`;
       }
       const chips = Object.keys(levels)
-        .map(
-          (l) =>
-            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}">${escapeHtml(l)} <span class="ex-var-lvl-f">${facLabel(l)}</span></button>`,
-        )
+        .map((l) => {
+          // Friendly label (not the raw key like "back_to_wall") + the level's explanation as a
+          // small gray sub-line, so the create/variation menu explains each tag (owner).
+          const hint = afLevelHint(dim, l);
+          return (
+            `<button type="button" class="ex-var-lvl${l === cur ? " is-on" : ""}" data-vecdim-ex="${escapeHtml(name)}" data-vecdim-note="${escapeHtml(note)}" data-vecdim-dim="${escapeHtml(dim)}" data-vecdim-level="${escapeHtml(l)}" aria-pressed="${l === cur}"${hint ? ` title="${escapeHtml(hint)}"` : ""}>` +
+            `<span class="ex-var-lvl-n">${escapeHtml(afLevelText(dim, l, fam))} <span class="ex-var-lvl-f">${facLabel(l)}</span></span>` +
+            (hint ? `<span class="ex-var-lvl-h">${escapeHtml(hint)}</span>` : "") +
+            `</button>`
+          );
+        })
         .join("");
-      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dim)}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
+      return `<div class="ex-var-dim${picked ? " is-picked" : ""}"><span class="ex-var-dim-lbl">${escapeHtml(dimLabel(dim, fam))}</span><div class="ex-var-dim-chips">${chips}</div></div>`;
     })
     .join("");
   // The "final multiplier" folds in any extra factor (the per-set incline level shown
@@ -11397,7 +15094,7 @@ function onBwInputChange(e: Event) {
       // Tier offers an "↺ Auto" option that drops the override (back to the guess).
       setMetaSet(kind, name, sel.value === "auto" ? [] : [sel.value]);
       renderBwParts();
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       renderLeaderboard();
     }
     return;
@@ -11437,10 +15134,7 @@ function populateTestExercises(username: string) {
 function prefillTestFromPick() {
   const username = els.testAthlete.value;
   const exName = els.testExercise.value;
-  if (username === "" || exName === "") {
-    els.testPickHint.textContent = "";
-    return;
-  }
+  if (username === "" || exName === "") return;
   const formula = currentFormula();
   // Pick the top set the SAME way the athlete page does: best bodyweight-aware
   // added-weight 1RM (honours the rep cap), not a raw estimate — so the Test tab
@@ -11456,18 +15150,38 @@ function prefillTestFromPick() {
     }
   }
   if (!best || best.weight === null || best.reps === null) {
-    els.testPickHint.textContent = "No logged sets with a usable 1RM for this exercise.";
     return;
   }
   els.calcWeight.value = String(best.weight);
   els.calcReps.value = String(best.reps);
   els.calcBw.value = String(best.bodyweight ?? athProfile(username)?.weight ?? els.calcBw.value);
   els.calcCoeff.value = String(coeffFor(exName));
-  const label = els.testAthlete.selectedOptions[0]?.textContent ?? username;
-  els.testPickHint.textContent =
-    `Loaded ${label}'s top ${exName}: ${best.weight}kg × ${best.reps} on ${shortDate(best.date)} ` +
-    `(${fmt(bestE1rm)}kg est. 1RM). Tweak any number below.`;
   renderTest();
+  renderCalcTopSets();
+}
+
+/** The athlete's TOP 10 sets for the picked exercise, ranked by estimated 1RM — shown in
+ * an expandable list under the calculator (the single top set can be a fluke, owner). Each
+ * row is tappable to load that set into the calculator. */
+function renderCalcTopSets(): void {
+  const box = document.getElementById("calcTopSets");
+  if (!box) return;
+  const username = els.testAthlete.value, exName = els.testExercise.value;
+  if (!username || !exName) { box.innerHTML = ""; return; }
+  const formula = currentFormula();
+  const scored = setsForUserExercise(data.records, username, exName)
+    .map((s) => ({ s, e: addedWeight1RM(computeRecord(s), formula) }))
+    .filter((x): x is { s: SetRecord; e: number } => x.e !== null && x.s.weight !== null && x.s.reps !== null)
+    .sort((a, b) => b.e - a.e)
+    .slice(0, 10);
+  if (!scored.length) { box.innerHTML = `<p class="muted calc-topsets-empty">No sets with a usable 1RM yet.</p>`; return; }
+  box.innerHTML = scored.map(({ s, e }, i) =>
+    `<button type="button" class="calc-topset-row" data-tsw="${s.weight}" data-tsr="${s.reps}"${s.bodyweight ? ` data-tsbw="${s.bodyweight}"` : ""} title="Load this set into the calculator">` +
+    `<span class="calc-ts-rank">${i + 1}</span>` +
+    `<span class="calc-ts-set">${s.weight}kg × ${s.reps}</span>` +
+    `<span class="calc-ts-e">${fmt(e)} kg</span>` +
+    `<span class="calc-ts-date muted">${s.date ? escapeHtml(shortDate(s.date)) : ""}</span></button>`,
+  ).join("");
 }
 
 // The 1RM formula shown in the Test-tab calculator (its own tab, independent of
@@ -11544,59 +15258,305 @@ function renderTest() {
     ),
   );
   els.calcOut.innerHTML = rows.join("");
+  // The first inputs ARE a 1RM calculation: show the answer BIG, then the warm-up ramp
+  // to the entered set right below (the old separate Coach panel is merged in here).
+  els.calcOrm.innerHTML =
+    `<span class="calc-orm-lbl">Your 1RM</span>` +
+    (addedWeight1RM === null
+      ? `<span class="calc-orm-val calc-orm-na muted">enter weight &amp; reps</span>`
+      : `<span class="calc-orm-val">${f2(addedWeight1RM)} kg</span>`);
+  renderWarmup(addedWeight1RM, addedWeight, reps, calcTab, bodyweightLoad);
   renderCalcCurve(effLoad, bodyweightLoad, reps, addedWeight, calcTab);
   renderDecayCurve();
 }
 
-/**
- * Coach prescription calculator (Formulas tab, top panel) — turns a client's 1RM
- * into the hard-set working weight and a warm-up ramp, using the pure, tested
- * maths in prescription.ts. Two target modes (cycling pill): reps+RIR or %1RM.
- * Pure DOM glue: read inputs → compute → write innerHTML. See
- * docs/ceo/coach-primary-user.md (Phase 3, step 26).
- */
-function renderCoachRx(): void {
-  const num = (el: HTMLInputElement, fallback: number): number => {
-    const v = parseFloat(el.value);
-    return Number.isFinite(v) ? v : fallback;
+// Warm-up plan (owner pick: quick / standard / heavy — fewer→more warm-up sets). Device-
+// local; read by BOTH the Formulas warm-up and the exercise-info warm-up.
+const WARMUP_PLAN_LABEL: Record<WarmupPlan, string> = { quick: "Quick", standard: "Standard", heavy: "Heavy" };
+const WARMUP_PLAN_BLURB: Record<WarmupPlan, string> = {
+  quick: "2 quick primers — for light days, accessories, or when you're already warm from a previous lift.",
+  standard: "4 ramp sets from ~40% of 1RM up to just under your work weight — the all-round default for most sessions.",
+  heavy: "A 6-set pyramid grooving the heavy load up to ~90% — for powerlifting, peaking and heavy singles/triples where the neural warm-up matters.",
+};
+// The stored warm-up plan id may be a built-in (quick/standard/heavy) OR "custom" — a
+// user-typed warm-up (its own back-off list, like the Safety hard-set plan). getWarmupPlan
+// maps "custom" to standard for the ramp math (unused when custom; warmupTableHtml branches).
+function getWarmupPlanId(): string {
+  try { return localStorage.getItem("colosseum.warmupPlan") ?? "standard"; } catch { return "standard"; }
+}
+function getWarmupPlan(): WarmupPlan {
+  const v = getWarmupPlanId(); return v === "quick" || v === "heavy" ? v : "standard";
+}
+function setWarmupPlan(p: string): void { try { localStorage.setItem("colosseum.warmupPlan", p); } catch { /* ignore */ } }
+// The user-typed "Custom" warm-up: fixed (weight, reps) lines, exactly like the Safety plan.
+function getWarmupCustomList(): { weight: number; reps: string }[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("colosseum.warmupCustom.v1") ?? "null");
+    if (Array.isArray(a)) return a.filter((x) => x && Number.isFinite(x.weight)).map((x) => ({ weight: Number(x.weight), reps: String(x.reps ?? "") }));
+  } catch { /* ignore */ }
+  return [{ weight: 20, reps: "10" }, { weight: 40, reps: "5" }];
+}
+function warmupCustomText(): string { return getWarmupCustomList().map((s) => `${s.weight} ${s.reps}`).join("\n"); }
+function setWarmupCustomText(text: string): void {
+  const list = text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(-?\d+(?:\.\d+)?)\s*(?:kg)?\s*[x×*\s]\s*([a-z0-9]+)/i);
+    return m ? { weight: Number(m[1]), reps: m[2]!.toLowerCase() } : null;
+  }).filter((x): x is { weight: number; reps: string } => !!x);
+  try { localStorage.setItem("colosseum.warmupCustom.v1", JSON.stringify(list)); } catch { /* ignore */ }
+}
+
+// How the warm-up loads are SHOWN (owner: one value column + a toggle): the bar weight
+// in kg, the % of 1RM, or the load as a rep-max (RM). Reps ride each value as weight^reps.
+type WarmupValMode = "kg" | "pct" | "rm";
+const WARMUP_VAL_MODES: WarmupValMode[] = ["kg", "pct", "rm"];
+const WARMUP_VAL_LABEL: Record<WarmupValMode, string> = { kg: "kg", pct: "%1RM", rm: "RM" };
+function getWarmupValMode(): WarmupValMode {
+  try { const v = localStorage.getItem("colosseum.warmupValMode"); return v === "pct" || v === "rm" ? v : "kg"; }
+  catch { return "kg"; }
+}
+function cycleWarmupValMode(): void {
+  const i = WARMUP_VAL_MODES.indexOf(getWarmupValMode());
+  try { localStorage.setItem("colosseum.warmupValMode", WARMUP_VAL_MODES[(i + 1) % WARMUP_VAL_MODES.length]!); } catch { /* ignore */ }
+}
+/** Pull the two band ENDS out of a "lo–hi" label ("60–80%" → [60,80]); [] if not a band. */
+function bandNums(label: string | undefined): number[] {
+  return (label ?? "").replace("%", "").split("–").map((x) => Number(x)).filter((n) => Number.isFinite(n));
+}
+// Per-set warm-up/work nudges (owner: "+/- buttons to make each set heavier/lighter and
+// adjust reps"). A device-local delta per row, keyed by exercise|plan|kind|index, applied
+// on top of the computed set: dw = weight steps (× the increment), dr = rep steps. Keying by
+// plan means a nudge belongs to that plan; switching plans starts fresh (cleared on reset).
+const WARMUP_ADJ_KEY = "colosseum.warmupAdj.v1";
+function warmupAdjAll(): Record<string, { dw: number; dr: number }> {
+  try { const o = JSON.parse(localStorage.getItem(WARMUP_ADJ_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; } catch { return {}; }
+}
+function getWarmupAdj(key: string): { dw: number; dr: number } {
+  const a = warmupAdjAll()[key]; return { dw: a?.dw ?? 0, dr: a?.dr ?? 0 };
+}
+function bumpWarmupAdj(key: string, field: "dw" | "dr", delta: number): void {
+  const all = warmupAdjAll(); const cur = all[key] ?? { dw: 0, dr: 0 };
+  cur[field] = (cur[field] ?? 0) + delta;
+  if (cur.dw === 0 && cur.dr === 0) delete all[key]; else all[key] = cur;
+  try { localStorage.setItem(WARMUP_ADJ_KEY, JSON.stringify(all)); } catch { /* ignore */ }
+}
+/** The 4 per-row nudge buttons (− + weight, − + reps) for one warm-up/work row. */
+function warmupAdjButtons(key: string): string {
+  return `<span class="rx-wu-adj">` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|-1" title="Lighter" aria-label="Lighter">−</button>` +
+    `<button type="button" class="rx-wu-bump" data-wuadj="${escapeHtml(key)}|dw|1" title="Heavier" aria-label="Heavier">+</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|-1" title="Fewer reps" aria-label="Fewer reps">−ʳ</button>` +
+    `<button type="button" class="rx-wu-bump rx-wu-bump-r" data-wuadj="${escapeHtml(key)}|dr|1" title="More reps" aria-label="More reps">+ʳ</button>` +
+    `</span>`;
+}
+/** One warm-up row's value^reps cell for the current value mode, paired so the LIGHT end
+ * shows more reps and the HEAVY end fewer (owner: "increasing the weight decreases the
+ * reps" — never the ambiguous 25–55 ^10–20). Bands render as "light^more–heavy^fewer";
+ * a single load (work set) renders as one "value^reps". */
+function warmupValueCell(s: { downKg: number; upKg: number; weightKg: number; reps: number; repsLabel?: string; pctOf1RM?: number; pctLabel?: string; maxReps?: number; maxRepsLabel?: string }, mode: WarmupValMode, orm: number, formula: OneRepMaxFormula, bodyShare = 0, dwKg = 0, dr = 0): string {
+  const sup = (r: string | number) => `<sup class="rx-wu-reps">${r}</sup>`;
+  const single = s.downKg === s.upKg;
+  const adjusted = dwKg !== 0 || dr !== 0; // a per-set nudge → recompute %/RM from the new load
+  // Value at the LIGHT (downKg) and HEAVY (upKg) ends, in the chosen unit. INVARIANT: %1RM
+  // and RM are computed on the EFFECTIVE load (added kg + bodyweight share), the kg shown is
+  // the ADDED weight. So a pull-up's "20%" is 20% of (added + bodyweight), not of the plate.
+  const valAt = (kg0: number, lightEnd: boolean): string => {
+    const kg = kg0 + dwKg; // apply the weight nudge
+    if (mode === "kg") return `${Math.round(kg * 100) / 100}`;
+    if (mode === "pct") {
+      const p = bandNums(s.pctLabel);
+      const pct = !adjusted && p.length === 2 ? (lightEnd ? p[0]! : p[1]!) : Math.round(((kg + bodyShare) / (orm + bodyShare)) * 100);
+      return `${pct}%`;
+    }
+    // rm: the load as a rep-max — light load = MORE max reps. Prefer the precomputed band.
+    const n = bandNums(s.maxRepsLabel); // [heavyEnd, lightEnd]
+    const rm = !adjusted && n.length === 2 ? (lightEnd ? n[1]! : n[0]!) : Math.max(1, Math.round(repsForWeight(orm + bodyShare, kg + bodyShare, formula) ?? s.reps));
+    return `${rm}RM`;
   };
-  const mode = els.rxModeBtn.dataset.mode === "pct" ? "pct" : "repsRIR";
-  // Show only the inputs relevant to the current mode.
-  els.rxRepsField.hidden = mode === "pct";
-  els.rxRirField.hidden = mode === "pct";
-  els.rxPctField.hidden = mode !== "pct";
-  els.rxModeBtn.textContent = mode === "pct" ? "Target: % of 1RM" : "Target: reps + RIR";
+  const adjReps = (n: number) => Math.max(1, n + dr); // apply the rep nudge
+  if (single) {
+    // A single load may carry a rep RANGE ("15–30") or a non-numeric "max" (safety AMRAP).
+    const rr = bandNums(s.repsLabel);
+    const repsDisp = rr.length === 2 ? `${adjReps(rr[0]!)}–${adjReps(rr[1]!)}`
+      : (s.repsLabel && !Number.isFinite(Number(s.repsLabel))) ? s.repsLabel
+      : adjReps(Number(s.repsLabel ?? s.reps));
+    return `<b>${valAt(s.weightKg, true)}</b>${sup(repsDisp)}`;
+  }
+  // reps band: repsLabel "lo–hi" = [heavyEndReps, lightEndReps].
+  const r = bandNums(s.repsLabel);
+  const repsHeavy = adjReps(r[0] ?? s.reps), repsLight = adjReps(r[1] ?? r[0] ?? s.reps);
+  return `<b>${valAt(s.downKg, true)}</b>${sup(repsLight)}<span class="rx-wu-dash">–</span><b>${valAt(s.upKg, false)}</b>${sup(repsHeavy)}`;
+}
 
-  const orm = num(els.rxOrm, 0);
-  const formula = els.rxFormula.value as OneRepMaxFormula;
+// Hard-set (working-set) plan — a SEPARATE selection from the warm-up (owner). Each plan is
+// a TIER: the load = the weight you could do `rm` times (its rep-max), do a rep RANGE for
+// `sets` sets. "Entered" keeps the typed set; "Safety" is a user-typed back-off list (fixed
+// kg per line, incl. "max"). Device-local pref. (Owner redesign, replacing the old schemes.)
+interface WorksetPlan { id: string; label: string; blurb: string; rm: number; repsLo: number; repsHi: number; sets: number }
+const WORKSET_PLANS: WorksetPlan[] = [
+  { id: "entered", label: "Entered", blurb: "Just the set you typed — your actual work set, no scheme applied.", rm: 0, repsLo: 0, repsHi: 0, sets: 1 },
+  { id: "end1", label: "Endurance 1", blurb: "A load you could do 30× (a 30RM), for 15–30 reps × 2 — muscular endurance / conditioning.", rm: 30, repsLo: 15, repsHi: 30, sets: 2 },
+  { id: "end2", label: "Endurance 2", blurb: "A 20RM load for 10–20 reps × 2 — endurance edging into hypertrophy.", rm: 20, repsLo: 10, repsHi: 20, sets: 2 },
+  { id: "str1", label: "Strength 1", blurb: "A 15RM load for 5–12 reps × 2 — hypertrophy-strength.", rm: 15, repsLo: 5, repsHi: 12, sets: 2 },
+  { id: "str2", label: "Strength 2", blurb: "A 10RM load for 3–8 reps × 2 — strength.", rm: 10, repsLo: 3, repsHi: 8, sets: 2 },
+  { id: "pow1", label: "Power 1", blurb: "An 8RM load for 1–3 reps × 2 — power.", rm: 8, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "pow2", label: "Power 2", blurb: "A 6RM load for 1–3 reps × 2 — heavy power.", rm: 6, repsLo: 1, repsHi: 3, sets: 2 },
+  { id: "elite", label: "Elite", blurb: "Near-max — a 1–5RM load for 1–5 reps × 2.", rm: 3, repsLo: 1, repsHi: 5, sets: 2 },
+  { id: "safety", label: "Safety", blurb: "Your own back-off list — type weight × reps per line (use “max” for AMRAP). Fixed kg, not computed from 1RM.", rm: 0, repsLo: 0, repsHi: 0, sets: 0 },
+];
+// The user-typed "Safety" back-off list: fixed (weight, reps) lines; reps may be "max".
+function getSafetyList(): { weight: number; reps: string }[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("colosseum.worksetSafety.v1") ?? "null");
+    if (Array.isArray(a)) return a.filter((x) => x && Number.isFinite(x.weight)).map((x) => ({ weight: Number(x.weight), reps: String(x.reps ?? "") }));
+  } catch { /* ignore */ }
+  return [{ weight: 40, reps: "5" }, { weight: 30, reps: "15" }, { weight: 25, reps: "max" }]; // the owner's example as the seed
+}
+function safetyText(): string { return getSafetyList().map((s) => `${s.weight} ${s.reps}`).join("\n"); }
+function setSafetyText(text: string): void {
+  const list = text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
+    const m = l.match(/^(-?\d+(?:\.\d+)?)\s*(?:kg)?\s*[x×*\s]\s*([a-z0-9]+)/i);
+    return m ? { weight: Number(m[1]), reps: m[2]!.toLowerCase() } : null;
+  }).filter((x): x is { weight: number; reps: string } => !!x);
+  try { localStorage.setItem("colosseum.worksetSafety.v1", JSON.stringify(list)); } catch { /* ignore */ }
+}
+function getWorksetPlan(): WorksetPlan {
+  try { const v = localStorage.getItem("colosseum.worksetPlan"); return WORKSET_PLANS.find((p) => p.id === v) ?? WORKSET_PLANS[0]!; }
+  catch { return WORKSET_PLANS[0]!; }
+}
+function setWorksetPlan(id: string): void { try { localStorage.setItem("colosseum.worksetPlan", id); } catch { /* ignore */ } }
+
+/** The working sets a hard-set plan prescribes. A TIER plan loads every set at its rep-max
+ *  weight (`rm`) computed on the EFFECTIVE curve, peeled to ADDED kg (rule 49), and shows the
+ *  rep RANGE; "Entered" keeps the typed set; "Safety" returns the user's fixed back-off list. */
+function worksetRows(plan: WorksetPlan, orm: number, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, increment: number, bodyShare = 0): { weightKg: number; reps: number; repsLabel?: string }[] {
+  if (plan.id === "entered") return [{ weightKg: Math.round(workingWeightKg * 100) / 100, reps: workReps }];
+  if (plan.id === "safety") return getSafetyList().map((s) => ({ weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }));
+  const added = roundToIncrement((weightForReps(orm + bodyShare, plan.rm, formula) ?? (workingWeightKg + bodyShare)) - bodyShare, increment);
+  const repsLabel = plan.repsLo === plan.repsHi ? `${plan.repsLo}` : `${plan.repsLo}–${plan.repsHi}`;
+  return Array.from({ length: Math.max(1, plan.sets) }, () => ({ weightKg: added, reps: plan.repsLo, repsLabel }));
+}
+
+// Last calc state captured by renderWarmup, so the plan popups can build their preview
+// tables off the SAME 1RM / work weight without recomputing the whole calculator.
+let lastWuCalc: { orm: number; work: number; reps: number; formula: OneRepMaxFormula; increment: number; bwl?: number } | null = null;
+// How to re-render the view that owns the warm-up the popup is editing (the Formulas calc
+// OR the exercise card), so a plan change refreshes the right place. Set on each render.
+let lastWuRerender: () => void = () => {};
+
+/** The shared warm-up + working-set table (warm-up ramp continuing into the hard sets) —
+ *  used by BOTH the Formulas calculator and the exercise card so they stay in lockstep. */
+function warmupTableHtml(orm: number, work: number, reps: number, formula: OneRepMaxFormula, increment: number, bodyweightLoad = 0, ctx = ""): string {
+  const mode = getWarmupValMode();
+  // A "custom" warm-up is the user's own fixed (weight, reps) lines — exactly like the Safety
+  // hard-set plan. Otherwise the computed ramp. Both render through warmupValueCell as single
+  // value^reps rows, so the value-mode toggle + per-set nudge still work.
+  const wuPlan = getWarmupPlanId();
+  const wu = wuPlan === "custom"
+    ? getWarmupCustomList().map((s) => ({ kind: "ramp" as const, downKg: s.weight, upKg: s.weight, weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }))
+    : warmupRamp({ oneRepMax: orm, workingWeightKg: work, formula, increment, plan: getWarmupPlan(), bodyweightLoad });
+  // Per-set nudge (owner: +/- buttons): a device-local delta per row, applied here and shown
+  // with the 4 buttons. Keyed by ctx|plan|kind|idx; only when ctx is set (the card passes the
+  // exercise; the Formulas calc passes "" → no buttons there).
+  const wsPlan = getWorksetPlan().id;
+  const adjFor = (kind: string, plan: string, i: number) => ctx ? getWarmupAdj(`${ctx}|${plan}|${kind}|${i}`) : { dw: 0, dr: 0 };
+  const btns = (kind: string, plan: string, i: number) => ctx ? warmupAdjButtons(`${ctx}|${plan}|${kind}|${i}`) : "";
+  // ONE value column (owner): each row is value^reps in the toggled unit (kg / %1RM / RM),
+  // paired so the lighter end carries more reps. No "kg" text — the column header is the unit.
+  const wuRows = wu.map((s, i) => { const a = adjFor("wu", wuPlan, i); return `<tr class="rx-wu-${s.kind}"><td>${warmupValueCell(s, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)}${btns("wu", wuPlan, i)}</td></tr>`; }).join("");
+  const sets = worksetRows(getWorksetPlan(), orm, work, reps, formula, increment, bodyweightLoad);
+  const workRows = sets.map((s, i) => { const a = adjFor("ws", wsPlan, i); return `<tr class="rx-wu-work"><td>${warmupValueCell({ ...s, downKg: s.weightKg, upKg: s.weightKg }, mode, orm, formula, bodyweightLoad, a.dw * increment, a.dr)} <span class="rx-wu-worktag">work</span>${btns("ws", wsPlan, i)}</td></tr>`; }).join("");
+  return (wu.length || sets.length)
+    ? `<table class="rx-wu"><thead><tr><th>Set · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${wuRows}${workRows}</tbody></table>`
+    : "";
+}
+
+/** The warm-up + hard-set PLAN PILLS (open the tabbed popups) — shared by the calc & card.
+ *  Plus the value-mode toggle: cycle the warm-up loads between kg / %1RM / RM. */
+function planPillsHtml(): string {
+  return `<button type="button" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose">${getWarmupPlanId() === "custom" ? "Custom" : WARMUP_PLAN_LABEL[getWarmupPlan()]}</button> ` +
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose">${escapeHtml(getWorksetPlan().label)}</button> ` +
+    `<button type="button" class="calc-wu-plan rx-valmode" data-warmupvalmode title="Show loads as kg / %1RM / RM — tap to cycle">${WARMUP_VAL_LABEL[getWarmupValMode()]}</button>`;
+}
+
+/** Close any open warm-up / hard-set plan popup. */
+function closePlanPopup(): void { document.getElementById("planPopup")?.remove(); }
+
+/** The tabbed plan POPUP (owner): a row of plan-type tabs, the selected plan's full
+ *  set×reps×%1RM table, and a "what it's for" explanation below. Shared by the warm-up
+ *  pill and the hard-set pill. Tapping a tab applies it (and refreshes the table/blurb). */
+function openPlanPopup(kind: "warmup" | "workset", anchor: HTMLElement): void {
+  closePlanPopup();
+  const c = lastWuCalc;
+  if (!c) return;
+  const menu = document.createElement("div");
+  menu.id = "planPopup";
+  menu.className = "plan-popup";
+  menu.dataset.kind = kind;
+  menu.innerHTML = planPopupHtml(kind);
+  document.body.appendChild(menu);
+  clampMenuIntoView(menu, anchor);
+}
+
+/** Inner HTML of the plan popup for the current selection (re-rendered on tab tap). */
+function planPopupHtml(kind: "warmup" | "workset"): string {
+  const c = lastWuCalc!;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  if (kind === "warmup") {
+    const curId = getWarmupPlanId();
+    const tabIds: string[] = [...WARMUP_PLANS, "custom"];
+    const tabLabel = (p: string) => p === "custom" ? "Custom" : WARMUP_PLAN_LABEL[p as WarmupPlan];
+    const tabs = tabIds.map((p) =>
+      `<button type="button" class="plan-tab${p === curId ? " is-on" : ""}" data-plantab="${p}">${tabLabel(p)}</button>`).join("");
+    const mode = getWarmupValMode();
+    const wu = curId === "custom"
+      ? getWarmupCustomList().map((s) => ({ kind: "ramp" as const, downKg: s.weight, upKg: s.weight, weightKg: s.weight, reps: Number(s.reps) || 0, repsLabel: s.reps }))
+      : warmupRamp({ oneRepMax: c.orm, workingWeightKg: c.work, formula: c.formula, increment: c.increment, plan: getWarmupPlan(), bodyweightLoad: c.bwl ?? 0 });
+    const rows = wu.map((s) => `<tr><td>${warmupValueCell(s, mode, c.orm, c.formula, c.bwl ?? 0)}</td></tr>`).join("");
+    // A "Custom" warm-up gets the same user-typed back-off editor as Safety (above the table);
+    // built-ins show their blurb below the table.
+    const tableHtml = `<table class="plan-tbl"><thead><tr><th>Warm-up · ${WARMUP_VAL_LABEL[mode]}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    const editor = `<div class="plan-custom"><textarea class="plan-safety" data-warmupcustom rows="4" placeholder="20 10&#10;40 5&#10;60 3" aria-label="Custom warm-up sets">${escapeHtml(warmupCustomText())}</textarea><div class="plan-blurb muted">One set per line: weight reps. Fixed kg.</div></div>`;
+    return `<div class="plan-tabs">${tabs}</div>` + (curId === "custom"
+      ? editor + tableHtml
+      : tableHtml + `<p class="plan-blurb">${escapeHtml(WARMUP_PLAN_BLURB[getWarmupPlan()])}</p>`);
+  }
+  const cur = getWorksetPlan();
+  const tabs = WORKSET_PLANS.map((p) =>
+    `<button type="button" class="plan-tab${p.id === cur.id ? " is-on" : ""}" data-plantab="${escapeHtml(p.id)}">${escapeHtml(p.label)}</button>`).join("");
+  const bwl = c.bwl ?? 0;
+  const sets = worksetRows(cur, c.orm, c.work, c.reps, c.formula, c.increment, bwl);
+  // kg shown = ADDED weight; % computed on the EFFECTIVE load (added + bodyweight share).
+  const rows = sets.map((s, i) => `<tr><td class="muted">${i + 1}</td><td><b>${r2(s.weightKg)} kg</b></td><td>× ${s.repsLabel ?? s.reps}</td><td class="muted">${c.orm + bwl > 0 ? Math.round(((s.weightKg + bwl) / (c.orm + bwl)) * 100) : 0}%</td></tr>`).join("");
+  // The Safety tab is a user-typed back-off list: one "weight reps" line each (reps may be "max").
+  let customEdit = "";
+  if (cur.id === "safety") {
+    customEdit = `<div class="plan-custom"><textarea class="plan-safety" data-worksetsafety rows="4" placeholder="40 5&#10;30 15&#10;25 max" aria-label="Safety back-off sets">${escapeHtml(safetyText())}</textarea><div class="plan-blurb muted">One set per line: weight reps (“max” = AMRAP). Fixed kg.</div></div>`;
+  }
+  return `<div class="plan-tabs">${tabs}</div>` + customEdit +
+    `<table class="plan-tbl"><thead><tr><th>Set</th><th>kg</th><th>reps</th><th>%1RM</th></tr></thead><tbody>${rows}</tbody></table>` +
+    `<p class="plan-blurb">${escapeHtml(cur.blurb)}</p>`;
+}
+
+/** Warm-up ramp to the entered set, using the 1RM the calculator just computed (merged
+ * from the old Coach panel — no separate 1RM/reps/formula inputs; Plates rounds it). */
+function renderWarmup(orm: number | null, workingWeightKg: number, workReps: number, formula: OneRepMaxFormula, bodyweightLoad = 0): void {
   const increment = parseFloat(els.rxInc.value) || 2.5;
-  const target: HardSetTarget =
-    mode === "pct"
-      ? { kind: "pct", pct: num(els.rxPct, 0) }
-      : { kind: "repsRIR", reps: Math.max(1, Math.round(num(els.rxReps, 1))), rir: Math.max(0, Math.round(num(els.rxRir, 0))) };
-
-  const hs = hardSetWeight(orm, target, formula, increment);
-  if (!hs) {
-    els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a 1RM to see the prescription.</p>`;
+  const plan = getWarmupPlan();
+  const planBtn = document.getElementById("warmupPlanBtn");
+  if (planBtn) planBtn.textContent = WARMUP_PLAN_LABEL[plan];
+  // Gate on the EFFECTIVE load (added + bodyweight share), which is positive even when the
+  // ADDED weight is negative (an ASSISTED calisthenics set) — so a -5 kg Dips set still
+  // shows a warm-up instead of the misleading "enter a weight" prompt. bwl=0 for barbell.
+  if (orm === null || !(orm + bodyweightLoad > 0) || !(workingWeightKg + bodyweightLoad > 0)) {
+    els.rxOut.innerHTML = `<p class="muted" style="font-size:0.85rem">Enter a weight &amp; reps to see the warm-up.</p>`;
     return;
   }
-  const repText =
-    hs.rir !== null ? `${hs.reps} reps @ RIR ${hs.rir}` : `~${hs.reps} reps`;
+  lastWuCalc = { orm, work: workingWeightKg, reps: workReps, formula, increment, bwl: bodyweightLoad }; // for the plan popups
+  lastWuRerender = renderTest; // a plan change from the popup recomputes the calculator
   const work =
-    `<div class="rx-work"><span class="rx-work-lbl">Work set</span> ` +
-    `<b>${hs.weightKg} kg</b> × ${repText} <span class="muted">(${hs.pctOf1RM}% 1RM)</span></div>`;
-
-  const wu = warmupRamp({ oneRepMax: orm, workingWeightKg: hs.weightKg, formula, increment });
-  const wuRows = wu
-    .map(
-      (s) =>
-        `<tr class="rx-wu-${s.kind}"><td>${s.weightKg} kg</td><td>× ${s.reps}</td><td class="muted">${s.pctOfWorking}%</td></tr>`,
-    )
-    .join("");
-  const wuTable = wu.length
-    ? `<table class="rx-wu"><thead><tr><th>Warm-up</th><th>reps</th><th></th></tr></thead><tbody>${wuRows}</tbody></table>`
-    : "";
-  els.rxOut.innerHTML = work + wuTable;
+    `<div class="rx-work"><span class="rx-work-lbl">Work sets</span> ` +
+    `<button type="button" class="calc-wu-plan rx-ws-plan" data-worksetplan title="Hard-set plan — tap to choose (strength · power · peaking · hypertrophy · volume · pump…)">${escapeHtml(getWorksetPlan().label)}</button></div>`;
+  els.rxOut.innerHTML = work + warmupTableHtml(orm, workingWeightKg, workReps, formula, increment, bodyweightLoad);
 }
 
 /**
@@ -11742,21 +15702,38 @@ function renderAll() {
 // (e.g. reopenIndexDetail / renderExerciseDetail right after).
 let pendingRender: (() => void) | null = null;
 let renderRafQueued = false;
+// NEVER fight an active user scroll. Render paths capture scrollY and re-apply it after
+// a rebuild to keep your place — but during load/sync that fires WHILE you're scrolling
+// and yanks you back: the "page jumps around when I scroll while it's still loading" bug
+// (#persistent PB-50, #debug). A real scroll gesture (wheel/touch) stamps the time; any
+// programmatic scroll-restore is SKIPPED for a short window after, so the user wins.
+let lastUserScrollAt = -1e9;
+for (const ev of ["wheel", "touchstart", "touchmove"] as const)
+  window.addEventListener(ev, () => { lastUserScrollAt = performance.now(); }, { passive: true, capture: true });
+// Don't let the browser re-apply a remembered scroll position after the async app
+// finishes building — that late restore is itself a "jump on open" (PB-50).
+try { if ("scrollRestoration" in history) history.scrollRestoration = "manual"; } catch { /* ignore */ }
+const userScrollingNow = (): boolean => performance.now() - lastUserScrollAt < 600;
+/** Restore window scroll to `y` to preserve place across a rebuild — but yield to a live
+ *  user scroll (don't yank them back). Used by every "capture y → render → restore" path. */
+function restoreScrollY(y: number): void {
+  if (!userScrollingNow()) window.scrollTo(0, y);
+}
 /** Defer ANY heavy render to the next frame, coalesced + scroll-preserving. The
  * latest fn queued in a frame is the one that runs (one render per frame), and the
  * scroll position is captured now and restored after — so a tap repaints its own
  * control first and a rebuild won't make the page jump. */
-function deferRender(fn: () => void): void {
+function deferRender(fn: () => void, preserveScrollY?: number): void {
   pendingRender = fn;
   if (renderRafQueued) return;
   renderRafQueued = true;
-  const y = window.scrollY;
+  const y = preserveScrollY ?? window.scrollY;
   requestAnimationFrame(() => {
     renderRafQueued = false;
     const f = pendingRender; pendingRender = null;
     f?.();
-    window.scrollTo(0, y);
-    requestAnimationFrame(() => window.scrollTo(0, y)); // charts can reflow async
+    restoreScrollY(y);
+    requestAnimationFrame(() => restoreScrollY(y)); // charts can reflow async
   });
 }
 function scheduleRender(after?: () => void): void {
@@ -11801,8 +15778,8 @@ function refreshAfterDifficultyEdit(): void {
   refreshExerciseInfo();
   renderAll();
   if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-  window.scrollTo(0, y);
-  requestAnimationFrame(() => window.scrollTo(0, y));
+  restoreScrollY(y);
+  requestAnimationFrame(() => restoreScrollY(y));
 }
 
 // Editing model ×factors should feel instant: each change just saves + recolours
@@ -11818,7 +15795,7 @@ function scheduleModelFactorsApply(): void {
     renderAll();
     if (document.getElementById("workoutsTable")) renderWorkoutsPage();
     if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
-    window.scrollTo(0, y);
+    restoreScrollY(y);
   }, 600);
 }
 
@@ -11839,6 +15816,16 @@ const REP_BANDS: { id: string; label: string; min: number; max?: number }[] = [
 function setSettingsOpen(open: boolean) {
   els.settingsPanel.hidden = !open;
   els.settingsBtn.setAttribute("aria-expanded", String(open));
+  if (open) refreshE1rmStemsBtn();
+}
+
+function refreshE1rmStemsBtn(): void {
+  const on = getE1rmStems();
+  els.e1rmStemsBtn.textContent = on ? "│ 1RM stems" : "│ 1RM stems off";
+  els.e1rmStemsBtn.setAttribute("aria-pressed", String(on));
+  els.e1rmStemsBtn.title = on
+    ? "Hide the thin weight→1RM lines on the graph."
+    : "Show thin weight→1RM lines on each 1RM bubble.";
 }
 
 async function init() {
@@ -11850,6 +15837,8 @@ async function init() {
     els.status.innerHTML = `<span class="badge warn">Failed to load data</span> ${escapeHtml(String(err))}`;
     return;
   }
+  applyViewTierClass(); // reflect the saved view tier on <body> so s2 CSS simplifications apply from load
+  replayHdDiag(); // PB-44: surface any history-dash cloud-merge line stashed before a sync-triggered reload
   // Fold in any hand-logged sets saved on this device (the Add tab).
   loadedRecords = data.records; // immutable base for spelling-split re-derivation
   mergeManualSets();
@@ -11894,11 +15883,21 @@ async function init() {
   els.athlete.innerHTML = users
     .map((u) => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.user)}</option>`)
     .join("");
-  // Pick the athlete to show on load: the one remembered from last visit if it's
-  // still in the data, otherwise default to Indre.
+  // Pick the athlete to show on load. A ?u=<username> link is the SOURCE OF TRUTH and
+  // overrides the cached pick (owner: "the browser shouldn't remember which user — it
+  // listens to the URL"). How far it overrides depends on your REAL role:
+  //   • admin     → open that account fully (drops any "view as" preview).
+  //   • a user    → your OWN link = your normal view; ANOTHER user's link = read-only
+  //                 spectate of them (canEditAthlete still blocks edits).
+  // With no ?u=, fall back to the remembered athlete, else Indre.
+  const urlTarget = athleteFromUrl(users);
   const remembered = loadLastAthlete();
   const rememberedUser = remembered ? users.find((u) => u.username === remembered) : undefined;
-  if (rememberedUser) {
+  if (urlTarget) {
+    if (isAdminRole()) { viewMode = "admin"; spectateUser = null; }
+    else spectateUser = urlTarget === userViewUsername() ? null : urlTarget;
+    els.athlete.value = urlTarget;
+  } else if (rememberedUser) {
     els.athlete.value = rememberedUser.username;
   } else {
     const indre = users.find((u) => u.username.toLowerCase() === "indre_ju");
@@ -11937,6 +15936,15 @@ async function init() {
     renderTest();
   });
 
+  // Tap a "top 10 sets" row → load that set into the calculator (keeps the exercise's coeff).
+  document.getElementById("calcTopSets")?.addEventListener("click", (e) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".calc-topset-row");
+    if (!row) return;
+    if (row.dataset.tsw) els.calcWeight.value = row.dataset.tsw;
+    if (row.dataset.tsr) els.calcReps.value = row.dataset.tsr;
+    if (row.dataset.tsbw) els.calcBw.value = row.dataset.tsbw;
+    renderTest();
+  });
   prefillTestFromPick(); // load Adomas / Squat into the calculator on first paint
 
   // Version label + history come from the single CHANGELOG source. The tag is
@@ -11980,8 +15988,10 @@ async function init() {
     if ((e.target as HTMLElement).closest(".mo-period")) { momentumPeriod = MO_PERIOD_NEXT[momentumPeriod]; renderMomentum(); }
   });
   setupTabs();
+  setupHandstands(); // the standalone handstand tag calculator page
   setupStatsToggle(); // small Stats show/hide button by the athlete picker
   setupSectionToggles(); // matching Graph / History show/hide buttons beside it
+  setupFoldToggleGuards(); // collapse an OPEN analysis section ONLY via its caret (not a stray title tap)
   // Graph card: closing it REMEMBERS whether you were on the single-lift carousel or the
   // full multi graph, so reopening returns to the same view (owner request — don't reset
   // to single). The single ⇄ multi switch is the "Multi ▾" / "Single ▴" button. Opening
@@ -11995,6 +16005,71 @@ async function init() {
     if (!pill?.dataset.reclift) return;
     recordsLift = pill.dataset.reclift as PowerLift;
     renderRecords();
+  });
+  // World Records page: toggle the sex the percentile curves are shown for.
+  document.getElementById("recordsBody")?.addEventListener("click", (e) => {
+    if (!(e.target as HTMLElement).closest(".rec-pct-sex")) return;
+    recordsStdSex = recordsStdSex === "m" ? "f" : "m";
+    renderRecords();
+  });
+  // Benchmarks editor — document-level + self-describing (data-bm-ex), so the SAME
+  // handler drives it on both the World Records page and the Index lift card. We rebuild
+  // only the editor in place (not the host), so folds, scroll and focus stay put.
+  const rerenderBenchmarks = (host: HTMLElement, ex: string): HTMLElement | null => {
+    const fresh = document.createElement("div");
+    fresh.innerHTML = benchmarksHtml(ex);
+    const node = fresh.firstElementChild as HTMLElement | null;
+    if (node) host.replaceWith(node);
+    return node;
+  };
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const host = t.closest<HTMLElement>(".rec-bm[data-bm-ex]");
+    if (!host || !canEditGlobalMeta()) return; // global config → admin only
+    const ex = host.dataset.bmEx ?? "";
+    if (t.closest(".rec-bm-add")) {
+      commitBenchmarks(ex, [...benchmarksFor(ex), { label: "New", value: 1, unit: "x" }]);
+      const node = rerenderBenchmarks(host, ex);
+      const inputs = node?.querySelectorAll<HTMLInputElement>(".rec-bm-label");
+      inputs?.[inputs.length - 1]?.select();
+      return;
+    }
+    const row = t.closest<HTMLElement>(".rec-bm-row");
+    if (!row) return;
+    const idx = Number(row.dataset.bmidx);
+    const list = benchmarksFor(ex).slice();
+    if (!(idx >= 0 && idx < list.length)) return;
+    if (t.closest(".rec-bm-del")) {
+      list.splice(idx, 1);
+      commitBenchmarks(ex, list);
+      rerenderBenchmarks(host, ex);
+    } else if (t.closest(".rec-bm-unit")) {
+      list[idx] = { ...list[idx]!, unit: list[idx]!.unit === "kg" ? "x" : "kg" };
+      commitBenchmarks(ex, list);
+      rerenderBenchmarks(host, ex);
+    }
+  });
+  // Commit label/value edits on blur (change), not per keystroke, so focus is never
+  // stolen mid-type; rebuild the editor in place to re-sort the rows.
+  document.addEventListener("change", (e) => {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement)) return;
+    const host = t.closest<HTMLElement>(".rec-bm[data-bm-ex]");
+    const row = t.closest<HTMLElement>(".rec-bm-row");
+    if (!host || !row || !canEditGlobalMeta()) return;
+    const ex = host.dataset.bmEx ?? "";
+    const idx = Number(row.dataset.bmidx);
+    const list = benchmarksFor(ex).slice();
+    if (!(idx >= 0 && idx < list.length)) return;
+    if (t.dataset.bmfield === "label") {
+      list[idx] = { ...list[idx]!, label: t.value.trim() || list[idx]!.label };
+    } else if (t.dataset.bmfield === "value") {
+      const v = parseFloat(t.value);
+      if (!Number.isFinite(v) || v <= 0) { rerenderBenchmarks(host, ex); return; } // revert bad input
+      list[idx] = { ...list[idx]!, value: Math.round(v * 100) / 100 };
+    } else { return; }
+    commitBenchmarks(ex, list);
+    rerenderBenchmarks(host, ex);
   });
   setupDataTab();
   renderDataTab();
@@ -12040,19 +16115,54 @@ async function init() {
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
   );
 
+  refreshE1rmStemsBtn();
+  els.e1rmStemsBtn.addEventListener("click", () => { setE1rmStems(!getE1rmStems()); refreshE1rmStemsBtn(); });
+
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
   setupViewSwitch();
   setViewMode(viewMode);
   updateBrand(); // show the current page's name in the title from the start
   els.viewAsSelect.addEventListener("change", () => setViewAs(els.viewAsSelect.value));
   els.authBtn.addEventListener("click", showLoginPage);
+  // "Public profile" toggle: flip whether YOUR profile (the selected athlete in admin) is
+  // public, then refresh the chips so the spectate row updates. Synced, so others see it.
+  els.publicProfileToggle.addEventListener("click", () => {
+    const t = publicToggleTarget();
+    if (!t) return;
+    setPublicProfile(t, !isPublicProfile(t));
+    syncPublicProfileToggle();
+    syncAthleteChips();
+  });
   els.syncUpBtn.addEventListener("click", () => { void syncManualToSupabase(); });
   els.syncDownBtn.addEventListener("click", () => { void loadManualFromSupabase(); });
+  // Green debug console on/off (admin-only). dbgVisible() reads colosseum.dbg === "on".
+  const syncDbgToggle = () => {
+    const on = dbgVisible();
+    els.dbgToggleBtn.setAttribute("aria-pressed", String(on));
+    els.dbgToggleBtn.textContent = on ? "🐞 Debug console ✓" : "🐞 Debug console";
+  };
+  syncDbgToggle();
+  els.dbgToggleBtn.addEventListener("click", () => {
+    try { localStorage.setItem("colosseum.dbg", dbgVisible() ? "off" : "on"); } catch { /* ignore */ }
+    syncDbgToggle();
+    renderDbg(); // shows or removes the overlay immediately
+  });
+  // 🔍 CSS / element inspector (admin-only). Lazy-loads eruda devtools on first tap — a
+  // full on-screen Elements panel (box model: padding/margin/border/size + computed styles),
+  // console & network. Phones have no devtools, so this is the tappable inspector (pairs with
+  // the green dbg() console + the CSS box-viewer rule). Loaded on demand so it never touches
+  // the initial bundle (Vite splits the dynamic import into its own chunk).
+  els.inspectToggleBtn?.addEventListener("click", () => { void toggleInspector(); });
+  // 📦 Custom box-model viewer (admin) — our own fast/simple alternative to eruda's Elements tab:
+  // outlines every box AND tap-to-measure padding/margin/size. See toggleBoxInspect.
+  document.getElementById("boxInspectBtn")?.addEventListener("click", () => { toggleBoxInspect(); });
   document.getElementById("loginSendBtn")?.addEventListener("click", signIn);
-  document.getElementById("loginGuestBtn")?.addEventListener("click", viewAsSpectator);
   document.getElementById("loginPass")?.addEventListener("keydown", (e) => {
     if ((e as KeyboardEvent).key === "Enter") signIn();
   });
+  // Require login (DATA-24): a device that has never signed in is GATED — show the
+  // login page (the gate is opaque) until a valid profile + password. No spectate bypass.
+  try { if (localStorage.getItem("colosseum.signedIn") !== "1") showLoginPage(); } catch { /* ignore */ }
   // Populate login dropdown from ATHLETES registry — athletes go after admin.
   {
     const sel = document.getElementById("loginUser") as HTMLSelectElement | null;
@@ -12106,11 +16216,124 @@ async function init() {
   els.exInfoPillToggle.addEventListener("click", () => {
     exInfoMode = !exInfoMode;
     syncPillToggle();
-    if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+    if (currentExInfo) paintExInfo(currentExInfo);
   });
   // Delegated: a pill's ⓘ navigates — group pill → that group's own info card;
+  // Pairing-grade mini menu (super → no way): pick an option → set + close + re-render
+  // the open view; a tap outside the menu closes it. (Menu lives on <body>.)
+  document.addEventListener("click", (e) => {
+    // Toggle the menu's editing LAYER (gym vs just-me) without closing it (rule 24).
+    const lay = (e.target as Element | null)?.closest<HTMLElement>("[data-pairlayer]");
+    if (lay?.dataset.pairlayer && pairMenuFrom && pairMenuTo) {
+      pairMenuLayer = lay.dataset.pairlayer === "personal" ? "personal" : "shared";
+      renderPairGradeMenu();
+      return;
+    }
+    const opt = (e.target as Element | null)?.closest<HTMLElement>("[data-setgrade]");
+    if (opt?.dataset.setgrade && pairMenuFrom && pairMenuTo) {
+      setPairGrade(pairMenuFrom, pairMenuTo, opt.dataset.setgrade as PairGrade, pairMenuLayer);
+      closePairGradeMenu();
+      if (!els.exInfoPage.hidden) refreshExerciseInfo();
+      renderWorkoutPlanIfShown();
+      return;
+    }
+    const m = document.getElementById("pairGradeMenu");
+    if (m && !m.hidden && !(e.target as Element | null)?.closest("#pairGradeMenu, [data-pairfrom]")) closePairGradeMenu();
+  });
   // category pill (discipline / muscle / tier) → the Index grouped by that dimension.
+  // Card inline calculator: typing a weight×reps recomputes the card's 1RM (and the warm-up
+  // / working sets that flow from it). On commit (blur/Enter) re-render the card; focus has
+  // already left the input so nothing is stolen mid-type.
+  els.exInfoBody.addEventListener("change", (e) => {
+    if (handleExInfoGraphConfigChange(e.target as HTMLElement)) return;
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-cardcalc]");
+    if (!inp) return;
+    const w = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="w"]')?.value ?? "";
+    const r = els.exInfoBody.querySelector<HTMLInputElement>('[data-cardcalc="r"]')?.value ?? "";
+    cardCalc = { weight: w.trim(), reps: r.trim() };
+    if (currentExInfo) paintExInfo(currentExInfo);
+  });
   els.exInfoBody.addEventListener("click", (e) => {
+    if (handleExInfoGraphControl(e.target as HTMLElement)) return;
+    // Volume-tab merge/range/height pills (cycle the value, persist, re-render the map).
+    const mapCtl = (e.target as HTMLElement).closest<HTMLElement>("[data-mapwt],[data-maprep],[data-maprange]");
+    if (mapCtl) {
+      e.preventDefault(); e.stopPropagation();
+      if (mapCtl.hasAttribute("data-mapwt")) { vol3dWtBin = VOL3D_WTBINS[((VOL3D_WTBINS as readonly number[]).indexOf(vol3dWtBin) + 1) % VOL3D_WTBINS.length]!; setMapPref("wtBin", String(vol3dWtBin)); }
+      else if (mapCtl.hasAttribute("data-maprep")) { vol3dRepBin = VOL3D_REPBINS[((VOL3D_REPBINS as readonly number[]).indexOf(vol3dRepBin) + 1) % VOL3D_REPBINS.length]!; setMapPref("repBin", String(vol3dRepBin)); }
+      else { vol3dRange = VOL3D_RANGES[((VOL3D_RANGES as readonly string[]).indexOf(vol3dRange) + 1) % VOL3D_RANGES.length]!; setMapPref("range", vol3dRange); }
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    // Tab pills (Curve / Volume): switch the active sub-tab and re-render.
+    const tabBtn = (e.target as HTMLElement).closest<HTMLElement>("[data-exitab]");
+    if (tabBtn?.dataset.exitab) {
+      e.preventDefault(); e.stopPropagation();
+      const tab = tabBtn.dataset.exitab;
+      if ((tab === "curve" || tab === "volume") && tab !== exInfoTab) {
+        exInfoTab = tab;
+        if (currentExInfo) paintExInfo(currentExInfo);
+      }
+      return;
+    }
+    // Setup-notes add / delete (the per-lift list of notes).
+    const noteAdd = (e.target as HTMLElement).closest<HTMLElement>("[data-noteadd]");
+    if (noteAdd?.dataset.noteadd) {
+      e.preventDefault(); e.stopPropagation();
+      addSetupNote(noteAdd.dataset.noteadd);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    const noteDel = (e.target as HTMLElement).closest<HTMLElement>("[data-notedel]");
+    if (noteDel?.dataset.notedel) {
+      e.preventDefault(); e.stopPropagation();
+      const cut = noteDel.dataset.notedel.lastIndexOf("|");
+      deleteSetupNote(noteDel.dataset.notedel.slice(0, cut), Number(noteDel.dataset.notedel.slice(cut + 1)));
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    // Per-set warm-up nudge buttons (− + weight, − + reps): bump the row's delta + re-render.
+    const bump = (e.target as HTMLElement).closest<HTMLElement>("[data-wuadj]");
+    if (bump?.dataset.wuadj) {
+      e.preventDefault(); e.stopPropagation();
+      const idx = bump.dataset.wuadj.lastIndexOf("|");
+      const delta = Number(bump.dataset.wuadj.slice(idx + 1));
+      const rest = bump.dataset.wuadj.slice(0, idx);
+      const fidx = rest.lastIndexOf("|");
+      const field = rest.slice(fidx + 1) as "dw" | "dr";
+      bumpWarmupAdj(rest.slice(0, fidx), field, delta);
+      if (currentExInfo) paintExInfo(currentExInfo);
+      return;
+    }
+    // "Pair with" flag: open the mini grade menu for the directional edge (from → to).
+    const pflag = (e.target as HTMLElement).closest<HTMLElement>("[data-pairfrom]");
+    if (pflag?.dataset.pairfrom && pflag.dataset.pairto) {
+      e.preventDefault(); e.stopPropagation();
+      openPairGradeMenu(pflag.dataset.pairfrom, pflag.dataset.pairto, pflag);
+      return;
+    }
+    // "Pair with" SORT pill: cycle the sort key (Practical → Muscle → A–Z → Trained).
+    const psort = (e.target as HTMLElement).closest<HTMLElement>("[data-pairsort]");
+    if (psort) {
+      e.preventDefault(); e.stopPropagation();
+      const order: PairSort[] = ["practical", "muscle", "name", "trained"];
+      pairSort = order[(order.indexOf(pairSort) + 1) % order.length]!;
+      try { localStorage.setItem("colosseum.pairSort", pairSort); } catch { /* ignore */ }
+      if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+      return;
+    }
+    // "Pair with" HIDE-avoid toggle: show/hide the no-way-graded suggestions.
+    const phide = (e.target as HTMLElement).closest<HTMLElement>("[data-pairhide]");
+    if (phide) {
+      e.preventDefault(); e.stopPropagation();
+      pairHideAvoid = !pairHideAvoid;
+      try { localStorage.setItem("colosseum.pairHideAvoid", pairHideAvoid ? "1" : "0"); } catch { /* ignore */ }
+      if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+      return;
+    }
+    // Pair-with lift chip in the "How to train" panel → open that lift's brief.
+    const trainex = (e.target as HTMLElement).closest<HTMLElement>("[data-trainex]");
+    if (trainex?.dataset.trainex) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(trainex.dataset.trainex); return; }
     const ex = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-ex]");
     if (ex?.dataset.pillinfoEx) { e.preventDefault(); e.stopPropagation(); openExerciseInfo(ex.dataset.pillinfoEx); return; }
     const cat = (e.target as HTMLElement).closest<HTMLElement>("[data-pillinfo-cat]");
@@ -12130,17 +16353,126 @@ async function init() {
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (pickDrawerScope !== null) { closePickDrawer(); return; } // topmost overlay closes first
-    if (!els.planPage.hidden) { els.planPage.hidden = true; return; }
+    if (!els.statseditPage.hidden) { els.statseditPage.hidden = true; return; }
+    if (!els.formulasPage.hidden) { els.formulasPage.hidden = true; return; }
     if (!els.exInfoPage.hidden) closeExerciseInfo();
     else if (document.body.classList.contains("wa-graph-full")) { document.body.classList.remove("wa-graph-full"); renderWaGraph(); }
   });
-  // "Plan workout" — suggest what to train today (top of the workout history).
-  els.planWorkoutBtn.addEventListener("click", openWorkoutPlan);
-  els.planClose.addEventListener("click", () => { els.planPage.hidden = true; });
+  // Plan is now an inline card toggled by the "Plan" tab (handled by setupSectionToggles).
+  els.statseditClose.addEventListener("click", () => { els.statseditPage.hidden = true; });
+  // Formulas popup (was the Test tab) — sits beside the Plan button.
+  els.formulasBtn.addEventListener("click", openFormulas);
+  els.formulasClose.addEventListener("click", () => { els.formulasPage.hidden = true; });
+  // Drag-to-reorder the focus lifts (only in the "Drag" sort mode — the ≡ grips exist
+  // only then). Delegated on els.planBody so it survives re-renders. We move the grabbed
+  // row among its siblings by pointer Y, then on release write each entry's `order` and
+  // persist — only if the order actually changed (a stray tap mustn't churn the order).
+  let prioDrag: { listEl: HTMLElement; row: HTMLElement; pointerId: number; initial: string[] } | null = null;
+  els.planBody.addEventListener("pointerdown", (e) => {
+    const handle = (e.target as HTMLElement).closest<HTMLElement>("[data-priodrag]");
+    if (!handle) return;
+    const row = handle.closest<HTMLElement>(".prio-row");
+    const listEl = row?.parentElement as HTMLElement | null;
+    if (!row || !listEl) return;
+    e.preventDefault();
+    const initial = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
+    prioDrag = { listEl, row, pointerId: e.pointerId, initial };
+    row.classList.add("prio-dragging");
+    try { handle.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  }, { passive: false });
+  els.planBody.addEventListener("pointermove", (e) => {
+    if (!prioDrag || e.pointerId !== prioDrag.pointerId) return;
+    e.preventDefault();
+    const { listEl, row } = prioDrag;
+    const y = e.clientY;
+    for (const other of Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row"))) {
+      if (other === row) continue;
+      const r = other.getBoundingClientRect();
+      const mid = r.top + r.height / 2;
+      const otherIsAfter = !!(row.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING);
+      if (y < mid && !otherIsAfter) { listEl.insertBefore(row, other); break; }
+      if (y > mid && otherIsAfter) { listEl.insertBefore(row, other.nextSibling); break; }
+    }
+  }, { passive: false });
+  const endPrioDrag = () => {
+    if (!prioDrag) return;
+    const { listEl, row, initial } = prioDrag;
+    prioDrag = null;
+    row.classList.remove("prio-dragging");
+    const final = Array.from(listEl.querySelectorAll<HTMLElement>(".prio-row")).map((r) => r.dataset.prioex ?? "");
+    if (final.join("") === initial.join("")) return; // no move → leave the order untouched
+    const store = prioritiesStore[els.athlete.value];
+    if (store) { final.forEach((ex, i) => { if (store[ex]) store[ex]!.order = i; }); savePriorities(); }
+    renderWorkoutPlan();
+  };
+  els.planBody.addEventListener("pointerup", endPrioDrag);
+  els.planBody.addEventListener("pointercancel", endPrioDrag);
+  // 1RM goal input (Phase 2): save the target kg (or clear it) on change, then re-render
+  // so the % progress updates. Input has already blurred, so re-rendering is fine.
+  // Tier-2 "Add another" search: filter the addable list as you type. Re-render the
+  // plan, then restore focus + caret to the search input (it's recreated by the render).
+  els.planBody.addEventListener("input", (e) => {
+    const inp = (e.target as Element)?.closest?.<HTMLInputElement>(".prio-add-search");
+    if (!inp) return;
+    prioAddQuery = inp.value;
+    // PB-23 (#persistent): the search box lives INSIDE planBody, so the old code
+    // re-rendered the WHOLE plan on every keystroke — rebuilding every focus-lift row +
+    // pill (and destroying the input, hence the focus-restore hack), which lagged
+    // ("with each letter it's changing the pills"). Root fix (rule 17, same idiom as the
+    // S-ANL / variant-picker / graph-chip searches): refill ONLY the suggestion pills,
+    // leaving the live input untouched — no whole-plan rebuild, no focus theft.
+    planAddChipsRefill?.(prioAddQuery);
+  });
+  els.planBody.addEventListener("change", (e) => {
+    const g = (e.target as HTMLElement).closest<HTMLInputElement>("[data-priogoal]");
+    if (!g?.dataset.priogoal) return;
+    const user = els.athlete.value;
+    const pri = prioritiesStore[user] ?? (prioritiesStore[user] = {});
+    const ex = g.dataset.priogoal;
+    if (!pri[ex]) return;
+    const v = Number(g.value);
+    if (Number.isFinite(v) && v > 0) pri[ex]!.goalKg = Math.round(v * 10) / 10;
+    else delete pri[ex]!.goalKg;
+    savePriorities(); renderWorkoutPlan();
+  });
+  // Enter in the Goals input adds the goal (same as the ＋ button).
+  els.planBody.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".plan-goal-input");
+    if (!inp || e.key !== "Enter") return;
+    e.preventDefault();
+    if (inp.value.trim()) { addGoal(els.athlete.value, inp.value); renderWorkoutPlan(); }
+  });
   els.planBody.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
     const user = els.athlete.value;
     const pri = prioritiesStore[user] ?? (prioritiesStore[user] = {});
+    // A focus-lift SECTION header toggles its collapse — native <details> handles the
+    // open/close; we just record the new state so a re-render preserves it (no re-render).
+    const secSum = t.closest<HTMLElement>("[data-priosection]");
+    if (secSum?.dataset.priosection) {
+      const k = secSum.dataset.priosection;
+      if (prioSectionCollapsed.has(k)) prioSectionCollapsed.delete(k); else prioSectionCollapsed.add(k);
+      return;
+    }
+    // Goals (owner): add the typed goal, or remove one. Per-athlete, shown alongside priorities.
+    if (t.closest("[data-goaladd]")) {
+      const inp = els.planBody.querySelector<HTMLInputElement>(".plan-goal-input");
+      if (inp && inp.value.trim()) { addGoal(user, inp.value); renderWorkoutPlan(); }
+      return;
+    }
+    const goalDel = t.closest<HTMLElement>("[data-goaldel]");
+    if (goalDel?.dataset.goaldel !== undefined) { removeGoalAt(user, Number(goalDel.dataset.goaldel)); renderWorkoutPlan(); return; }
+    // ↕ Sort pill — cycle the list order: Top → Effort → Drag (free order).
+    if (t.closest("[data-priosort]")) {
+      prioSortMode = PRIO_SORTS[(PRIO_SORTS.indexOf(prioSortMode) + 1) % PRIO_SORTS.length]!;
+      savePrioSort(); renderWorkoutPlan(); return;
+    }
+    // ↺ Reset free order — clear every hand-sorted `order` so the list falls back to
+    // the effort default (owner: "untouched = sorted by effort").
+    if (t.closest("[data-prioresetorder]")) {
+      for (const ex of Object.keys(pri)) delete pri[ex]!.order;
+      savePriorities(); renderWorkoutPlan(); return;
+    }
     // Toggle a row's "related lifts" dropdown (no sort change — the rows stay put).
     const exp = t.closest<HTMLElement>("[data-prioexpand]");
     if (exp?.dataset.prioexpand) {
@@ -12161,41 +16493,53 @@ async function init() {
       }
       return;
     }
-    // Cycle the priority LEVEL → re-suggest the target for the new level (re-renders: the
-    // order changes by level, by design).
-    const lvl = t.closest<HTMLElement>("[data-priolevel]");
-    if (lvl?.dataset.priolevel && pri[lvl.dataset.priolevel]) {
-      const ex = lvl.dataset.priolevel;
-      const next = PRIORITY_LEVELS[(PRIORITY_LEVELS.indexOf(pri[ex]!.level) + 1) % PRIORITY_LEVELS.length]!;
-      pri[ex] = { level: next, target: suggestedTarget(next, exerciseMonthAvg(user, ex)) };
-      savePriorities(); renderWorkoutPlan(); return;
+    // The combined rank+effort tags → open ONE pick menu with both sections (owner).
+    // stopPropagation so the menu's outside-close (document handler) doesn't fire on this click.
+    const meta = t.closest<HTMLElement>("[data-priometa]");
+    if (meta?.dataset.priometa && pri[meta.dataset.priometa]) {
+      e.stopPropagation();
+      openPrioPickMenu(meta, meta.dataset.priometa, "both");
+      return;
+    }
+    // Cycle the SET INTENSITY (hard → mid → half) in the detail panel. Doesn't change
+    // order, but re-render to recolour the pill + hint.
+    const effBtn = t.closest<HTMLElement>("[data-prioeffort]");
+    if (effBtn?.dataset.prioeffort && pri[effBtn.dataset.prioeffort]) {
+      const ex = effBtn.dataset.prioeffort;
+      const cur = effortOf(pri[ex]!);
+      pri[ex]!.effort = EFFORT_LEVELS[(EFFORT_LEVELS.indexOf(cur) + 1) % EFFORT_LEVELS.length]!;
+      savePriorities(); renderWorkoutPlan(); refreshExerciseInfo(); return;
     }
     // Target −/+ stepper — update IN PLACE (no re-sort, so the row doesn't jump as you tap).
+    // Sub-1 steps of 0.5 below 2 (0.5 = one set / 2 weeks); whole sets above.
     const tgt = t.closest<HTMLElement>("[data-priotgt]");
     if (tgt?.dataset.priotgt && pri[tgt.dataset.priotgt]) {
       const ex = tgt.dataset.priotgt;
-      const v = Math.max(0, Math.min(20, pri[ex]!.target + (Number(tgt.dataset.d) || 0)));
+      const v = stepTarget(pri[ex]!.target, Number(tgt.dataset.d) || 0);
       pri[ex]!.target = v; savePriorities();
       const val = tgt.closest(".prio-target")?.querySelector(".prio-tgt-val");
-      if (val) val.textContent = `${v}/wk`;
+      if (val) val.textContent = fmtTarget(v);
       return;
     }
     // Remove a priority.
     const rm = t.closest<HTMLElement>("[data-prioremove]");
     if (rm?.dataset.prioremove) { delete pri[rm.dataset.prioremove]; savePriorities(); renderWorkoutPlan(); return; }
-    // Add a suggested exercise (default Active), up to the cap.
+    // Add a suggested exercise (default Active) — the priority list is unlimited.
     const add = t.closest<HTMLElement>("[data-prioadd]");
     if (add?.dataset.prioadd) {
       const ex = add.dataset.prioadd;
-      if (Object.keys(pri).length < PRIORITY_MAX && !pri[ex]) {
+      if (!pri[ex]) {
         pri[ex] = { level: "active", target: suggestedTarget("active", exerciseMonthAvg(user, ex)) };
         savePriorities(); renderWorkoutPlan();
       }
       return;
     }
+    // Pairs manager flag toggle (in the Plan popup pairs section) — directional edge.
+    const pf2 = t.closest<HTMLElement>("[data-pairfrom]");
+    if (pf2?.dataset.pairfrom && pf2.dataset.pairto) { openPairGradeMenu(pf2.dataset.pairfrom, pf2.dataset.pairto, pf2); return; }
     // Tap the name → open the exercise's info.
     const row = t.closest<HTMLElement>("[data-planopen]");
-    if (row?.dataset.planopen) { els.planPage.hidden = true; openExerciseInfo(row.dataset.planopen); }
+    if (row?.dataset.planopen) { openExerciseInfo(row.dataset.planopen, true); }
   });
   // "More info" buttons (Index ℹ, Analysis single mode, drill-in) all open that
   // exercise's settings in the floating overlay.
@@ -12248,11 +16592,38 @@ async function init() {
         else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
       }
       else if (act === "only") { if (scope === "graph") waGraphSel = [name]; else waSelected = [name]; }
+      else if (act === "member") { const mem = row.dataset.lmmem; if (mem) { if (scope === "graph") waGraphSel = [mem]; else waSelected = [mem]; } }
       closeLiftMenu();
+      if (currentExInfo && name === currentExInfo && (act === "merged" || act === "separated" || act === "only")) refreshExerciseInfo();
       deferRender(renderWorkoutAnalysis);
       return;
     }
     if (!menu.contains(t)) closeLiftMenu();
+  });
+  // The rank / effort-level PICK MENU (opened from the Plan focus-lift pills): apply a
+  // tapped option, else close on an outside click. The menu lives on document.body, so
+  // this is a document-level handler (mirrors the lift-menu one above).
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    const menu = document.getElementById("prioPickMenu");
+    if (!menu) return;
+    const pick = t.closest<HTMLElement>("[data-priopick]");
+    if (pick && menu.contains(pick)) {
+      e.preventDefault(); e.stopPropagation();
+      const ex = pick.dataset.priopickex!, val = pick.dataset.priopick!, kind = pick.dataset.priopickkind;
+      const user = els.athlete.value;
+      const pri = prioritiesStore[user];
+      if (pri?.[ex]) {
+        if (kind === "rank") pri[ex]!.rank = val as PriorityRank;
+        // Spread keeps the independent dials (rank, 1RM goal, effort); level also re-suggests its target.
+        else pri[ex] = { ...pri[ex]!, level: val as PriorityLevel, target: suggestedTarget(val as PriorityLevel, exerciseMonthAvg(user, ex)) };
+        savePriorities();
+      }
+      closePrioPickMenu();
+      renderWorkoutPlan();
+      return;
+    }
+    if (!menu.contains(t)) closePrioPickMenu();
   });
   // Swipe-RIGHT-to-remove on the selection-title chips (same drop as the menu's ✕
   // Remove, via the one removeLiftFromSelection choke-point). Only the title chips —
@@ -12414,7 +16785,7 @@ async function init() {
       renderAll();
       if (document.getElementById("tab-analysis")?.hidden === false) renderWorkoutAnalysis();
       if (document.getElementById("workoutsTable")) renderWorkoutsPage();
-      window.scrollTo(0, y);
+      restoreScrollY(y);
       return;
     }
     // "Compare" toggle (graph bar, beside Graph options / Legend): show/hide the
@@ -12433,6 +16804,7 @@ async function init() {
         waGraphAthletes = waGraphAthletes.includes(u) ? waGraphAthletes.filter((x) => x !== u) : [...waGraphAthletes, u];
         renderWaGraph();
         renderSelector("graph"); // refresh the 📈 cap marks for the new athlete count
+        applyPickDrawer(); // PB-36: restore drawer if it was open (renderSelector rebuilt the card)
       }
       return;
     }
@@ -12552,7 +16924,7 @@ async function init() {
       const v = Number(step!.value);
       if (Number.isFinite(v) && v > 0) {
         setInclineCmPerStep(stepDim, Math.round(v * 10) / 10);
-        if (currentExInfo) els.exInfoBody.innerHTML = exerciseInfoHtml(currentExInfo);
+        if (currentExInfo) paintExInfo(currentExInfo);
         scheduleModelFactorsApply();
       }
       return;
@@ -12596,12 +16968,8 @@ async function init() {
     if (!input?.dataset.varEx || input.dataset.varNote === undefined) return;
     const v = Number(input.value);
     if (Number.isFinite(v) && v > 0) setVariationScale(input.dataset.varEx, input.dataset.varNote, Math.round(v * 100) / 100);
-    if (scaleEditState) {
-      scaleEditDirty = true;
-      closeScaleEditor(); // a selection in the floating popover closes it
-    } else {
-      refreshAfterDifficultyEdit();
-    }
+    if (scaleEditState) afterModelPick(); // popover closes on a pick; in-card model stays open
+    else refreshAfterDifficultyEdit();
   });
   // Close button on the floating modifier editor.
   document.addEventListener("click", (e) => {
@@ -12652,18 +17020,26 @@ async function init() {
     shoulderRefPhoto = !shoulderRefPhoto;
     if (scaleEditState) renderScaleEditor();
   });
+  // The UNIFIED variation picker (DEDUP-2): the per-set edit card/popover renders the
+  // same add-set-style <select> dim dropdowns, each tagged with data-vecdim-ex/note.
+  // Picking a level fires the auto-xdd's native `change` — save it to THIS set's vec and
+  // re-render in place (the popover/card stays open so several dims can be set in a row;
+  // the heavy table/graph sync defers to close via scaleEditDirty). Add-popup dim selects
+  // carry no data-vecdim-ex, so they're skipped here (they're read once on "Add").
+  document.addEventListener("change", (e) => {
+    const sel = (e.target as HTMLElement).closest<HTMLSelectElement>("select.wo-af-dim[data-vecdim-ex]");
+    if (!sel || !sel.dataset.vecdimEx || sel.dataset.vecdimNote === undefined || !sel.dataset.dim) return;
+    setNoteVecDim(sel.dataset.vecdimEx, sel.dataset.vecdimNote, sel.dataset.dim, sel.value);
+    if (scaleEditState) { scaleEditDirty = true; renderScaleEditor(); }
+    else refreshAfterDifficultyEdit();
+  });
   // Per-note ATTRIBUTE picker (model lifts): click a dimension's level chip (DM3).
   document.addEventListener("click", (e) => {
     const lvl = (e.target as HTMLElement).closest<HTMLElement>(".ex-var-lvl");
     if (!lvl?.dataset.vecdimEx || lvl.dataset.vecdimNote === undefined || !lvl.dataset.vecdimDim || lvl.dataset.vecdimLevel === undefined) return;
     setNoteVecDim(lvl.dataset.vecdimEx, lvl.dataset.vecdimNote, lvl.dataset.vecdimDim, lvl.dataset.vecdimLevel);
-    if (scaleEditState) {
-      // In the floating popover, a selection closes it (which syncs the table/graph).
-      scaleEditDirty = true;
-      closeScaleEditor();
-    } else {
-      refreshAfterDifficultyEdit();
-    }
+    if (scaleEditState) afterModelPick(); // popover closes on a pick; in-card model stays open to keep tweaking
+    else refreshAfterDifficultyEdit();
   });
   // Nested SUPPORT dropdowns (support / ladder grip / ladder height) — custom
   // floating .xdd menus, never native <select>. Tapping the button toggles its
@@ -12714,7 +17090,7 @@ async function init() {
     const dotLeft = noLean ? 50 : xf * 100, dotTop = yf * 100;
     const wrap = pad.closest(".ex-pad-dim");
     const set = (sel: string, txt: string) => { const el = wrap?.querySelector(sel); if (el) el.textContent = txt; };
-    set(".ex-sl-rk", rk); set(".ex-sl-lk", lk); set(".ex-sl-mult", `×${mult}`);
+    set(".ex-sl-rk", rk); set(".ex-sl-lk", `${leanFingertipCm(lk, els.athlete.value)}cm`); set(".ex-sl-mult", `×${mult}`);
     set(".ex-sl-rf", `×${romF}`); set(".ex-sl-lf", `×${leanF}`);
     const fill = pad.querySelector<HTMLElement>(".ex-pad-fill");
     if (fill) {
@@ -12803,6 +17179,16 @@ async function init() {
     scaleEditDirty = true;
   };
   document.addEventListener("input", onScrub);
+  // In-panel exercise search: typing in the selector's .wa-chip-search box drives the
+  // shared waSearchQuery (the catalogue-wide chip filter). The input sits OUTSIDE
+  // #waChips, so refilling just the chips keeps the input — and its focus/caret — alive.
+  document.addEventListener("input", (e) => {
+    const t = e.target;
+    const inp = t instanceof Element ? t.closest<HTMLInputElement>(".wa-chip-search") : null;
+    if (!inp) return;
+    waSearchQuery = inp.value;
+    renderWaChipsScope((inp.dataset.scope as SelScope) || "graph");
+  });
   // On release: resume the rep loop and do the deferred table/graph sync.
   document.addEventListener("change", (e) => {
     if (!(e.target as HTMLElement).closest?.(".pose-scrub")) return;
@@ -12824,6 +17210,10 @@ async function init() {
   // Inline identity/model editors on the More-info page (code / short / bw part).
   document.addEventListener("change", (e) => {
     const t = e.target as HTMLElement;
+    // "How to train" per-lift setup notes (rack height etc.) — save on blur, no
+    // re-render so the textarea keeps focus/scroll.
+    const note = t.closest<HTMLTextAreaElement>(".lt-note");
+    if (note?.dataset.setupnote) { setSetupNoteAt(note.dataset.setupnote, Number(note.dataset.noteidx ?? 0), note.value); return; }
     const code = t.closest<HTMLInputElement>(".ex-edit-code");
     if (code?.dataset.editex) { setCodeOverride(code.dataset.editex, code.value); renderAll(); reopenIndexDetail(code.dataset.editex); return; }
     const short = t.closest<HTMLInputElement>(".ex-edit-short");
@@ -12840,9 +17230,44 @@ async function init() {
       scheduleRender(() => reopenIndexDetail(ex));
       return;
     }
+    // Default range of motion (%) for this exercise — tracked default, not a rescale.
+    const romEl = t.closest<HTMLInputElement>(".ex-edit-rom");
+    if (romEl?.dataset.editex) {
+      const ex = romEl.dataset.editex;
+      setRomDefault(ex, parseFloat(romEl.value));
+      scheduleRender(() => reopenIndexDetail(ex));
+      return;
+    }
+    // Machine base weight (kg) for this exercise — folds into strength/1RM. Blank = clear.
+    const mwEl = t.closest<HTMLInputElement>(".ex-edit-mw");
+    if (mwEl?.dataset.editex) {
+      const ex = mwEl.dataset.editex;
+      const txt = mwEl.value.trim();
+      setMachineWeightWithUndo(ex, txt === "" ? null : parseFloat(txt)); // global change → confirm/undo (Phase 2)
+      return;
+    }
+    // Machine multiplier (÷ divisor) for this assisted-machine lift — the −20/N formula. Blank/2 = default.
+    const mmEl = t.closest<HTMLInputElement>(".ex-edit-mm");
+    if (mmEl?.dataset.editex) {
+      const ex = mmEl.dataset.editex;
+      const txt = mmEl.value.trim();
+      const v = parseFloat(txt);
+      setMachineMultWithUndo(ex, txt === "" || !Number.isFinite(v) ? undefined : v); // global change → confirm/undo (Phase 2)
+      return;
+    }
   });
   // Category / Muscle group / Tier are multi-select chips — tap to toggle membership
   // (a lift can belong to several at once); the ↺ chip resets to the auto default.
+  // Experimental toggle in the index card — flip the whole lift in/out of scratchpad mode
+  // (its sets are then excluded from / re-included in every metric). The built-in
+  // Experimentation lift is locked on (the button is disabled, so this never fires for it).
+  document.addEventListener("click", (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".ex-exp-toggle");
+    const ex = btn?.dataset.editex;
+    if (!ex || btn?.disabled) return;
+    setExperimental(ex, !isExperimental(ex));
+    scheduleRender(() => reopenIndexDetail(ex));
+  });
   document.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-meta-chip, .ex-meta-reset");
     const ex = chip?.dataset.metaEx, kind = chip?.dataset.metaKind, val = chip?.dataset.metaVal;
@@ -12852,18 +17277,35 @@ async function init() {
     // feels instant and the page keeps its scroll, then reopen the inline panel.
     scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
   });
-  // Muscle INVOLVEMENT level chips: cycle 0→1→2→3→4→0 (≥3 = shown in that muscle's
-  // category); the ↺ resets all of this lift's muscle levels to the auto guess.
+  // Muscle INVOLVEMENT level chips. ADD-FIRST cycle: an OFF muscle jumps straight to 4
+  // (top → gold) so ONE tap visibly adds it; each further tap dials DOWN 4→3→2→1→0
+  // (every level reachable, ending at off). The ↺ resets all of this lift's levels.
+  // SNAPPY (rule 17 — owner: "working but very laggy"): repaint just the tapped chip IN
+  // PLACE instantly, and DEBOUNCE the heavy panel + muscle-map rebuild — cycling a level
+  // used to re-render the WHOLE editor on every tap.
+  let mgSyncTimer: number | undefined;
+  const mgSync = (ex: string) => {
+    if (mgSyncTimer) clearTimeout(mgSyncTimer);
+    mgSyncTimer = window.setTimeout(() => { reopenIndexDetail(ex); refreshPoseViz(); }, 260);
+  };
   document.addEventListener("click", (e) => {
     const chip = (e.target as HTMLElement).closest<HTMLElement>(".ex-mglvl-chip, .ex-mglvl-reset");
     const ex = chip?.dataset.mglvlEx;
     if (!ex) return;
-    if (chip!.classList.contains("ex-mglvl-reset")) resetMgLevel(ex);
-    else {
-      const m = chip!.dataset.mglvlMuscle as MuscleGroup;
-      setMgLevel(ex, m, (mgLevelOf(ex, m) + 1) % 5);
-    }
-    scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); });
+    if (chip!.classList.contains("ex-mglvl-reset")) { resetMgLevel(ex); scheduleRender(() => { reopenIndexDetail(ex); refreshPoseViz(); }); return; }
+    const m = chip!.dataset.mglvlMuscle as MuscleGroup;
+    const before = mgLevelOf(ex, m);
+    const after = before === 0 ? 4 : before - 1;
+    setMgLevel(ex, m, after);
+    if (mgLevelOf(ex, m) !== after) return; // edit was blocked (non-admin) — don't fake the UI
+    // Instant in-place repaint of THIS chip only (no panel rebuild) — keeps the tap snappy.
+    chip!.classList.toggle("is-on", after >= 3);
+    chip!.classList.toggle("is-partial", after > 0 && after < 3);
+    chip!.classList.toggle("is-top", after === 4);
+    const badge = chip!.querySelector<HTMLElement>(".ex-mglvl-n");
+    if (after > 0) { if (badge) badge.textContent = String(after); else chip!.insertAdjacentHTML("beforeend", `<span class="ex-mglvl-n">${after}</span>`); }
+    else badge?.remove();
+    mgSync(ex); // muscle map / fold hint / ↺ button catch up once tapping settles
   });
   // Combinable / Comparable membership chips — toggle this lift in/out of a group.
   document.addEventListener("click", (e) => {
@@ -12991,6 +17433,23 @@ async function init() {
     const k = `${ex}|${sec}`;
     if (d.open) metaFoldOpen.add(k); else metaFoldOpen.delete(k);
   }, true);
+  // Remember the "Index entry" + "Pair with" folds' open state across card re-renders.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!(d instanceof HTMLDetailsElement)) return;
+    if (d.classList.contains("ex-index-fold")) exIndexFoldOpen = d.open;
+    else if (d.classList.contains("lt-pair-fold")) pairFoldOpen = d.open;
+  }, true);
+  // When the graph "Options" sheet OPENS, scroll the chart up so it sits ABOVE the bottom
+  // sheet — owner: "auto scroll the graph so it's above it, so I can see both". The sheet is
+  // a height-capped fixed bottom panel; pinning the chart's top to the viewport top keeps the
+  // whole graph visible in the gap above it. Capture phase — `toggle` doesn't bubble.
+  document.addEventListener("toggle", (e) => {
+    const d = e.target as HTMLElement;
+    if (!(d instanceof HTMLDetailsElement) || !d.classList.contains("wa-graph-fold") || !d.open) return;
+    const stage = document.getElementById("gdashStage") ?? document.querySelector<HTMLElement>(".wa-graph-chart");
+    requestAnimationFrame(() => stage?.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }, true);
   // Editable SOURCES (spelling-merge): split a folded spelling into its own lift, or
   // merge a split-out sibling back in. Mutates the split set, rebuilds the records +
   // merge report, then refreshes the picker + the open card.
@@ -13030,9 +17489,10 @@ async function init() {
   els.athleteChips.addEventListener("click", (e) => {
     const btn = (e.target as HTMLElement).closest<HTMLButtonElement>(".athlete-chip");
     if (!btn?.dataset.username || btn.dataset.username === els.athlete.value) return;
-    // Outside admin, only the locked athlete's chip is selectable.
+    // Outside admin, you can select your OWN chip or any PUBLIC athlete's (to spectate
+    // them read-only); other athletes stay locked out.
     const lock = lockedUsername();
-    if (lock && btn.dataset.username !== lock) return;
+    if (lock && btn.dataset.username !== lock && !isPublicProfile(btn.dataset.username)) return;
     els.athlete.value = btn.dataset.username;
     renderAthlete();
   });
@@ -13073,8 +17533,8 @@ async function init() {
     const keepScroll = (fn: () => void) => {
       const y = window.scrollY;
       fn();
-      window.scrollTo(0, y);
-      requestAnimationFrame(() => window.scrollTo(0, y));
+      restoreScrollY(y);
+      requestAnimationFrame(() => restoreScrollY(y));
     };
     if (target.closest("[data-heatall]")) {
       waSelected = [];
@@ -13159,16 +17619,83 @@ async function init() {
     // wall) that just re-rendered the popover and orphaned the click target — that
     // isn't a genuine outside click, so the editor should stay open.
     const t = e.target as HTMLElement;
-    if (scaleEditState && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
+    if (scaleEditState && !scaleEditInCard && t.isConnected && !t.closest("#scaleEditPop") && !t.closest(".set-scale.is-editable")) closeScaleEditor();
   });
   els.summariseBtn.addEventListener("click", runSummary);
+  // ⚙ history settings: tapping any pill shows its description in the footer bar (owner:
+  // "explain each setting with a little text; whichever i click, that description appears").
+  // Reuses each pill's own title as the description, delegated so it covers every pill,
+  // present and future. The ⚙ popout is static markup, so the bar survives re-renders.
+  const djBox = document.querySelector<HTMLElement>(".wo-controls.wo-dj");
+  const djDesc = document.getElementById("woDjDesc");
+  if (djBox && djDesc) {
+    const djDefault = (djDesc.textContent ?? "").trim();
+    djBox.addEventListener("click", (e) => {
+      const pill = (e.target as HTMLElement).closest<HTMLElement>(".wo-dj-btn, .wo-hidden-toggle");
+      if (!pill) return;
+      const label = (pill.textContent ?? "").trim();
+      const desc = (pill.getAttribute("title") ?? "").trim();
+      djDesc.textContent = desc ? `${label} — ${desc}` : (label || djDefault);
+    });
+  }
   // Each control is one toggle button now: tap to flip its value (no segments).
   els.workoutViewToggle.addEventListener("click", () => {
     // Cycle Day → Week → 2 wks → Month → 3 mo → Day.
     const i = WO_VIEW_MODES.indexOf(S.workoutViewMode);
     S.workoutViewMode = WO_VIEW_MODES[(i + 1) % WO_VIEW_MODES.length]!;
+    historyByExercise = false; // a period grouping turns the by-exercise view off
+    saveHistByExercise();
     S.workoutsPage = 0;
     renderWorkoutsPage();
+  });
+  // History dashboard tabs (user-managed, like the graph): switch / add / rename /
+  // duplicate / delete. Each tab is its own independent history view.
+  document.addEventListener("click", (e) => {
+    const el = e.target as HTMLElement;
+    // ⋯ options button → toggle the tab menu (same as the graph strip).
+    const menuBtn = el.closest<HTMLElement>("[data-hwmenu]");
+    if (menuBtn?.dataset.hwmenu) {
+      if (document.getElementById("histTabMenu")) closeHistTabMenu();
+      else openHistTabMenu(menuBtn, menuBtn.dataset.hwmenu);
+      return;
+    }
+    const sw = el.closest<HTMLElement>("[data-hwtab]");
+    if (sw?.dataset.hwtab) {
+      histEditTab = null;
+      if (sw.dataset.hwtab !== activeHistoryTab(historyDash).id) switchHistoryTab(sw.dataset.hwtab);
+      return;
+    }
+  });
+  // History tab MENU ACTIONS (Duplicate / Rename / Add / Delete) — the menu is appended to
+  // <body>, so handle at document level (same pattern + PB-38 lesson as the graph tabs).
+  document.addEventListener("click", (e) => {
+    const tgt = e.target as Element | null;
+    const item = tgt?.closest<HTMLElement>("[data-htabmenu]");
+    if (item?.dataset.htabmenu) {
+      const act = item.dataset.htabmenu, tid = item.dataset.tab;
+      closeHistTabMenu();
+      if (act === "add") { historyDash = addHistoryTab(historyDash); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
+      else if (act === "duplicate" && tid) { historyDash = duplicateHistoryTab(historyDash, tid); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
+      else if (act === "rename" && tid) { historyDash = setActiveHistoryTab(historyDash, tid); histEditTab = tid; if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash); renderWoTabs(); }
+      else if (act === "delete" && tid) { historyDash = removeHistoryTab(historyDash, tid); histEditTab = null; switchHistoryTab(activeHistoryTab(historyDash).id); }
+      return;
+    }
+    if (document.getElementById("histTabMenu") && !tgt?.closest("#histTabMenu, [data-hwmenu]")) closeHistTabMenu();
+  });
+  // Inline history-tab rename input: Enter/blur commits the name, Esc cancels.
+  document.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-hwtabname]");
+    if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); histEditTab = null; renderWoTabs(); }
+  });
+  document.addEventListener("focusout", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-hwtabname]");
+    if (!inp?.dataset.hwtabname) return;
+    historyDash = renameHistoryTab(historyDash, inp.dataset.hwtabname, inp.value.trim() || "History");
+    histEditTab = null;
+    if (historyDashUser !== null) saveHistoryDashboardFor(historyDashUser, historyDash);
+    renderWoTabs();
   });
   // EXPERIMENTAL horizontal history: its grouping cycle mirrors the ⚙ toggle
   // (same shared S.workoutViewMode). Delegated since the button is re-rendered.
@@ -13203,7 +17730,10 @@ async function init() {
     renderWorkoutsPage();
   });
   els.restToggle.addEventListener("click", () => {
-    S.showRestDays = !S.showRestDays;
+    // Cycle: off → full slivers → compact hairline → off.
+    if (!S.showRestDays) { S.showRestDays = true; S.restCompact = false; }
+    else if (!S.restCompact) { S.restCompact = true; }
+    else { S.showRestDays = false; S.restCompact = false; }
     S.workoutsPage = 0;
     renderWorkoutsPage();
   });
@@ -13212,11 +17742,34 @@ async function init() {
     localStorage.setItem("colosseum.showAddSets", S.showAddSets ? "1" : "0");
     renderWorkoutsPage();
   });
+  els.prioSortToggle.addEventListener("click", () => {
+    woSortMode = nextWoSortMode(woSortMode); // cycle priority → recency → volume → logged
+    saveWoSortMode();
+    els.prioSortToggle.textContent = WO_SORT_LABEL[woSortMode]; // instant pill feedback
+    els.prioSortToggle.setAttribute("data-sub", WO_SORT_SUB[woSortMode]);
+    els.prioSortToggle.classList.toggle("is-active", woSortMode !== "logged");
+    els.prioSortToggle.setAttribute("aria-pressed", woSortMode !== "logged" ? "true" : "false");
+    renderWorkoutsPage();
+  });
   els.variantToggle.addEventListener("click", () => {
     S.showVariants = !S.showVariants;
     localStorage.setItem("colosseum.showVariants", S.showVariants ? "1" : "0");
     els.variantToggle.classList.toggle("is-active", S.showVariants); // instant pill feedback
     els.variantToggle.setAttribute("aria-pressed", S.showVariants ? "true" : "false");
+    renderWorkoutsPage();
+  });
+  els.scaleModeToggle.addEventListener("click", () => {
+    S.showAllScale = !S.showAllScale;
+    localStorage.setItem("colosseum.showAllScale", S.showAllScale ? "1" : "0");
+    els.scaleModeToggle.classList.toggle("is-active", S.showAllScale); // instant pill feedback
+    els.scaleModeToggle.setAttribute("aria-pressed", S.showAllScale ? "true" : "false");
+    renderWorkoutsPage();
+  });
+  els.machineRealToggle.addEventListener("click", () => {
+    S.machineReal = !S.machineReal;
+    localStorage.setItem("colosseum.machineReal", S.machineReal ? "1" : "0");
+    els.machineRealToggle.classList.toggle("is-active", S.machineReal); // instant pill feedback
+    els.machineRealToggle.setAttribute("aria-pressed", S.machineReal ? "true" : "false");
     renderWorkoutsPage();
   });
   els.aloneTagToggle.addEventListener("click", () => {
@@ -13457,7 +18010,7 @@ async function init() {
   // Rep-max reps live in the column header now: editing the header input (fires
   // on blur/Enter, so typing doesn't lose focus) recalculates the column.
   els.athleteTable.addEventListener("change", (e) => {
-    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note, .set-side-input")) { onSetEditInput(e); return; }
+    if ((e.target as HTMLElement).closest(".set-edit-input, .set-edit-note, .set-side-input, .rpe-exact")) { onSetEditInput(e); return; }
     const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".rm-col-input");
     if (!inp) return;
     const n = Math.round(Number(inp.value));
@@ -13672,7 +18225,7 @@ async function init() {
       const sy = window.scrollY;
       setBwReviewOpen(true);
       toggleActiveOverride(keep.dataset.askeep, "include");
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       return;
     }
     // "⤳ merge?" — flag / unflag a lift for the merge-review queue (top of the Index).
@@ -13681,7 +18234,7 @@ async function init() {
       const sy = window.scrollY;
       toggleMergeReview(mflag.dataset.mergeflag);
       renderBwParts();
-      window.scrollTo(0, sy);
+      restoreScrollY(sy);
       return;
     }
     // (Tier quick-edit is now a .xdd dropdown — handled by the bw-attr-edit change
@@ -13707,22 +18260,60 @@ async function init() {
   });
   for (const input of [els.calcWeight, els.calcReps, els.calcBw, els.calcCoeff])
     input.addEventListener("input", () => {
-      els.testPickHint.textContent = ""; // numbers are now custom, not the loaded top set
       renderTest();
     });
 
-  // Coach prescription calculator: recompute on any input/select change, and
-  // cycle the target mode (reps+RIR ↔ %1RM) on the mode pill (rule 15: one
-  // cycling pill, not a segmented control).
-  for (const el of [els.rxOrm, els.rxReps, els.rxRir, els.rxPct])
-    el.addEventListener("input", renderCoachRx);
-  for (const sel of [els.rxFormula, els.rxInc])
-    sel.addEventListener("change", renderCoachRx);
-  els.rxModeBtn.addEventListener("click", () => {
-    els.rxModeBtn.dataset.mode = els.rxModeBtn.dataset.mode === "pct" ? "repsRIR" : "pct";
-    renderCoachRx();
+  // The warm-up ramp is part of renderTest now (merged calculator). Changing the Plates
+  // rounding recomputes it.
+  els.rxInc.addEventListener("change", renderTest);
+  // ONE delegated handler for the plan popups, shared by the calculator AND the exercise
+  // card (owner: the card should have everything the calculator has): a warm-up/hard-set
+  // pill (data-warmupplan / data-worksetplan, anywhere) opens the tabbed popup; a tab
+  // inside it applies the plan + refreshes the OWNING view (lastWuRerender) and the popup;
+  // a click elsewhere closes it.
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    // Value-mode toggle: cycle the warm-up loads between kg / %1RM / RM, then refresh the
+    // owning view (card or calc) + any open plan popup. Owner: one value column, toggleable.
+    if (t.closest<HTMLElement>("[data-warmupvalmode]")) {
+      e.stopPropagation();
+      cycleWarmupValMode();
+      lastWuRerender();
+      const menu = document.getElementById("planPopup");
+      if (menu) menu.innerHTML = planPopupHtml(menu.dataset.kind as "warmup" | "workset");
+      return;
+    }
+    const wuPill = t.closest<HTMLElement>("[data-warmupplan]");
+    const wsPill = t.closest<HTMLElement>("[data-worksetplan]");
+    if (wuPill || wsPill) {
+      e.stopPropagation();
+      openPlanPopup(wuPill ? "warmup" : "workset", (wuPill ?? wsPill)!);
+      return;
+    }
+    const menu = document.getElementById("planPopup");
+    if (!menu) return;
+    const tab = t.closest<HTMLElement>("[data-plantab]");
+    if (tab && menu.contains(tab)) {
+      e.stopPropagation();
+      const kind = menu.dataset.kind as "warmup" | "workset";
+      if (kind === "warmup") setWarmupPlan(tab.dataset.plantab!); else setWorksetPlan(tab.dataset.plantab!);
+      lastWuRerender();
+      menu.innerHTML = planPopupHtml(kind);
+      return;
+    }
+    if (!menu.contains(t)) closePlanPopup();
   });
-  renderCoachRx(); // initial paint
+  // Safety / custom-warm-up back-off lists inside the popup (a textarea of "weight reps"
+  // lines): commit on blur, refresh the popup table + the owning view.
+  document.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    const menu = document.getElementById("planPopup");
+    if (!menu) return;
+    const safe = t.closest<HTMLTextAreaElement>("[data-worksetsafety]");
+    if (safe) { setSafetyText(safe.value); setWorksetPlan("safety"); lastWuRerender(); menu.innerHTML = planPopupHtml("workset"); return; }
+    const wuc = t.closest<HTMLTextAreaElement>("[data-warmupcustom]");
+    if (wuc) { setWarmupCustomText(wuc.value); setWarmupPlan("custom"); lastWuRerender(); menu.innerHTML = planPopupHtml("warmup"); return; }
+  });
 
   setupBottomNav();
 
@@ -13759,14 +18350,51 @@ async function init() {
   setupLanguage();
   initI18n();
 
+  // Tapping the top "new data" bar applies every staged background update at once
+  // (the only moment the view rebuilds) — see stageRefresh/applyRefresh.
+  document.getElementById("refreshBar")?.addEventListener("click", applyRefresh);
+
   // Once the dashboard is up with the bundled data, quietly pull the LATEST ud.csv
-  // from GitHub and hot-swap it in if it changed — with a spinner next to the title.
+  // from GitHub; if it changed, STAGE it for a manual refresh (no live hot-swap).
   void syncFromGitHub();
 }
 
-/** Fetch the latest data from GitHub and, if it differs from what's bundled, swap it
- * in and re-render. A small badge by the title shows the live state (⟳ while fetching,
- * ✓ when synced). All failures are silent — the bundled data just stays. */
+// ── Background-sync "refresh" bar ───────────────────────────────────────────────
+// A background sync that finds fresher data must NEVER rebuild or reload the view
+// under the user (that's the page-jump the owner reported). Instead it STAGES the
+// update here and shows the sticky top bar; the view rebuilds ONLY when the user taps
+// it — keeping scroll/typing rock-stable meanwhile. `apply` mutates in-memory state
+// (the unified render runs after); pass "reload" for a change that only takes effect
+// on a full reload (a KV cache merge, which in-memory stores read at boot only).
+const refreshAppliers: (() => void)[] = [];
+let refreshNeedsReload = false;
+function stageRefresh(apply: (() => void) | "reload"): void {
+  if (apply === "reload") refreshNeedsReload = true;
+  else refreshAppliers.push(apply);
+  const bar = document.getElementById("refreshBar");
+  if (bar) bar.hidden = false;
+}
+/** Apply every staged background update at once (the one moment the view rebuilds),
+ *  or reload if a staged change needs it. Keeps the current scroll position. */
+function applyRefresh(): void {
+  const bar = document.getElementById("refreshBar");
+  if (refreshNeedsReload) { location.reload(); return; }
+  const fns = refreshAppliers.splice(0);
+  const y = window.scrollY;
+  for (const fn of fns) fn(); // in-memory state swaps only
+  populateExercisePicker();
+  renderAll();
+  renderWorkoutAnalysis();
+  renderStatus();
+  renderDataTab();
+  restoreScrollY(y); // user CHOSE to refresh → keep their place, don't fling to top
+  if (bar) bar.hidden = true;
+}
+
+/** Fetch the latest data from GitHub and, if it differs from what's bundled, STAGE it
+ * for a manual refresh (the top bar) rather than swapping it in live. A small badge by
+ * the title shows the live state (⟳ while fetching, ✓ when synced). All failures are
+ * silent — the bundled data just stays. */
 async function syncFromGitHub(): Promise<void> {
   const ind = document.getElementById("ghSync");
   if (ind) {
@@ -13777,19 +18405,17 @@ async function syncFromGitHub(): Promise<void> {
   const fresh = await fetchLatestCsv();
   if (fresh == null) { if (ind) ind.hidden = true; return; } // offline / unavailable: keep bundled
   if (fresh !== data.rawCsv) {
-    // Newer data than the build carries — rebuild the records and re-render the views.
-    data = buildLoaded(fresh);
-    clearMachineCache();
-    loadedRecords = data.records; // immutable base for spelling-split re-derivation
-    mergeManualSets();
-    populateExercisePicker();
-    renderAll();
-    renderLeaderboard();
-    renderPersonalRecords();
-    renderWorkoutAnalysis();
-    renderStatus();
-    renderDataTab();
-    if (ind) { ind.className = "gh-sync gh-sync--ok"; ind.title = "Loaded the latest data from GitHub."; ind.textContent = "GitHub"; }
+    // Newer data than the build carries — STAGE it (don't rebuild under the user); the
+    // top refresh bar lets them apply it when they choose, so the view never jumps.
+    const freshCsv = fresh;
+    stageRefresh(() => {
+      data = buildLoaded(freshCsv);
+      clearMachineCache();
+      clearWorkoutSortFreeze(); // a data refresh is a "sparse" moment → re-sort the history fresh
+      loadedRecords = data.records; // immutable base for spelling-split re-derivation
+      mergeManualSets();
+    });
+    if (ind) { ind.className = "gh-sync gh-sync--ok"; ind.title = "Newer data is available — tap the bar at the top to refresh."; ind.textContent = "GitHub"; }
   } else if (ind) {
     ind.className = "gh-sync gh-sync--ok";
     ind.title = "Already on the latest data from GitHub.";
@@ -14102,6 +18728,17 @@ function showSyncStatus(type: "up" | "down" | "err", msg: string): void {
 }
 
 /** Push all local manual entries to the shared Supabase sets table. */
+// Device-local record of which manual sets we've already uploaded (mid → content hash of
+// the last-uploaded row), so a refresh pushes only NEW/CHANGED sets instead of re-uploading
+// ALL of them every time (the "284 synced after just a refresh" bug). Never synced.
+const MANUAL_SYNCED_KEY = "colosseum._manualSynced.v1";
+function loadManualSynced(): Record<string, string> {
+  try { const o = JSON.parse(localStorage.getItem(MANUAL_SYNCED_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+}
+function saveManualSynced(m: Record<string, string>): void {
+  try { localStorage.setItem(MANUAL_SYNCED_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+}
 async function syncManualToSupabase(): Promise<void> {
   if (manualEntries.length === 0) return;
   // Back-fill seq for entries added before the seq field existed.
@@ -14111,24 +18748,31 @@ async function syncManualToSupabase(): Promise<void> {
   });
   if (seqDirty) saveManualLocal();
   try {
-    const rows = manualEntries
+    const rowOf = (m: ManualEntry) => ({
+      user_id: m.username,
+      username: m.username,
+      date: m.date,
+      bodyweight: null as number | null,
+      exercise_name: m.exerciseName,
+      set_number: m.seq!,
+      weight: m.weight,
+      reps: m.reps,
+      notes: (m.notes ?? "") + `||mid:${m.id}`,
+      dropset: false,
+      percentile: null as number | null,
+    });
+    // Only upload sets that are NEW or whose content changed since we last uploaded them —
+    // not the whole list every refresh. The hash covers every field that lands in the row.
+    const synced = loadManualSynced();
+    const pending = manualEntries
       .filter((m) => m.seq !== undefined)
-      .map((m) => ({
-        user_id: m.username,
-        username: m.username,
-        date: m.date,
-        bodyweight: null as number | null,
-        exercise_name: m.exerciseName,
-        set_number: m.seq!,
-        weight: m.weight,
-        reps: m.reps,
-        notes: (m.notes ?? "") + `||mid:${m.id}`,
-        dropset: false,
-        percentile: null as number | null,
-      }));
-    if (rows.length > 0) {
-      await upsertSets(rows);
-      showSyncStatus("up", `⬆ ${rows.length} synced`);
+      .map((m) => { const row = rowOf(m); return { mid: m.id, row, hash: JSON.stringify(row) }; })
+      .filter((x) => synced[x.mid] !== x.hash);
+    if (pending.length > 0) {
+      await upsertSets(pending.map((x) => x.row));
+      for (const x of pending) synced[x.mid] = x.hash;
+      saveManualSynced(synced);
+      showSyncStatus("up", `⬆ ${pending.length} synced`);
     } else {
       showSyncStatus("up", "⬆ nothing to upload");
     }
@@ -14143,12 +18787,25 @@ async function syncManualToSupabase(): Promise<void> {
  *  entries from other users that aren't stored locally). */
 async function loadManualFromSupabase(): Promise<void> {
   try {
-    const { data: rows, error } = await supabase
-      .from("sets")
-      .select("*")
-      .gte("set_number", 100000000);
-    if (error) { showSyncStatus("err", "⬇ " + (error.message ?? "error").slice(0, 40)); console.error("[sync download]", error); return; }
-    if (!rows || rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
+    // PAGINATE — PostgREST caps a plain select at 1000 rows. With thousands of
+    // shared manual sets a single fetch silently dropped the most-recent ones, so
+    // other devices never saw lifts added past the first 1000 (the "not synced"
+    // bug). Page through in 1000-row windows until exhausted.
+    const PAGE = 1000;
+    const rows: import("./supabase").DbSet[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("sets")
+        .select("*")
+        .gte("set_number", 100000000)
+        .order("set_number", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) { showSyncStatus("err", "⬇ " + (error.message ?? "error").slice(0, 40)); console.error("[sync download]", error); return; }
+      if (!data || data.length === 0) break;
+      rows.push(...(data as import("./supabase").DbSet[]));
+      if (data.length < PAGE) break;
+    }
+    if (rows.length === 0) { showSyncStatus("down", "⬇ nothing new"); return; }
     const localIds = new Set(manualEntries.map((m) => m.id));
     let added = 0;
     for (const r of rows as import("./supabase").DbSet[]) {
@@ -14171,12 +18828,103 @@ async function loadManualFromSupabase(): Promise<void> {
       added++;
     }
     if (added > 0) {
-      saveManualLocal();
-      mergeManualSets();
-      scheduleRender();
+      saveManualLocal(); // persist now; fold into the live view only on a manual refresh
+      stageRefresh(() => { mergeManualSets(); });
       showSyncStatus("down", `⬇ ${added} new`);
     }
   } catch { /* Supabase unreachable — local data is fine */ }
+}
+
+// ── Shared cache mirror (the `kv` table — CLAUDE.md rule 41) ─────────────────
+// Mirrors the SHARED colosseum.* keys (not device prefs, not manualSets) through
+// Supabase so every device/user converges on one copy. Merge is the tested 3-way
+// in cacheSync.ts: a side that didn't touch a key yields, so nothing is clobbered.
+let applyingRemoteKv = false;        // true while writing merged cloud→local (don't re-push)
+const kvDirty = new Set<string>();   // syncable keys changed locally, awaiting push
+let kvPushTimer: number | undefined;
+
+function loadKvBase(): Record<string, string> {
+  try { return JSON.parse(localStorage.getItem(SYNC_BASE_KEY) ?? "{}") as Record<string, string>; }
+  catch { return {}; }
+}
+function saveKvBase(base: Record<string, string>): void {
+  try { localStorage.setItem(SYNC_BASE_KEY, JSON.stringify(base)); } catch { /* ignore */ }
+}
+
+/** Push the queued local changes up to the shared kv table (debounced). Base only
+ *  advances on success, so a failed push is retried next load (no lost edit). */
+function pushKvDirty(): void {
+  const rows = [...kvDirty].filter(isSyncable)
+    .map((k) => ({ key: k, value: localStorage.getItem(k) }))
+    .filter((r): r is { key: string; value: string } => r.value !== null);
+  kvDirty.clear();
+  if (!rows.length) return;
+  upsertKv(rows).then(() => {
+    const base = loadKvBase();
+    for (const r of rows) base[r.key] = r.value;
+    saveKvBase(base);
+    showSyncStatus("up", `⬆ ${rows.length} synced`);
+  }).catch((e) => { console.error("[kv push]", e); });
+}
+
+/** Pull the shared kv table and 3-way-merge it into localStorage. If anything
+ *  changed locally, reload so every in-memory store re-reads the merged cache. */
+async function pullMergeKv(): Promise<void> {
+  let cloud: Record<string, string>;
+  try { cloud = await fetchKv(); }
+  catch (e) { console.error("[kv pull]", e); return; }
+  const base = loadKvBase();
+  const keys = new Set<string>();
+  for (const k of Object.keys(cloud)) if (isSyncable(k)) keys.add(k);
+  for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && isSyncable(k)) keys.add(k); }
+  const newBase: Record<string, string> = { ...base };
+  const toPush: { key: string; value: string }[] = [];
+  let localChanged = 0;
+  applyingRemoteKv = true;
+  try {
+    for (const k of keys) {
+      const localV = localStorage.getItem(k) ?? undefined;
+      const cloudV = cloud[k];
+      const merged = merge3(base[k], localV, cloudV);
+      // DIAG (history-tab reset #super-persistent / PB-44): trace the cloud merge for the history
+      // dashboard key — flags RED + "SHRINK" when the merge makes the local value SMALLER (a sign the
+      // cloud copy wiped tabs/selections). base/local/cloud/merged = JSON string lengths; CHANGED = a
+      // reload will follow → the line is also stashed (hdDiagPush) so it survives that reload.
+      // Compare on DEEP value, not raw string: merge3 re-serialises via JSON.stringify, which
+      // can reorder keys, so `merged !== localV/cloudV` was true for deeply-EQUAL values → every
+      // such key re-wrote + re-pushed on EVERY sync forever ("syncs 284 every refresh", and the
+      // spurious localChanged also kept the refresh bar open). sameStored() = JSON-deep-equal.
+      const localChangedHere = !sameStored(merged, localV);
+      if (k === HISTORY_DASH_KEY_V2) {
+        const shrink = localChangedHere && (merged?.length ?? 0) < (localV?.length ?? 0);
+        const line = `HD sync base=${base[k]?.length ?? 0} local=${localV?.length ?? 0} cloud=${cloudV?.length ?? 0} merged=${merged?.length ?? 0}${localChangedHere ? " CHANGED" : ""}${shrink ? " SHRINK" : ""}`;
+        dbg(line, shrink);
+        if (localChangedHere) hdDiagPush(line); // a local change → reload follows; keep the line across it
+      }
+      if (localChangedHere) {
+        if (merged === undefined) localStorage.removeItem(k); else localStorage.setItem(k, merged);
+        localChanged++;
+      }
+      if (merged !== undefined && !sameStored(merged, cloudV)) {
+        toPush.push({ key: k, value: merged }); // base advances only after a successful push
+      } else if (merged === undefined) {
+        delete newBase[k];
+      } else {
+        newBase[k] = merged; // already matches cloud → agreed
+      }
+    }
+  } finally { applyingRemoteKv = false; }
+  saveKvBase(newBase);
+  if (toPush.length) {
+    try {
+      await upsertKv(toPush);
+      const b = loadKvBase();
+      for (const r of toPush) b[r.key] = r.value;
+      saveKvBase(b);
+      showSyncStatus("up", `⬆ ${toPush.length} synced`);
+    } catch (e) { console.error("[kv pull-push]", e); } // base stays → retried next load
+  }
+  if (localChanged > 0) stageRefresh("reload"); // merged cache is on disk; re-read it on a manual refresh, not under the user
 }
 
 function saveManualLocal() {
@@ -14257,6 +19005,12 @@ function mergeManualSets() {
   // A high, unique set number per entry → a stable, collision-free setId (so each
   // hand-logged set edits/tags independently and never clashes with a CSV set).
   manualEntries.forEach((m, i) => data.records.push(manualToRecord(m, 100000 + i)));
+  // Admin-only "test" sandbox (ATH-50): inject deterministic mock sets so its graph/
+  // stats/history populate and there are sessions to log into — ONLY in the admin view,
+  // so it never leaks into a user/spectator view or the shared leaderboards.
+  if (viewMode === "admin") {
+    for (const a of ADMIN_ONLY_ATHLETES) data.records.push(...testMockRecords(a.username, a.user, todayIso()));
+  }
   // Re-derive the spelling-merge report (CSV only) so it reflects any split-outs.
   data.merges = mergesFromRecords(csv);
   mergeVariantsCache = null;
@@ -14295,15 +19049,90 @@ function populateAddExerciseList(): void {
 
 // The weight / reps / sets inputs + Add / cancel buttons shared by both inline
 // forms (add-a-set and add-a-new-exercise).
-const AF_INPUTS =
-  `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="kg" aria-label="Weight" />` +
-  `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
-  `<input class="wo-af-sets" type="number" step="1" min="1" inputmode="numeric" placeholder="sets" aria-label="Sets" />`;
+// One weight×reps LINE = one set (owner: drop the "how many sets" count — a set is always
+// one; instead the "+ set" button appends another line, so each set carries its own weight/
+// reps). The ✕ removes a line; CSS hides it on the only line.
+/** One add-set LINE = one set: its OWN variation tags (owner: "all sets should have
+ * their own separate tags") on the left, then the weight × reps chip, RIR and remove ✕
+ * grouped on the right. The variation block is per-line so each set's tags are
+ * independently selectable; a new line copies the previous line's picks (see + set). */
+function afLine(ex: string): string {
+  return (
+    `<div class="addm-line">` +
+    `<div class="addm-line-vars">${ex ? addmVariantField(ex) : ""}</div>` +
+    `<div class="addm-line-main">` +
+    `<div class="addm-set-chip">` +
+    `<div class="addm-wr-col">` +
+    `<div class="addm-wr-row">` +
+    `<span class="wo-af-wpre" aria-hidden="true" hidden></span>` +
+    `<span class="wo-af-sidelbl wo-af-sidelbl-r" title="Right side" hidden>R</span>` +
+    `<input class="wo-af-weight" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Weight (kg)" />` +
+    `<span class="wo-af-wsuf" aria-hidden="true" hidden></span>` +
+    `<input class="wo-af-reps" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Reps" />` +
+    `</div>` +
+    `<span class="addm-tag-total muted" aria-hidden="true" hidden></span>` +
+    `</div>` +
+    // Unilateral: a second weight×reps pair for the LEFT side, shown only for a unilateral lift in
+    // the ADD path (toggled in syncAddmReal). The strength calc uses the WEAKER side (onInlineAddGo).
+    `<span class="wo-af-lside" hidden>` +
+    `<span class="wo-af-sidelbl" title="Left side">L</span>` +
+    `<input class="wo-af-weight-l" type="number" step="0.5" inputmode="decimal" placeholder="W" aria-label="Left weight (kg)" />` +
+    `<input class="wo-af-reps-l" type="number" step="1" min="1" inputmode="numeric" placeholder="reps" aria-label="Left reps" />` +
+    `</span>` +
+    `<span class="addm-real" aria-hidden="true" hidden></span>` +
+    `</div>` +
+    `<span class="addm-rir-slot"></span>` +
+    `<button type="button" class="wo-af-rmline" aria-label="Remove this set" title="Remove this set">✕</button>` +
+    `</div>` +
+    `</div>`
+  );
+}
 const AF_BUTTONS =
   `<button type="button" class="wo-af-go">Add</button>` +
   `<button type="button" class="wo-af-cancel" aria-label="Cancel">×</button>` +
   `<span class="wo-af-msg muted"></span>`;
-const AF_FIELDS = AF_INPUTS + AF_BUTTONS;
+
+/** Copy one add-set line's variation picks (each dim pill + ROM) into another line,
+ * so a freshly-added set STARTS from the previous set's tags (owner: "by default copy
+ * the existing set's tags") while staying independently editable. Matches selects by
+ * their dimension (data-dim), ROM by class. The <select> value is set synchronously —
+ * before the body MutationObserver auto-enhances the new selects into .xdd — so the
+ * enhanced pill renders the copied label. */
+function copyLineVariation(from: HTMLElement, to: HTMLElement): void {
+  const srcByDim = new Map<string, string>();
+  for (const s of from.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]"))
+    if (s.dataset.dim) srcByDim.set(s.dataset.dim, s.value);
+  for (const s of to.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    const v = s.dataset.dim ? srcByDim.get(s.dataset.dim) : undefined;
+    if (v != null && [...s.options].some((o) => o.value === v)) s.value = v;
+  }
+  // ROM is a unit-pill (button) now — copy its unit / value / reference + label.
+  const fromRom = from.querySelector<HTMLElement>(".wo-af-rompill");
+  const toRom = to.querySelector<HTMLElement>(".wo-af-rompill");
+  if (fromRom && toRom) {
+    toRom.dataset.romunit = fromRom.dataset.romunit ?? "pct";
+    toRom.dataset.romval = fromRom.dataset.romval ?? toRom.dataset.romval ?? "";
+    toRom.dataset.romref = fromRom.dataset.romref ?? "";
+    toRom.textContent = romPillLabel(toRom.dataset.romunit, Number(toRom.dataset.romval) || 0);
+    toRom.classList.toggle("is-set", fromRom.classList.contains("is-set"));
+  }
+  // Custom ×multiplier pill — copy its value + mode so a "+ set" keeps the same multiplier.
+  const fromMult = from.querySelector<HTMLElement>(".wo-af-multpill");
+  const toMult = to.querySelector<HTMLElement>(".wo-af-multpill");
+  if (fromMult && toMult) {
+    toMult.dataset.multval = fromMult.dataset.multval ?? "";
+    toMult.dataset.multmode = fromMult.dataset.multmode ?? "mult";
+  }
+  // Lean pill (button) — copy its snapped level + label (handstand families).
+  const fromLean = from.querySelector<HTMLElement>(".wo-af-leanpill");
+  const toLean = to.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (fromLean && toLean) {
+    const lvl = fromLean.dataset.leanlevel ?? toLean.dataset.leandefault ?? "0cm";
+    toLean.dataset.leanlevel = lvl;
+    toLean.textContent = leanPillLabel(lvl);
+    toLean.classList.toggle("is-set", fromLean.classList.contains("is-set"));
+  }
+}
 
 /** Distinct variation NOTES already logged for an exercise (e.g. a handstand's
  * "b2w +15cm", a push-up's "deficit"), most-used first — the choices we offer when
@@ -14324,36 +19153,519 @@ function variationNotesFor(exerciseName: string): string[] {
 let afNoteSeq = 0; // unique <datalist> id per open form
 
 // Which family DIMENSIONS to offer in the add form (the meaningful "variables"), in
-// order. Ladder sub-dims (grip/height) are left to the full per-set editor.
-const AF_DIM_ORDER = ["support", "rom", "lean", "continuity", "band", "position"];
-const AF_DIM_LBL: Record<string, string> = { support: "support", rom: "ROM", lean: "fwd lean", continuity: "tempo", band: "band", position: "position" };
-const AF_LEVEL_LBL: Record<string, Record<string, string>> = {
-  support: { free: "free", front_to_wall: "front-to-wall", back_to_wall: "back-to-wall", ladder: "ladder" },
-  continuity: { paused: "paused", uninterrupted: "uninterrupted" },
-  band: { none: "no band", "1": "band 1", "2": "band 2", "3": "band 3", "4": "band 4", "5": "band 5", "6": "band 6" },
-  position: { floor: "floor (on feet)", knees: "on knees" },
+// order. This is now the SINGLE variation picker — used by both the add popup AND the
+// per-set edit card/popover (DEDUP-2 owner: "the edit menu should be the same as the
+// add one") — so EVERY dimension a lift has lives here, including the ladder sub-dims
+// (grip + rung height) that used to be in the old rich popover only.
+// ladderGrip (L-shape / hooked / no support) is INFREQUENT (owner: "it shouldn't be the second
+// tag"), so it sits LATE in the order — its obvious "no support" default stays gray/hidden and it
+// only shows when you ＋reveal, after the common dims.
+const AF_DIM_ORDER = ["lever", "reach", "support", "shoulderDist", "forearmSupport", "backrest", "floorHeight", "rom", "lean", "tapContact", "continuity", "band", "ladderGrip", "position"];
+const AF_DIM_LBL: Record<string, string> = { lever: "weight distance", reach: "hand distance", support: "support", ladderGrip: "ladder grip", ladderH: "ladder rung", shoulderDist: "shoulder gap", forearmSupport: "forearm support", backrest: "back rest", floorHeight: "floor height", obstacle: "obstacle", rom: "ROM", lean: "fwd lean", tapContact: "wall touch", continuity: "tempo", band: "band", position: "position" };
+/** Every dimension a family carries IN DISPLAY ORDER: built-ins (AF_DIM_ORDER), then the owner's
+ * user-created tags. The single SSOT for "what tags does this family have" — every enumeration
+ * site (palette, per-set pickers, variation editor, scaling) reads THIS so a new tag shows up
+ * everywhere at once (no half-wired tag). */
+function famDimOrder(family: string): string[] {
+  return mergeDimOrder(AF_DIM_ORDER, (d) => !!FAMILIES[family]?.dims[d], Object.keys(famUserDims[family] ?? {}));
+}
+/** Does a family carry this dim — built-in OR user-created? */
+function famHasDim(family: string, dim: string): boolean {
+  return !!FAMILIES[family]?.dims[dim] || !!famUserDims[family]?.[dim];
+}
+/** Is this a user-created tag (so it can be renamed/deleted, unlike a built-in)? */
+function isUserDim(family: string | null | undefined, dim: string): boolean {
+  return !!family && !!famUserDims[family]?.[dim] && !FAMILIES[family]?.dims[dim];
+}
+/** A dim's display label: built-in map → user tag's name → raw id. */
+function dimLabel(dim: string, family?: string | null): string {
+  return AF_DIM_LBL[dim] ?? (family ? famUserDims[family]?.[dim]?.label : undefined) ?? dim;
+}
+/** Slug a free-text label into a stable id (a-z0-9 + underscores). */
+function slugId(s: string, fallback: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || fallback;
+}
+/** Create a brand-new tag (dimension) on a family from the palette. It gets a GRAY baseline
+ * "none" (×1 = "just the exercise", the default) plus the owner's first option, so it's a normal
+ * deselectable passive tag from the start. Levels reuse the built-in stores (setFamFactor/Label),
+ * so it's identical to a built-in tag everywhere. Returns the new dim id (null if no name/family). */
+function addUserDim(family: string, label: string, firstOption: string): string | null {
+  const name = label.trim();
+  if (!name || !family) return null;
+  let dim = "u_" + slugId(name, "tag"); let i = 2;
+  while (famHasDim(family, dim)) dim = "u_" + slugId(name, "tag") + i++; // never collide
+  (famUserDims[family] ??= {})[dim] = { label: name, base: "none" };
+  saveUserDims();
+  setFamFactor(family, dim, "none", 1); setFamLabel(family, dim, "none", "none"); // baseline (gray default)
+  const opt = firstOption.trim();
+  if (opt) { const oid = slugId(opt, "on"); setFamFactor(family, dim, oid, 1); setFamLabel(family, dim, oid, opt); }
+  return dim;
+}
+/** Add another OPTION (level) to ANY tag — built-in or user (the owner can extend either). Returns
+ * the new level id. The factor starts ×1 (neutral) for the owner to tune in the same panel. */
+function addUserLevel(family: string, dim: string, label: string): string | null {
+  const nm = label.trim();
+  if (!nm || !family) return null;
+  let lvl = slugId(nm, "opt"); let i = 2; const have = famLevels(family, dim);
+  while (have[lvl] != null) lvl = slugId(nm, "opt") + i++;
+  setFamFactor(family, dim, lvl, 1); setFamLabel(family, dim, lvl, nm);
+  return lvl;
+}
+/** Delete a user-created tag entirely (built-in dims can't be deleted) and clear all its overrides. */
+function removeUserDim(family: string, dim: string): void {
+  if (!isUserDim(family, dim)) return;
+  delete famUserDims[family]?.[dim];
+  if (famUserDims[family] && Object.keys(famUserDims[family]).length === 0) delete famUserDims[family];
+  saveUserDims();
+  for (const [store, save] of [[famFactorOverrides, saveFamFactors], [famLabelOverrides, () => saveJson(FAM_LABELS_KEY, famLabelOverrides)], [famDefaultOverrides, () => saveJson(FAM_DEFAULTS_KEY, famDefaultOverrides)], [famGrayOverrides, () => saveJson(FAM_GRAY_KEY, famGrayOverrides)]] as const) {
+    const f = (store as Record<string, Record<string, unknown>>)[family];
+    if (f && f[dim] !== undefined) { delete f[dim]; (save as () => void)(); }
+  }
+}
+// ONE canonical label per (dimension, level), shared by the history TAG
+// (variationChipsHtml) and the add-set PICKER so the two can never drift — the
+// owner: "the variation selection should look like the tag and vice versa". The
+// short `label` is what BOTH show; the optional `hint` is a small-gray explanation
+// rendered ONLY in the open picker menu (e.g. "b2w" with hint "back to wall").
+type AfLevelLabel = { label: string; hint?: string };
+const AF_LEVEL_LBL: Record<string, Record<string, AfLevelLabel>> = {
+  support: { free: { label: "free" }, front_to_wall: { label: "f2w", hint: "front to wall" }, back_to_wall: { label: "b2w", hint: "back to wall" }, ladder: { label: "ladder" }, hanging: { label: "hang", hint: "hanging" }, on_hands: { label: "hands", hint: "on hands / parallettes" }, dips_bar: { label: "hands", hint: "on hands (legacy)" } },
+  // Ladder leg grip + rung height (only meaningful on the ladder support).
+  ladderGrip: { none: { label: "no support" }, lsit: { label: "L-shape", hint: "legs out in an L" }, hooked: { label: "hooked", hint: "legs hooked on a rung" } },
+  ladderH: { none: { label: "any rung" }, lad3: { label: "rung 3" }, lad5: { label: "rung 5" }, lad6: { label: "rung 6" }, lad9: { label: "rung 9" } },
+  // Back support = how far the back sits off the wall (back-to-wall): none, the blue 6cm block, or a 30/45cm box.
+  // Shoulder gap = how far the shoulders/back sit OFF the wall (back-to-wall handstands).
+  shoulderDist: { "0cm": { label: "none", hint: "shoulders on the wall" }, blue: { label: "blue", hint: "6cm blue block" }, "30cm": { label: "30cm", hint: "30cm off the wall" }, "45cm": { label: "45cm", hint: "45cm off the wall" } },
+  backrest: { none: { label: "none" }, "30cm": { label: "30cm", hint: "back rest" } },
+  obstacle: { none: { label: "none" }, S: { label: "yoga S", hint: "6cm" }, M: { label: "yoga M", hint: "15cm" }, L: { label: "yoga L", hint: "23cm" } },
+  continuity: { paused: { label: "paused" }, uninterrupted: { label: "uninterrupted" } },
+  band: { none: { label: "no band" }, "1": { label: "band 1" }, "2": { label: "band 2" }, "3": { label: "band 3" }, "4": { label: "band 4" }, "5": { label: "band 5" }, "6": { label: "band 6" } },
+  // A floor push-up is just "free" (the plain exercise, the default → never tags); on-knees is the only real variation.
+  position: { floor: { label: "free" }, knees: { label: "knees" } },
+  // Lever (plate distance from the grip) levels are cm, left as-is; reach (arm held out) reads in words.
+  reach: { tucked: { label: "tuck", hint: "tucked in" }, neutral: { label: "neut", hint: "neutral" }, extended: { label: "ext", hint: "extended" }, far: { label: "far", hint: "far out" } },
 };
-/** Readable label for a dimension level (cm levels like "+23cm" are left as-is). */
-function afLevelText(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level] ?? level; }
+// Wall-tap CONTACT levels: short chip code + the long explanation as the picker-menu hint,
+// built from the handstandLean SSOT so the labels can't drift. "none" = unset (the default,
+// never a tag — rule 60).
+AF_LEVEL_LBL.tapContact = { none: { label: "no touch" } };
+for (const c of TAP_CONTACT_ORDER) AF_LEVEL_LBL.tapContact[c] = { label: TAP_CONTACT_LABEL[c as TapContact], hint: TAP_CONTACT_HINT[c as TapContact] };
+/** Canonical short label for a dimension level (cm levels like "+23cm" are left as-is) — used by BOTH the tag and the picker. */
+function afLevelText(dim: string, level: string, family?: string): string {
+  if (family) { const o = famLabelOf(family, dim, level); if (o) return o; }
+  if (dim === "floorHeight") {
+    const cm = parseCmLevelKey(level);
+    if (cm === 0) return "floor";
+    if (cm != null) return `${cm}cm`;
+  }
+  return AF_LEVEL_LBL[dim]?.[level]?.label ?? level;
+}
+/** Optional small-gray explanation for a level, shown only in the picker menu. */
+function afLevelHint(dim: string, level: string): string { return AF_LEVEL_LBL[dim]?.[level]?.hint ?? ""; }
+/** Whether a dim applies to the current tag vector (mirrors scalarFromVec gating). */
+function dimAppliesInVec(_fam: string, dim: string, vec: Record<string, string>): boolean {
+  if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") return false;
+  if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
+  return true;
+}
+function requiredSupportForDim(dim: string): string | null {
+  if (dim === "shoulderDist") return "back_to_wall";
+  if (dim === "ladderGrip" || dim === "ladderH") return "ladder";
+  return null;
+}
+/** Support must match active contextual tags (shoulder gap ↔ back-to-wall, ladder ↔ ladder). */
+function reconcileContextualSupport(ex: string, fam: string, vec: Record<string, string>): void {
+  if (tagActive(ex, fam, "shoulderDist") && vec.support !== "back_to_wall") vec.support = "back_to_wall";
+  if ((tagActive(ex, fam, "ladderGrip") || tagActive(ex, fam, "ladderH")) && vec.support !== "ladder") {
+    vec.support = "ladder";
+  }
+}
+function setLineSupport(ln: HTMLElement, support: string): void {
+  const sel = ln.querySelector<HTMLSelectElement>('select.wo-af-dim[data-dim="support"]');
+  if (sel && sel.value !== support) sel.value = support;
+}
+/** Wall-tap contact tag only applies to the wall-touch lift. */
+function isWallTouchExercise(exerciseName: string): boolean {
+  return /wall\s*touch/i.test(exerciseName);
+}
+/** Project the add-form's likely vec (defaults + your usual levels for active tags). */
+function projectedAddVec(ex: string, fam: string): Record<string, string> {
+  const vec: Record<string, string> = { ...(FAMILIES[fam]?.defaults ?? {}) };
+  for (const dim of famDimOrder(fam)) {
+    if (!tagActive(ex, fam, dim)) continue;
+    const dflt = famDefaultLevel(fam, dim);
+    const freq = frequentLevelFor(ex, fam, dim, dflt);
+    if (famLevels(fam, dim)[freq] != null) vec[dim] = freq;
+  }
+  reconcileContextualSupport(ex, fam, vec);
+  return vec;
+}
+/** Read the current tag vector from one add/edit line's controls. */
+function readAddLineVec(ln: HTMLElement): Record<string, string> {
+  const vec: Record<string, string> = {};
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    if (s.dataset.dim) vec[s.dataset.dim] = s.value;
+  }
+  const lean = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (lean?.dataset.leanlevel) vec.lean = lean.dataset.leanlevel;
+  return vec;
+}
+/** Dims that use a floating chip picker (never the clipped inline xdd dropdown). */
+function dimUsesChipPicker(dim: string): boolean {
+  return dim === "shoulderDist" || dim === "forearmSupport" || dim === "tapContact";
+}
+/** The level the CURRENT athlete used most for this exercise+dimension over the last
+ * ~3 months — so the add-set picker pre-selects "what you usually do", not the config
+ * reference (owner: pick the default by the most frequent one in the last 3 months, or
+ * the first/reference if there's no data). Noteless sets count as the `fallback` level. */
+function frequentLevelFor(exerciseName: string, fam: string, dim: string, fallback: string): string {
+  const username = els.athlete.value;
+  const d = new Date();
+  d.setMonth(d.getMonth() - 3);
+  const cutoff = d.toISOString().slice(0, 10);
+  const counts = new Map<string, number>();
+  for (const r of data.records) {
+    if (r.username !== username || r.exerciseName !== exerciseName) continue;
+    if (!r.date || r.date < cutoff) continue;
+    const note = (r.notes ?? "").trim();
+    const lvl = note
+      ? String({ ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) }[dim] ?? fallback)
+      : fallback;
+    counts.set(lvl, (counts.get(lvl) ?? 0) + 1);
+  }
+  let best = fallback, bestN = 0;
+  for (const [lvl, n] of counts) if (n > bestN) { best = lvl; bestN = n; }
+  return bestN > 0 ? best : fallback;
+}
+
 /** The variation field for the inline add form. For a lift with a VARIATION MODEL
  * (a family), it's a row of structured pickers — the real variables (support, ROM,
  * lean, reps-style, band…), each a small dropdown defaulting to the reference level —
  * so you choose the variation, not type a note. Lifts with no model fall back to the
  * free-text note (datalist of past notes). */
-function afVariationField(exerciseName: string): string {
+/** The structured variation dim pickers — ONE `<select>` per dimension, the add-set
+ * style. This is the SINGLE variation editor (DEDUP-2 owner: "the edit menu should be
+ * the same as the add one"): the add popup calls it with no `edit` (each select
+ * pre-selects the athlete's most-used level over the last 3 months, read once on Add),
+ * while the per-set edit card/popover passes `edit` so each select PRE-SELECTS that
+ * set's current level and carries `data-vecdim-*` — a change then edits THIS set's vec
+ * live (handled by the delegated `change` listener). Returns "" for a non-family lift
+ * in the add path (the caller falls back to a free note); in the edit path a non-family
+ * noted set gets the plain per-note × input the old picker used. */
+function variantSelectsHtml(exerciseName: string, edit?: { note: string }): string {
   const fam = familyOf(exerciseName);
-  const famDef = fam ? FAMILIES[fam] : null;
-  if (famDef) {
-    const selects = AF_DIM_ORDER.filter((d) => famDef.dims[d]).map((dim) => {
-      const levels = famDef.dims[dim]!;
-      const cur = famDef.defaults[dim] ?? Object.keys(levels)[0]!;
-      const opts = Object.keys(levels)
-        .map((l) => `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, l))}</option>`)
-        .join("");
-      return `<label class="wo-af-dimf"><span class="wo-af-dimlbl">${escapeHtml(AF_DIM_LBL[dim] ?? dim)}</span><select class="wo-af-dim" data-dim="${escapeHtml(dim)}" aria-label="${escapeHtml(AF_DIM_LBL[dim] ?? dim)}">${opts}</select></label>`;
-    }).join("");
-    if (selects) return `<span class="wo-af-dims">${selects}</span>`;
+  if (!fam) {
+    if (!edit) return "";
+    // Non-family noted set, edit path: the per-note relative × (the `.ex-var-input`
+    // handler already saves it). Mirrors the old notePickerHtml no-family branch.
+    const scale = variationScaleFor(exerciseName, edit.note);
+    return (
+      `<div class="ex-var-picker"><label class="ex-var-lbl">× ` +
+      `<input class="ex-var-input" type="number" step="0.05" min="0.1" max="5" value="${scale}" data-var-ex="${escapeHtml(exerciseName)}" data-var-note="${escapeHtml(edit.note)}" aria-label="Difficulty for ${escapeHtml(edit.note)}" /></label></div>`
+    );
   }
+  // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
+  // implies + any per-set picks); the add path pre-selects the most-used recent level.
+  const effVecRaw = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
+  const effVec = effVecRaw && fam ? normalizeStaticLiftVec(fam, effVecRaw) : effVecRaw;
+  const projVec = effVec ?? projectedAddVec(exerciseName, fam);
+  // ROOT FIX (PB-48, owner #persistent ×3 — gray "NONE" tags kept leaking next to the weight).
+  // A PASSIVE tag is no longer RENDERED-then-HIDDEN (that hide raced the async select-enhancement
+  // and failed via .closest, so the gray pills leaked through). Instead the ADD path renders ONLY
+  // the tags that should SHOW — an ACTIVE tag (promoted, or a meaningful non-gray default like
+  // b2w) — so a passive tag simply does NOT exist in the DOM and CAN'T appear by the weight.
+  // The EDIT-arg path (the legacy per-set scaleEditPop) still renders EVERY dim so you can add any
+  // variation there; the add-modal's own edit mode uses the no-edit call + inserts carried tags.
+  // In the ADD path `lean` is its own rich pill (leanPillHtml), gated by tagActive in addmVariantField.
+  const selects = famDimOrder(fam)
+    .filter((d) => {
+      if (d === "floorHeight" && effVec?.support !== "on_hands") return false;
+      if (d === "lean" && !edit) return false;
+      if (edit) return true;
+      if (!tagActive(exerciseName, fam, d)) return false;
+      return dimAppliesInVec(fam, d, projVec);
+    })
+    .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
+    .join("");
+  return selects ? `<span class="wo-af-dims">${selects}</span>` : "";
+}
+/** Build ONE captioned variation tag (.addm-vtag = a tiny caption + the dim <select>) for an
+ * add/edit line. Extracted from variantSelectsHtml (PB-48) so the palette ＋ handler can INSERT a
+ * single tag's pill when you promote it — no full rebuild that would reset your other picks. The
+ * pre-selected level: the set's CARRIED value (edit), else your most-used recent level (an active
+ * add tag), else the default. */
+function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { note: string }, effVec?: Record<string, string> | null): string {
+  const levels = famLevels(fam, dim); // owner's multiplier overrides layered in
+  const dflt = famDefaultLevel(fam, dim); // owner's per-exercise default tag
+  let cur: string;
+  const isCmDim = dim === "rom" || dim === "floorHeight";
+  // ROM / floor height are continuous: an off-preset cm (e.g. "+32cm") is a VALID stored value.
+  if (effVec) { const v = String(effVec[dim] ?? dflt); cur = (levels[v] != null || (isCmDim && /^[+-]?\d+cm$/.test(v))) ? v : dflt; }
+  else if (tagActive(exerciseName, fam, dim)) { const freq = frequentLevelFor(exerciseName, fam, dim, dflt); cur = levels[freq] != null ? freq : dflt; }
+  else cur = dflt;
+  const editAttrs = edit ? ` data-vecdim-ex="${escapeHtml(exerciseName)}" data-vecdim-note="${escapeHtml(edit.note)}"` : "";
+  // For the leverage knobs (lever / reach) show the torque factor in each option ("60cm ×1.5").
+  const showFactor = dim === "lever" || dim === "reach";
+  const optLbl = (l: string) => (showFactor ? `${afLevelText(dim, l, fam)} ×${levels[l]}` : afLevelText(dim, l, fam));
+  const opts = Object.keys(levels)
+    .map((l) => { const hint = afLevelHint(dim, l); return `<option value="${escapeHtml(l)}"${l === cur ? " selected" : ""}${hint ? ` data-hint="${escapeHtml(hint)}"` : ""}>${escapeHtml(optLbl(l))}</option>`; })
+    .join("");
+  const cap = dimLabel(dim, fam);
+  // ROM is a cm SELECTOR like the lean tag (owner: "copy how the lean tag works, the same cm
+  // selector"). Its many cm levels made the inline xdd dropdown overflow the modal card and get
+  // clipped to a sliver (PB-55). So rom renders as a PILL that opens a FLOATING popup (never clipped,
+  // body-appended like the lean / value pickers) — backed by a HIDDEN <select> kept as the single
+  // source of truth so every save / read / edit / multiplier path (which all query `.wo-af-dim`)
+  // works UNCHANGED; `data-no-xdd` stops it being enhanced into the clipped dropdown.
+  if (dim === "rom") {
+    // Continuous ROM: if the stored value is an off-preset cm, the preset `opts` won't
+    // contain it — inject a selected option so the hidden <select> SSOT actually holds it.
+    const extraOpt = (cur && levels[cur] == null && /^[+-]?\d+cm$/.test(cur))
+      ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(afLevelText("rom", cur, fam))}</option>`
+      : "";
+    return `<span class="addm-vtag" data-dim="rom"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="rom" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
+      `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
+      `</span>`;
+  }
+  // Shoulder gap / forearm support / wall touch: floating chip picker — the inline xdd
+  // dropdown in the scrolling tag row was clipped/unusable on mobile (PB-55 class).
+  if (dimUsesChipPicker(dim)) {
+    return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
+      `<button type="button" class="wo-af-cmdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — tap to pick.">${escapeHtml(afLevelText(dim, cur, fam))}</button>` +
+      `</span>`;
+  }
+  if (dim === "floorHeight") {
+    const extraOpt = (cur && levels[cur] == null && /^[+-]?\d+cm$/.test(cur))
+      ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(afLevelText("floorHeight", cur, fam))}</option>`
+      : "";
+    return `<span class="addm-vtag" data-dim="floorHeight"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
+      `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="floorHeight" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
+      `<button type="button" class="wo-af-fhdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — how high the floor/hands are (cm, yoga block, SQ, Smith…). Tap to pick.">${escapeHtml(afLevelText("floorHeight", cur, fam))}</button>` +
+      `</span>`;
+  }
+  return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
+}
+/** Floating cm-level popup for the ROM pill — SAME cm selection menu as the lean picker
+ * (openLeanPicker, owner): a cm/block unit toggle + a −/+ cm stepper, NOT a grid of preset
+ * pills. The typed/stepped cm snaps to the family's nearest discrete ROM level (via the
+ * generic snapToLeanLevelCm — the rom keys "+25cm".."-20cm" parse straight to cm); a yoga
+ * block under the hands RAISES them, so a block reads as +its cm. Body-appended so it can't
+ * be clipped by the modal card; drives the hidden `.wo-af-dim` select (the SSOT) so every
+ * save/read/edit path is untouched. */
+function openRomDimPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  if (!fam) return;
+  const dflt = sel.dataset.dimdefault ?? "";
+  let unit: "cm" | "block" = "cm";
+  const initCm = parseCmLevelKey(sel.value) ?? 0;
+  let reading = initCm; // cm typed/stepped (kept in sync with block picks)
+  let block: YogaBlockSide = nearestYogaBlockSide(initCm);
+  const syncBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncReadingFromBlock = () => { reading = yogaBlockCm(block); };
+  const cm = (): number => (unit === "cm" ? reading : yogaBlockCm(block)); // a block raises the hands → +cm
+  const setLevel = (lvl: string) => {
+    // ROM is CONTINUOUS (owner: tag must show "exactly what i set", not a snapped preset):
+    // store the exact cm as the level key. The hidden <select> SSOT only holds values it
+    // has options for, so inject one for an off-preset cm before selecting it.
+    if (![...sel.options].some((o) => o.value === lvl)) sel.add(new Option(afLevelText("rom", lvl, fam), lvl));
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true })); // edit-mode vec sync + multiplier refresh
+    pill.textContent = afLevelText("rom", lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const commit = () => setLevel(cmLevelKey(cm()));
+  const eqText = () => `= ${Math.round(cm())}cm → tag ${afLevelText("rom", cmLevelKey(cm()), fam)}`;
+  const renderHtml = (): string =>
+    `<div class="rom-ref-lbl muted">range of motion — hand height (cm)</div>` +
+    `<div class="inc-units">` +
+    `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-romdimunit="cm">cm</button>` +
+    `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-romdimunit="block">block</button>` +
+    `</div>` +
+    (unit === "cm"
+      ? `<div class="inc-valrow"><button type="button" class="inc-step" data-romdimstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val romdim-val" step="1" value="${reading}" inputmode="decimal" aria-label="Hand height (cm)" />` +
+        `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-romdimstep="1" aria-label="Higher">+</button></div>`
+      : `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-romdimblock="${b}">${b} ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`) +
+    `<div class="inc-eq muted">${eqText()}</div>` +
+    `<button type="button" class="inc-floor" data-romdimdefaultbtn>default (${escapeHtml(afLevelText("rom", dflt, fam))})</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop romdim-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>("[data-romdimunit]");
+      if (u?.dataset.romdimunit) {
+        const newUnit = u.dataset.romdimunit === "block" ? "block" : "cm";
+        if (newUnit === "cm" && unit === "block") syncReadingFromBlock();
+        else if (newUnit === "block" && unit === "cm") syncBlockFromReading();
+        unit = newUnit;
+        rerender(); commit(); return;
+      }
+      const s = t.closest<HTMLElement>("[data-romdimstep]");
+      if (s?.dataset.romdimstep) {
+        const step = cmCurveStep(fam, "rom") * Number(s.dataset.romdimstep);
+        reading = Math.round((reading + step) * 10) / 10;
+        syncBlockFromReading(); rerender(); commit(); return;
+      }
+      const bl = t.closest<HTMLElement>("[data-romdimblock]");
+      if (bl?.dataset.romdimblock) { block = bl.dataset.romdimblock as YogaBlockSide; syncReadingFromBlock(); rerender(); commit(); return; }
+      if (t.closest("[data-romdimdefaultbtn]")) { unit = "cm"; reading = parseCmLevelKey(dflt) ?? 0; syncBlockFromReading(); rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".romdim-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = v; syncBlockFromReading(); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } }
+    },
+  });
+}
+/** Floating chip picker for shoulder gap / forearm support — never clipped (PB-55). */
+function openCmDimPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  const dim = sel.dataset.dim ?? "";
+  if (!fam || !dim) return;
+  const levels = famLevels(fam, dim);
+  const dflt = sel.dataset.dimdefault ?? "";
+  const setLevel = (lvl: string) => {
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    pill.textContent = afLevelText(dim, lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const renderHtml = (): string => {
+    const chips = Object.keys(levels).map((lvl) => {
+      const hint = afLevelHint(dim, lvl);
+      return `<button type="button" class="rom-ref-chip${lvl === sel.value ? " is-on" : ""}" data-cmdimlvl="${escapeHtml(lvl)}">${escapeHtml(afLevelText(dim, lvl, fam))}` +
+        (hint ? `<span class="muted"> · ${escapeHtml(hint)}</span>` : "") + `</button>`;
+    }).join("");
+    return `<div class="rom-ref-lbl muted">${escapeHtml(dimLabel(dim, fam))}</div>` +
+      `<div class="rom-ref-chips cmdim-chips">${chips}</div>` +
+      `<button type="button" class="inc-floor" data-cmdimdefault>default (${escapeHtml(afLevelText(dim, dflt, fam))})</button>`;
+  };
+  openFloatingPicker(pill, {
+    className: "inc-pop cmdim-pop",
+    renderHtml,
+    onClick: (t) => {
+      const chip = t.closest<HTMLElement>("[data-cmdimlvl]");
+      if (chip?.dataset.cmdimlvl) { setLevel(chip.dataset.cmdimlvl); closeFloatingPicker(); return; }
+      if (t.closest("[data-cmdimdefault]")) { setLevel(dflt); closeFloatingPicker(); }
+    },
+  });
+}
+/** When support changes, show/hide ladder / shoulder-gap pills that only apply to that support. */
+function refreshContextualDimTags(form: HTMLElement): void {
+  const ex = form.dataset.addex || form.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+  const fam = ex ? familyOf(ex) : null;
+  if (!fam) return;
+  const contextual = ["shoulderDist", "ladderGrip", "ladderH"] as const;
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const vec = readAddLineVec(ln);
+    const slot = ln.querySelector<HTMLElement>(".addm-line-vars");
+    if (!slot) continue;
+    for (const dim of contextual) {
+      const applies = dimAppliesInVec(fam, dim, vec) && tagActive(ex, fam, dim);
+      const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(dim)}"]`);
+      if (applies && !existing) {
+        const html = dimVtagHtml(ex, fam, dim);
+        const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+        if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+        else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+      } else if (!applies && existing) {
+        existing.remove();
+      }
+    }
+  }
+  syncAddmVtags(form);
+  syncAddmReal(form);
+  refreshAddmPalette(ex);
+}
+/** Floating floor-height picker for knee-raise / L-sit on-hands sets — cm + yoga block + SQ /
+ * Smith / rack / ladder box (owner: same tooling as push-up incline and HSPU ROM). Stores an
+ * exact cm key in the hidden `.wo-af-dim` select; difficulty uses the global incline cm curve. */
+function openFloorHeightPicker(pill: HTMLElement): void {
+  const sel = pill.previousElementSibling;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  const fam = familyOf(sel.dataset.ex ?? "");
+  if (!fam) return;
+  const dflt = sel.dataset.dimdefault ?? "0cm";
+  type PickUnit = LevelDim | "block";
+  const allUnits: PickUnit[] = ["cm", "block", "sq", "smith", "rackbox", "ladbox"];
+  let unit: PickUnit = "cm";
+  const initCm = parseCmLevelKey(sel.value) ?? 0;
+  let dim: LevelDim = "cm";
+  let val = initCm;
+  let reading = initCm;
+  let block: YogaBlockSide = nearestYogaBlockSide(initCm);
+  const syncBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncReadingFromBlock = () => { reading = YOGA_BLOCK_CM[block]; };
+  const currentCm = (): number => (unit === "block" ? YOGA_BLOCK_CM[block] : levelCm(dim, val));
+  const setLevel = (lvl: string) => {
+    if (![...sel.options].some((o) => o.value === lvl)) sel.add(new Option(afLevelText("floorHeight", lvl, fam), lvl));
+    sel.value = lvl;
+    sel.dispatchEvent(new Event("change", { bubbles: true }));
+    pill.textContent = afLevelText("floorHeight", lvl, fam);
+    pill.classList.toggle("is-set", lvl !== dflt);
+  };
+  const commit = () => setLevel(cmLevelKey(currentCm()));
+  const eqText = () => `= ${Math.round(currentCm())}cm · ×${Math.round(inclineMultForCm(currentCm()) * 100) / 100}`;
+  const renderHtml = (): string =>
+    `<div class="rom-ref-lbl muted">floor height — how high the hands/floor are</div>` +
+    `<div class="inc-units">` +
+    allUnits.map((u) => `<button type="button" class="inc-unit${u === unit ? " is-on" : ""}" data-fhunit="${u}">${escapeHtml(u === "block" ? "block" : inclineDimLabel(u))}</button>`).join("") +
+    `</div>` +
+    (unit === "block"
+      ? `<div class="rom-ref-chips rom-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-fhblock="${b}">${b} ${YOGA_BLOCK_CM[b]}cm</button>`).join("") + `</div>`
+      : `<div class="inc-valrow"><button type="button" class="inc-step" data-fhstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val fh-val" step="${unit === "cm" ? 1 : unit === "smith" ? 0.5 : 1}" value="${unit === "cm" ? reading : val}" inputmode="decimal" aria-label="Floor height" />` +
+        `<span class="rom-unit-lbl muted">${unit === "cm" ? "cm" : inclineDimLabel(unit)}</span><button type="button" class="inc-step" data-fhstep="1" aria-label="Higher">+</button></div>`) +
+    `<div class="inc-eq muted">${eqText()}</div>` +
+    `<button type="button" class="inc-floor" data-fhdefaultbtn>floor (0cm)</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop fh-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>("[data-fhunit]");
+      if (u?.dataset.fhunit) {
+        const newUnit = u.dataset.fhunit as PickUnit;
+        const cm = currentCm();
+        if (newUnit === "block") { unit = "block"; syncBlockFromReading(); }
+        else {
+          unit = newUnit;
+          dim = newUnit;
+          val = cmToLevel(dim, cm);
+          if (newUnit === "cm") reading = cm;
+        }
+        rerender(); commit(); return;
+      }
+      const s = t.closest<HTMLElement>("[data-fhstep]");
+      if (s?.dataset.fhstep) {
+        const d = unit === "cm" ? 1 : unit === "smith" ? 0.5 : 1;
+        if (unit === "cm") { reading = Math.round(reading + Number(s.dataset.fhstep) * d); syncBlockFromReading(); }
+        else val = Math.round((val + Number(s.dataset.fhstep) * d) * 2) / 2;
+        rerender(); commit(); return;
+      }
+      const bl = t.closest<HTMLElement>("[data-fhblock]");
+      if (bl?.dataset.fhblock) { block = bl.dataset.fhblock as YogaBlockSide; syncReadingFromBlock(); rerender(); commit(); return; }
+      if (t.closest("[data-fhdefaultbtn]")) { unit = "cm"; dim = "cm"; reading = 0; val = 0; syncBlockFromReading(); rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".fh-val");
+      if (!vi) return;
+      const v = parseFloat(vi.value);
+      if (!Number.isFinite(v)) return;
+      if (unit === "cm") { reading = v; syncBlockFromReading(); }
+      else { val = v; reading = levelCm(dim, val); syncBlockFromReading(); }
+      commit();
+      pop.querySelector(".inc-eq")!.textContent = eqText();
+    },
+  });
+}
+function afVariationField(exerciseName: string): string {
+  const selects = variantSelectsHtml(exerciseName);
+  if (selects) return selects; // the lean pill is added (captioned) in addmVariantField, like ROM
   const notes = variationNotesFor(exerciseName);
   if (!notes.length) return "";
   const listId = `afNotes-${++afNoteSeq}`;
@@ -14420,44 +19732,30 @@ function openDatePicker(anchor: HTMLElement, currentIso: string, onPick: (iso: s
   setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
 }
 
+/** Single-origin builders for the segmented toggle (UIC-7): ONE place emits the
+ * `.seg-toggle` wrapper + `.seg-btn` button shape, so every real toggle AND the
+ * Coach UI catalogue render through the same code and can't drift. */
+function segBtn(label: string, opts: { active?: boolean; cls?: string; attrs?: string } = {}): string {
+  return `<button type="button" class="seg-btn${opts.active ? " is-active" : ""}${opts.cls ? " " + opts.cls : ""}"${opts.attrs ? " " + opts.attrs : ""}>${label}</button>`;
+}
+function segToggle(buttons: string, opts: { tag?: "span" | "div"; cls?: string; attrs?: string } = {}): string {
+  const tag = opts.tag ?? "span";
+  return `<${tag} class="seg-toggle${opts.cls ? " " + opts.cls : ""}"${opts.attrs ? " " + opts.attrs : ""}>${buttons}</${tag}>`;
+}
+
 /** Date chooser for the inline add form: the session day, Today, and a 📅 that opens a
  * custom calendar to log to ANY date. (Always shown now — the 📅 needs a home even when
  * you're viewing today.) When the session IS today, the redundant day chip is dropped. */
 function afWhenToggle(date: string, today: string): string {
-  const dayBtn = date === today ? "" : `<button type="button" class="seg-btn is-active" data-when="day">${escapeHtml(shortDate(date))}</button>`;
-  const todayBtn = `<button type="button" class="seg-btn${date === today ? " is-active" : ""}" data-when="today">Today</button>`;
-  const pickBtn = `<button type="button" class="seg-btn wo-af-pick" data-when="pick" title="Pick any date (calendar)" aria-label="Pick a date">📅</button>`;
-  return `<span class="wo-af-when seg-toggle">${dayBtn}${todayBtn}${pickBtn}</span>`;
+  const dayBtn = date === today ? "" : segBtn(escapeHtml(shortDate(date)), { active: true, attrs: `data-when="day"` });
+  const todayBtn = segBtn("Today", { active: date === today, attrs: `data-when="today"` });
+  const pickBtn = segBtn("📅", { cls: "wo-af-pick", attrs: `data-when="pick" title="Pick any date (calendar)" aria-label="Pick a date"` });
+  return segToggle(`${dayBtn}${todayBtn}${pickBtn}`, { cls: "wo-af-when" });
 }
 
 /** Compact inline "add set" form shown right under an exercise in the Workouts
  * view, so a set is logged on this screen without jumping to the Add page. The
  * athlete is the one the page is showing; the date is the session's date. */
-function inlineAddFormHtml(exerciseName: string, date: string): string {
-  const today = todayIso();
-  return (
-    `<span class="wo-addform" data-addex="${escapeHtml(exerciseName)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
-    afWhenToggle(date, today) +
-    afVariationField(exerciseName) +
-    AF_FIELDS +
-    `</span>`
-  );
-}
-
-/** Like the add-set form, but with a searchable exercise picker up front so a
- * brand-new exercise can be added to a session (type to filter every known
- * exercise; a new name is allowed too). */
-function inlineAddExerciseFormHtml(date: string): string {
-  const today = todayIso();
-  return (
-    `<span class="wo-addform wo-addform--new" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
-    afWhenToggle(date, today) +
-    `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" aria-label="Exercise" autocomplete="off" />` +
-    AF_FIELDS +
-    `</span>`
-  );
-}
-
 /** Remove an open inline add form, plus its wrapping detail-table row if it sits
  * in the expanded sets table. */
 function removeInlineAddForm(form: HTMLElement) {
@@ -14466,66 +19764,1775 @@ function removeInlineAddForm(form: HTMLElement) {
   else form.remove();
 }
 
-/** Toggle the inline add form for a "+ set" button. In the expanded sets table
- * it becomes its own row under the exercise header; in the collapsed session
- * summary it sits inline right after the button. */
-function toggleInlineAddForm(btn: HTMLElement) {
-  const ex = btn.dataset.addex ?? "";
-  const date = btn.dataset.adddate ?? "";
-  const headerRow = btn.closest("tr.set-ex-row");
-  if (headerRow) {
-    const next = headerRow.nextElementSibling;
-    if (next?.classList.contains("wo-addform-row")) {
-      next.remove();
-      return;
-    }
-    const tr = document.createElement("tr");
-    tr.className = "wo-addform-row";
-    tr.innerHTML = `<td colspan="4">${inlineAddFormHtml(ex, date)}</td>`;
-    headerRow.insertAdjacentElement("afterend", tr);
-    tr.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
-    return;
-  }
-  const sib = btn.nextElementSibling;
-  if (sib?.classList.contains("wo-addform")) {
-    sib.remove();
-    return;
-  }
-  btn.insertAdjacentHTML("afterend", inlineAddFormHtml(ex, date));
-  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+// ---- Add-set / add-exercise POPUP (replaces the cramped inline strip) --------
+// Owner: the inline kg/reps/sets row "is not enough" — a roomy popup that prefills
+// the last hard set, suggests sets from history, and holds the richer fields
+// (variant pickers + a free note). Reuses the proven write path (onInlineAddGo on
+// the same .wo-addform markup) so logging itself is unchanged.
+interface AddSuggestion { label: string; weight: number | null; reps: number; sets: number; rec?: SetRecord; }
+/** Prefill (the last HARD set = the heaviest of the most recent session) + a couple
+ * of quick set-suggestion chips, from this athlete's logged sets for the lift. */
+function addSetSuggestions(username: string, exercise: string): { prefill: AddSuggestion | null; chips: AddSuggestion[] } {
+  const recs = data.records.filter((r) => r.username === username && r.exerciseName === exercise && r.reps != null);
+  if (!recs.length) return { prefill: null, chips: [] };
+  const byDate = new Map<string, SetRecord[]>();
+  for (const r of recs) { const a = byDate.get(r.date); if (a) a.push(r); else byDate.set(r.date, [r]); }
+  const lastDate = [...byDate.keys()].sort().pop()!;
+  const lastSets = byDate.get(lastDate)!;
+  const heaviest = [...lastSets].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0) || (b.reps ?? 0) - (a.reps ?? 0))[0]!;
+  const wr = (w: number | null, r: number) => (w != null && w > 0 ? `${Math.round(w * 10) / 10}×${r}` : `${r} reps`);
+  const prefill: AddSuggestion = { label: "last session", weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length };
+  const chips: AddSuggestion[] = [
+    { label: `Last · ${wr(heaviest.weight, heaviest.reps ?? 1)}${lastSets.length > 1 ? ` ·${lastSets.length}×` : ""}`, weight: heaviest.weight, reps: heaviest.reps ?? 1, sets: lastSets.length, rec: heaviest },
+  ];
+  const cutoff = new Date(Date.now() - 84 * 86_400_000).toISOString().slice(0, 10);
+  let top: SetRecord | null = null;
+  for (const r of recs) if (r.date >= cutoff && (top === null || (r.weight ?? 0) > (top.weight ?? 0))) top = r;
+  if (top && (top.weight ?? 0) > (heaviest.weight ?? 0)) chips.push({ label: `Top · ${wr(top.weight, top.reps ?? 1)}`, weight: top.weight, reps: top.reps ?? 1, sets: 1, rec: top });
+  return { prefill, chips };
 }
 
-/** Toggle the inline "add a new exercise" form for a "+ exercise" button. Same
- * two contexts as toggleInlineAddForm, but the form leads with a searchable
- * exercise picker. */
-function toggleInlineAddExerciseForm(btn: HTMLElement) {
-  const date = btn.dataset.adddate ?? "";
-  const hostRow = btn.closest("tr.set-ex-row");
-  if (hostRow) {
-    const next = hostRow.nextElementSibling;
-    if (next?.classList.contains("wo-addform-row")) {
-      next.remove();
+let addModalEl: HTMLElement | null = null;
+function addModalEsc(e: KeyboardEvent): void { if (e.key === "Escape") closeAddModal(); }
+// PENDING-ADD live preview (owner): while the add popup is open, a faint GHOST set shows
+// inline in the history on the lift's row, updating as you type — so you see the set you're
+// about to add next to the real ones before committing. Cleared on close/add.
+let pendingAdd: { ex: string; date: string; lines: { weight: number | null; reps: number | null }[]; note: string } | null = null;
+let pendingAddTimer: ReturnType<typeof setTimeout> | null = null;
+const numOrNull = (v: string | undefined): number | null => { const n = parseFloat(v ?? ""); return Number.isFinite(n) ? n : null; };
+/** Rebuild the variant-tag strips inside every .addm-line of the open add form so the chips
+ * reflect the currently-selected dim values (b2w, lean, band…), matching the history chip look. */
+function syncAddmVtags(form: HTMLElement): void {
+  // PB-48: a PASSIVE tag is no longer in the DOM at all (variantSelectsHtml renders only ACTIVE
+  // tags), so there's nothing to HIDE here — the old "render then hide a gray pill" raced the
+  // async select-enhancement and leaked the gray "NONE" tags next to the weight. This now only
+  // COLOURS a rendered tag whose value is meaningful (non-gray: support→accent, band→gold) via
+  // .is-set; the selects are the source read on Add (onInlineAddGo).
+  for (const sel of form.querySelectorAll<HTMLSelectElement>(".addm-line-vars .wo-af-dim")) {
+    const ex = sel.dataset.ex ?? "";
+    const fam = ex ? familyOf(ex) : null;
+    const dim = sel.dataset.dim ?? "";
+    const gray = fam && dim ? isGray(fam, dim, sel.value) : sel.value === (sel.dataset.dimdefault ?? "");
+    sel.classList.toggle("is-set", !gray);
+  }
+  syncFloorHeightVtags(form);
+}
+/** Knee-raise / L-sit: floor-height tag only applies when support is on-hands — drop the pill
+ * when hanging, (re)insert when on-hands and the tag is active in the palette. */
+function syncFloorHeightVtags(form: HTMLElement): void {
+  const ex = addmCogEx(form);
+  const fam = familyOf(ex);
+  if (fam !== "KNEERAISE") return;
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const supportSel = ln.querySelector<HTMLSelectElement>('.wo-af-dim[data-dim="support"]');
+    const onHands = supportSel?.value === "on_hands";
+    const slot = ln.querySelector<HTMLElement>(".addm-line-vars");
+    if (!slot) continue;
+    const fh = slot.querySelector<HTMLElement>('.addm-vtag[data-dim="floorHeight"]');
+    if (!onHands || !tagActive(ex, fam, "floorHeight")) { fh?.remove(); continue; }
+    if (!fh) {
+      const vec = supportSel ? { support: supportSel.value, floorHeight: famDefaultLevel(fam, "floorHeight") } : null;
+      const html = dimVtagHtml(ex, fam, "floorHeight", undefined, vec);
+      const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+      if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+      else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+      const newSel = slot.querySelector<HTMLSelectElement>('.wo-af-dim[data-dim="floorHeight"]');
+      if (newSel && !newSel.classList.contains("dd-native")) enhanceSelect(newSel);
+    }
+  }
+}
+
+/** Live machine FORMULA preview per add-line, matching how the set will read in the history
+ * (owner: "if I add machine weight or assistance multiplier I should see it next to the weight
+ * as x/2 or x+10"): an assisted machine shows the dialed counterweight over its divisor
+ * (−20/2), a machine with a base weight shows base+dial (10+0). Hidden for a plain lift where
+ * the typed weight already IS the real value. */
+function syncAddmReal(form: HTMLElement): void {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  // Use the equipment the NEW set will be logged on (the current choice), so the live preview
+  // matches what the set will compute once added (Phase 3).
+  const eq = ex ? equipSettingsCurrent(ex) : null;
+  // Unilateral lifts get a second (left) weight×reps pair in the ADD path so both sides are
+  // editable up front (owner); the expanded-table editor still handles editing an existing set.
+  // PB-54: show the two-sided inputs in BOTH add AND edit (the edit modal is the SAME editor now,
+  // rule 65) — the old `&& !form.dataset.editsid` hid the left side when editing a unilateral set.
+  const uni = !!ex && isUni(ex);
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const lside = ln.querySelector<HTMLElement>(".wo-af-lside");
+    const rlbl = ln.querySelector<HTMLElement>(".wo-af-sidelbl-r");
+    if (lside) lside.toggleAttribute("hidden", !uni);
+    if (rlbl) rlbl.toggleAttribute("hidden", !uni);
+    // Gray read-only total ×multiplier (tag product, with any custom value applied) — not a tag.
+    const totalEl = ln.querySelector<HTMLElement>(".addm-tag-total");
+    const mpill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+    if (totalEl && ex) {
+      const tagScale = addLineDisplayScale(ex, ln);
+      const eff = mpill ? multPillEffective(ex, ln, mpill, true) : tagScale;
+      const rounded = Math.round(eff * 100) / 100;
+      if (rounded !== 1) {
+        totalEl.textContent = `×${rounded}`;
+        totalEl.removeAttribute("hidden");
+      } else {
+        totalEl.textContent = "";
+        totalEl.setAttribute("hidden", "");
+      }
+    }
+    // Custom-multiplier pill (only when promoted via the palette): label shows the owner's value.
+    if (mpill) {
+      mpill.textContent = customMultPillLabel(mpill);
+      mpill.classList.toggle("is-set", !!mpill.dataset.multval);
+    }
+    const out = ln.querySelector<HTMLElement>(".addm-real");
+    const pre = ln.querySelector<HTMLElement>(".wo-af-wpre");
+    const wsuf = ln.querySelector<HTMLElement>(".wo-af-wsuf");
+    if (!out) continue;
+    const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
+    // Machine base weight → a persistent "N+" prefix glued to the LEFT of the weight box, shown
+    // ALWAYS (even before a weight is dialed) so the box reads "10+<weight>" like the history
+    // (owner: "if it has a machine weight I should see it even before adding weight, 10+ then the weight").
+    if (pre) {
+      if (eq && eq.kgBase > 0) { pre.textContent = `${fmt(eq.kgBase)}+`; pre.removeAttribute("hidden"); }
+      else { pre.textContent = ""; pre.setAttribute("hidden", ""); }
+    }
+    // Assisted machine ÷ divisor: glued to the weight box, ONLY when a NEGATIVE counterweight is
+    // dialed — not when empty/0/positive (owner: "/3 next to weight, not after reps").
+    if (wsuf) {
+      if (eq && eq.assisted && w !== null && w < 0) {
+        wsuf.textContent = `/${fmt(eq.divisor)}`;
+        wsuf.removeAttribute("hidden");
+      } else {
+        wsuf.textContent = "";
+        wsuf.setAttribute("hidden", "");
+      }
+    }
+    out.textContent = "";
+    out.setAttribute("hidden", "");
+  }
+}
+
+// The current athlete's strength map for the open add-modal (computed once on open / ex change),
+// so the live assumed-RIR per line is cheap to refresh as you type reps. Cleared on close.
+let addmStrength: Map<string, Map<number, number>> | null = null;
+/** The assumed RIR band for a candidate set (lift + dialed weight/reps), from the same
+ * predicted-RIR model the history uses. Falls back to the lift's default band with no reps. */
+function addmAssumedRirBand(ex: string, date: string, weight: number | null, reps: number | null): string {
+  if (!ex) return "2.8–4.8";
+  if (reps === null || reps <= 0) return assumedRirBandId(ex, null);
+  const formula = currentFormula();
+  if (!addmStrength) addmStrength = currentStrengthByUserExercise(formula);
+  const pseudo = { username: els.athlete.value, exerciseName: ex, date, weight, reps } as SetRecord;
+  const anchor = currentStrengthFor(addmStrength, pseudo);
+  return assumedRirBandId(ex, predictedRir(anchor, weight, reps, formula));
+}
+/** The add-line RIR picker (custom .xdd dropdown, reusing the per-set RIR styles): shows the
+ * ASSUMED band (faded) until the owner picks one, then it becomes a chosen value recorded on
+ * the new set. No setId — the value is read on Add and written to the created set's id. */
+function addmRirHtml(assumedId: string): string {
+  return (
+    `<div class="xdd xdd-rpe addm-rir is-assumed" data-addmrir data-assumed="${escapeHtml(assumedId)}">` +
+    `<button type="button" class="xdd-btn set-rpe-btn" aria-label="Reps in reserve — assumed from reps & 1RM; tap to set" title="RIR — assumed from your reps & 1RM; tap to set">${escapeHtml(rirLabel(assumedId))}<span class="xdd-caret">▾</span></button>` +
+    `<div class="xdd-menu" hidden role="listbox">${rpeMenuHtml(null, rirBandMid(assumedId))}</div></div>`
+  );
+}
+/** Re-render an add-modal RIR pill in place from its data-picked grade (the menu element is kept,
+ * so an open menu stays open across a band toggle — rule 24). */
+function updateAddmRir(dd: HTMLElement): void {
+  const grade = dd.dataset.picked || "";
+  const g = parseRirGrade(grade);
+  const assumed = dd.dataset.assumed || "";
+  dd.classList.toggle("is-set", !!g);
+  dd.classList.toggle("is-assumed", !g);
+  const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
+  if (btn) btn.innerHTML = `${escapeHtml(g ? rirLabel(grade) : rirLabel(assumed))}<span class="xdd-caret">▾</span>`;
+  const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+  if (menu) menu.innerHTML = rpeMenuHtml(g, rirBandMid(assumed));
+}
+/** Fill / refresh each add-line's RIR picker. A line with no picker yet gets one; a line whose
+ * picker the owner hasn't manually set tracks the live assumed band as the reps change. */
+function syncAddmRir(form: HTMLElement): void {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "pick" ? form.dataset.pickdate : when === "today" ? form.dataset.todaydate : form.dataset.daydate) ||
+    form.dataset.daydate || todayIso();
+  for (const ln of form.querySelectorAll<HTMLElement>(".addm-line")) {
+    const slot = ln.querySelector<HTMLElement>(".addm-rir-slot");
+    if (!slot) continue;
+    const w = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value);
+    const reps = numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value);
+    const assumed = addmAssumedRirBand(ex, date, w, reps);
+    const dd = slot.querySelector<HTMLElement>(".addm-rir");
+    if (!dd) { slot.innerHTML = addmRirHtml(assumed); continue; }
+    if (dd.dataset.picked) continue; // the owner set it → leave their choice alone
+    // Not picked → track the live assumed band: refresh the faded label + menu from it.
+    dd.dataset.assumed = assumed;
+    updateAddmRir(dd);
+  }
+}
+/** Read the open add-modal's live values into pendingAdd, then re-render the history ghost. */
+function syncPendingFromModal(): void {
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  if (!form) { pendingAdd = null; refreshGhost(); return; }
+  syncAddmVtags(form);
+  syncAddmReal(form);
+  syncAddmRir(form);
+  // Editing an existing set shows no "pending add" ghost (it's an in-place edit, not a new set).
+  if (form.dataset.editsid) { pendingAdd = null; refreshGhost(); return; }
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  const ex = exInput ? exInput.value.trim() : (form.dataset.addex ?? "");
+  const when = form.querySelector<HTMLElement>(".wo-af-when .seg-btn.is-active")?.dataset.when;
+  const date =
+    (when === "pick" ? form.dataset.pickdate : when === "today" ? form.dataset.todaydate : form.dataset.daydate) ||
+    form.dataset.daydate || todayIso();
+  const lines = [...form.querySelectorAll<HTMLElement>(".addm-line")].map((ln) => ({
+    weight: numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value),
+    reps: numOrNull(ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value),
+  }));
+  pendingAdd = ex ? { ex, date, lines, note: form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "" } : null;
+  refreshGhost();
+}
+/** Re-render the history (debounced, scroll-preserving) so the ghost set tracks the inputs.
+ * Used only when the ghost's LOCATION changes (open / day switch / close) — NOT on every
+ * keystroke; refreshGhost updates the existing slot in place for that (snappy recipe, rule 17). */
+function scheduleGhostRender(): void {
+  if (pendingAddTimer) clearTimeout(pendingAddTimer);
+  pendingAddTimer = setTimeout(() => {
+    pendingAddTimer = null;
+    if (!document.getElementById("workoutsTable")) return;
+    const y = window.scrollY;
+    renderWorkoutsPage();
+    restoreScrollY(y);
+  }, 130);
+}
+/** Update the live ghost-set preview WITHOUT rebuilding the page (the old per-keystroke full
+ * renderWorkoutsPage was the add-sheet lag, owner). The ghost lives on ONE line (the pending
+ * exercise+date): if its slot is already in the DOM, just rewrite its chips — an O(1) DOM
+ * touch that keeps typing + the keyboard animation smooth. Only when the target line CHANGES
+ * (different day/exercise) or the slot doesn't exist yet do we fall back to one debounced full
+ * render to move/create it. This is the "separate the heavy work from the UI" the owner asked
+ * for — done on the main thread (a Web Worker can't touch the DOM, rule 17), just decoupled
+ * from the keystroke. */
+function refreshGhost(): void {
+  const p = pendingAdd;
+  const key = p ? `${p.date}|${p.ex}` : "";
+  const slot = document.querySelector<HTMLElement>(".wo-ghost-slot");
+  if (p && slot && slot.dataset.ghostkey === key) { slot.innerHTML = ghostChipsInner(p); return; }
+  if (!p && slot) { slot.remove(); return; }
+  scheduleGhostRender();
+}
+/** The ghost-set chips (dashed/greyed previews) for the pending add's lines. */
+function ghostChipsInner(p: { lines: { weight: number | null; reps: number | null }[] }): string {
+  return (p.lines.length ? p.lines : [{ weight: null, reps: null }])
+    .map((l) => `<span class="wo-set-ghost" title="New set — adding… (not saved yet)">${l.weight === null && l.reps === null ? "?" : wr(l.weight, l.reps)}</span>`)
+    .join("");
+}
+/** The faint GHOST set chips for a pending add on this exercise+date (empty otherwise) — a
+ * dashed, greyed preview of the set(s) being typed in the add popup, wrapped in a keyed slot
+ * so refreshGhost can update it in place without a full re-render. */
+function ghostSetsHtml(exerciseName: string, date: string): string {
+  const p = pendingAdd;
+  if (!p || p.ex !== exerciseName || p.date !== date) return "";
+  return ` <span class="wo-ghost-slot" data-ghostkey="${escapeHtml(`${date}|${exerciseName}`)}">${ghostChipsInner(p)}</span>`;
+}
+/** The wrapped "Variant" block for the add popup — the structured dim pickers for a
+ * modelled lift, or "" when the lift has no variation model. Shared by the initial
+ * render and the reactive rebuild when the exercise is picked in the new-lift popup
+ * (so its variants show as you choose it, not only after it's added). The note
+ * fallback afVariationField can emit is NOT used here — the popup has its own Note. */
+// ---- ACTIVE vs PASSIVE add-set tags (owner) ----.
+// ACTIVE tags = the family variation pills shown per set line (support, band, …) at their
+// default, inviting a change. PASSIVE tags = ones NOT shown until you PROMOTE them with ＋
+// (so e.g. ROM stops nagging you with a meaningless "90%" on every lift). A promotion is
+// remembered PER EXERCISE — "full ROM is an exception for this lift" sticks. Saved on device.
+// PB-48 follow-up (owner): a tag is now a per-exercise SHOWN/HIDDEN override, not just a "promote
+// to add" list — so the owner can DESELECT a tag whose default is a meaningful value (e.g. support
+// = back-to-wall) and make it PASSIVE, as long as the tag has an OBVIOUS (gray) baseline to fall
+// back to. With no override a tag follows its DEFAULT (a meaningful non-gray default shows; a gray
+// default / ROM is passive). A tag with NO obvious/gray level can't be passive → always shown (you
+// can't deselect it). Migrated from the old promoted-list store (membership ⇒ shown:true).
+const ADDM_TAGSHOWN_KEY = "colosseum.addmTagShown.v1";
+/** Passive/active pseudo-tag for an owner-typed multiplier on top of (or replacing) the tag product. */
+const CUSTOM_MULT_ID = "customMult";
+const addmTagShown = loadJsonObject<Record<string, Record<string, boolean>>>(ADDM_TAGSHOWN_KEY);
+(function migrateOldPromotedList() {
+  let old: Record<string, string[]> | null = null;
+  try { const s = localStorage.getItem("colosseum.addmPassive.v1"); if (s) old = JSON.parse(s); } catch { /* ignore */ }
+  if (!old) return;
+  for (const ex of Object.keys(old)) { const m = (addmTagShown[ex] ??= {}); for (const id of old[ex] ?? []) if (m[id] === undefined) m[id] = true; }
+  saveJson(ADDM_TAGSHOWN_KEY, addmTagShown);
+  try { localStorage.removeItem("colosseum.addmPassive.v1"); } catch { /* ignore */ }
+})();
+/** Does a dimension have any OBVIOUS (gray) level — a baseline to be PASSIVE with? If not, the tag
+ * can never be deselected (it's always shown), because there's no "nothing special" level to hide
+ * behind. The owner marks which level is obvious via the 👁 toggle in the tag's menu. */
+function famHasGrayLevel(fam: string, dim: string): boolean {
+  return Object.keys(famLevels(fam, dim)).some((l) => isGray(fam, dim, l));
+}
+/** Can this tag be DESELECTED (made passive)? Only if it has an obvious baseline (ROM + custom mult always can). */
+function tagDeselectable(fam: string | null, id: string): boolean {
+  return id === "rom" || id === CUSTOM_MULT_ID || (!!fam && famHasGrayLevel(fam, id));
+}
+/** Set a tag's explicit SHOWN state for an exercise (persisted); clears the store when empty. */
+function setTagShown(ex: string, id: string, shown: boolean): void {
+  const m = (addmTagShown[ex] ??= {});
+  m[id] = shown;
+  saveJson(ADDM_TAGSHOWN_KEY, addmTagShown);
+}
+/** The ROM pill (a passive tag): only rendered on a line when ROM is promoted for the lift. */
+/** The compact label for a ROM pill: "90%" (percent) or "20cm" (centimetres). */
+function romPillLabel(unit: string, val: number): string {
+  return unit === "cm" ? `${val}cm` : `${val}%`;
+}
+function romPillHtml(ex: string): string {
+  const romDef = romDefaultFor(ex || "");
+  const leg = usesLegPctRom(ex);
+  // ROM is now a unit-pill (owner): tap it to set the range as a PERCENT or in CM, and for cm pick
+  // what it's measured FROM (the floor, your body, or any other reference). Stored as a note token
+  // ("ROM 90%" / "ROM 20cm from floor"); it's a recorded label, not a difficulty multiplier.
+  // Leg-kick handstands (Handstand kicks): %-only — how far the legs go, not cm hand height.
+  const title = leg
+    ? "Leg range of motion — tap to set as % of how far the kick goes"
+    : "Range of motion — tap to set as % or in cm (measured from the floor, your body, or another reference)";
+  const legAttr = leg ? ' data-romleg="1"' : "";
+  return `<button type="button" class="wo-af-rompill wo-af-rom"${legAttr} data-romunit="pct" data-romval="${romDef}" data-romref="" data-romdefault="${romDef}" title="${escapeHtml(title)}">${romPillLabel("pct", romDef)}</button>`;
+}
+// Floating ROM picker for the add-set ROM pill (NOT a native control). Pick the UNIT (% or cm);
+// in cm you also choose what it's measured FROM (floor / body / any typed reference). Mirrors the
+// incline picker. Outside-tap / Esc closes it.
+// ── Shared floating value-picker lifecycle (DEDUP-4, rule 65) ────────────────────
+// ROM / lean / incline / multiplier pickers were four copies of one popover skeleton
+// (create div, clamp under the pill, outside-tap + Esc to close, deferred listener
+// attach). This factory owns that lifecycle; each picker passes only what's unique:
+// its className, an innerHTML renderer, and click/input handlers. Only one floating
+// picker is open at a time (opening any closes the previous). `rerender` rebuilds the
+// body + re-clamps; `onInput` gets `pop` so it can patch single elements without a
+// full rebuild (keeping input focus).
+let floatingPickerClose: (() => void) | null = null;
+function closeFloatingPicker(): void { floatingPickerClose?.(); }
+function openFloatingPicker(
+  pill: HTMLElement,
+  cfg: {
+    className: string;
+    renderHtml: () => string;
+    onClick?: (target: HTMLElement, rerender: () => void) => void;
+    onInput?: (target: HTMLElement, pop: HTMLElement, rerender: () => void) => void;
+  },
+): void {
+  closeFloatingPicker();
+  const pop = document.createElement("div");
+  pop.className = cfg.className;
+  const place = () => {
+    const r = pill.getBoundingClientRect();
+    const w = pop.offsetWidth || 220, h = pop.offsetHeight || 180;
+    if (pop.classList.contains("taginfo-pop")) {
+      const left = Math.max(6, (window.innerWidth - w) / 2);
+      const top = Math.max(6, (window.innerHeight - Math.min(h, window.innerHeight - 12)) / 2);
+      pop.style.left = `${left}px`; pop.style.top = `${top}px`;
       return;
     }
-    const tr = document.createElement("tr");
-    tr.className = "wo-addform-row";
-    tr.innerHTML = `<td colspan="4">${inlineAddExerciseFormHtml(date)}</td>`;
-    hostRow.insertAdjacentElement("afterend", tr);
-    tr.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+    const left = Math.max(6, Math.min(r.left, window.innerWidth - w - 6));
+    let top = r.bottom + 4;
+    if (top + h > window.innerHeight - 6) top = Math.max(6, r.top - h - 4);
+    pop.style.left = `${left}px`; pop.style.top = `${top}px`;
+  };
+  const rerender = () => { pop.innerHTML = cfg.renderHtml(); place(); };
+  if (cfg.onClick) pop.addEventListener("click", (e) => cfg.onClick!(e.target as HTMLElement, rerender));
+  if (cfg.onInput) pop.addEventListener("input", (e) => cfg.onInput!(e.target as HTMLElement, pop, rerender));
+  const onOutside = (e: MouseEvent) => { if (!pop.contains(e.target as Node) && e.target !== pill) closeFloatingPicker(); };
+  const onEsc = (e: KeyboardEvent) => { if (e.key === "Escape") closeFloatingPicker(); };
+  floatingPickerClose = () => {
+    document.removeEventListener("click", onOutside, true);
+    document.removeEventListener("keydown", onEsc, true);
+    pop.remove(); floatingPickerClose = null;
+  };
+  document.body.appendChild(pop);
+  rerender();
+  setTimeout(() => { document.addEventListener("click", onOutside, true); document.addEventListener("keydown", onEsc, true); }, 0);
+}
+function openRomPicker(pill: HTMLElement): void {
+  // Owner: ROM can be entered in cm OR in yoga blocks (like the lean picker), and for handstands
+  // measured FROM the floor or your HEAD. `mode` drives the picker UI (% / cm / block); a block
+  // resolves to its cm height, so storage stays {unit:"cm"|"pct", val, ref} — no schema change.
+  // Handstand kicks: %-only (leg kick range — not cm hand height).
+  const legOnly = pill.dataset.romleg === "1";
+  let mode: "pct" | "cm" | "block" = legOnly ? "pct" : (pill.dataset.romunit === "cm" ? "cm" : "pct");
+  let val = Number(pill.dataset.romval) || 0;
+  let ref = pill.dataset.romref || "floor";
+  const def = Number(pill.dataset.romdefault) || 0;
+  const REFS = ["floor", "head", "body", "top", "bar"]; // floor / head lead for handstands; text field allows any other
+  const BLOCKS: YogaBlockSide[] = ["small", "medium", "large"];
+  const committedUnit = (): "pct" | "cm" => (mode === "pct" ? "pct" : "cm");
+  const commit = () => {
+    const u = committedUnit();
+    pill.dataset.romunit = u; pill.dataset.romval = String(val); pill.dataset.romref = u === "cm" ? ref : "";
+    pill.textContent = romPillLabel(u, val);
+    pill.classList.toggle("is-set", u === "cm" || val !== def); // cm is always a deliberate value
+  };
+  const renderHtml = () =>
+    (legOnly ? "" : `<div class="inc-units">` +
+    `<button type="button" class="inc-unit${mode === "pct" ? " is-on" : ""}" data-rommode="pct">%</button>` +
+    `<button type="button" class="inc-unit${mode === "cm" ? " is-on" : ""}" data-rommode="cm">cm</button>` +
+    `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
+    `</div>`) +
+    (mode === "block"
+      ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === yogaBlockCm(b) ? " is-on" : ""}" data-romblock="${b}">${b} · ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`
+      : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
+        `<input type="number" class="inc-val rom-val" step="${mode === "cm" ? 1 : 5}" min="0" value="${val}" inputmode="decimal" aria-label="Range of motion value" />` +
+        `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
+        `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>`) +
+    (mode === "pct"
+      ? `<div class="inc-eq muted">${legOnly ? "% of the full kick range (how far the legs go)" : "% of the full range of motion"}</div>`
+      : `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
+        `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
+        `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`) +
+    `<button type="button" class="inc-floor" data-romdefaultbtn>default (${def}%)</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const m = t.closest<HTMLElement>("[data-rommode]");
+      if (m?.dataset.rommode) { mode = m.dataset.rommode as "pct" | "cm" | "block"; if (mode === "block" && (val === 0 || val === def)) val = yogaBlockCm("medium"); rerender(); commit(); return; }
+      const bl = t.closest<HTMLElement>("[data-romblock]");
+      if (bl?.dataset.romblock) { val = yogaBlockCm(bl.dataset.romblock as YogaBlockSide); rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>("[data-romstep]");
+      if (s?.dataset.romstep) { const d = mode === "cm" ? 1 : 5; val = Math.max(0, Math.round(val + Number(s.dataset.romstep) * d)); rerender(); commit(); return; }
+      const rc = t.closest<HTMLElement>(".rom-ref-chip");
+      if (rc?.dataset.romref) { ref = rc.dataset.romref; rerender(); commit(); return; }
+      if (t.closest("[data-romdefaultbtn]")) { mode = "pct"; val = def; ref = "floor"; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".rom-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { val = Math.max(0, v); commit(); } return; }
+      const ri = t.closest<HTMLInputElement>(".rom-ref-input");
+      if (ri) { ref = ri.value.trim() || "floor"; commit(); for (const c of pop.querySelectorAll<HTMLElement>(".rom-ref-chip")) c.classList.toggle("is-on", c.dataset.romref === ref); }
+    },
+  });
+}
+
+// ── Custom MULTIPLIER pill + picker (owner: "every tag is a multiplier; I should SEE the total
+// of all tags, ADD my own, and OVERRIDE the total") ──────────────────────────────────────────
+// The pill shows a set's effective ×multiplier; tapping it lets you type your own number that
+// EITHER multiplies on top of the tags OR replaces the total. Stored on the created/edited set as
+// `scale` (multiply) or `scaleAbs` (replace) — both read by scaleForRecord.
+/** The tag-derived multiplier for an add/edit LINE (the family variation product × any incline
+ * level), so the pill + picker can show the total before the set exists. */
+function addLineVec(ln: HTMLElement): Record<string, string> {
+  const vec: Record<string, string> = {};
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) if (s.dataset.dim) vec[s.dataset.dim] = s.value;
+  const lean = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+  if (lean?.dataset.leanlevel) vec.lean = lean.dataset.leanlevel;
+  return vec;
+}
+function addLineTagScale(ex: string, ln: HTMLElement): number {
+  const fam = ex ? familyOf(ex) : null;
+  const vec = addLineVec(ln);
+  let s = fam ? scalarFromVec(fam, vec) : 1;
+  const inc = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (inc && isInclineLevelExercise(ex)) { const d = inc.dataset.incdim as LevelDim; const v = Number(inc.dataset.incval); if (Number.isFinite(v)) s *= levelScaleFor(ex, d, v); }
+  return Math.round(s * 1e6) / 1e6;
+}
+/** Combined × readout under W/reps — includes band levels (kg-assist in calc, but each band
+ * level still has a ×factor the owner tunes) so a band-only line isn't stuck at ×1. */
+function addLineDisplayScale(ex: string, ln: HTMLElement): number {
+  const fam = ex ? familyOf(ex) : null;
+  if (!fam) return 1;
+  const vec = addLineVec(ln);
+  let s = scalarFromVec(fam, vec);
+  const band = vec.band;
+  if (band && band !== "none") {
+    const bf = famLevels(fam, "band")[band];
+    if (typeof bf === "number") s *= bf;
+  }
+  const inc = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (inc && isInclineLevelExercise(ex)) { const d = inc.dataset.incdim as LevelDim; const v = Number(inc.dataset.incval); if (Number.isFinite(v)) s *= levelScaleFor(ex, d, v); }
+  return Math.round(s * 1e6) / 1e6;
+}
+/** The effective multiplier a line will record = the tag total, with the owner's custom value
+ * either replacing it (abs) or multiplying on top (mult). Display uses addLineDisplayScale
+ * (includes band ×factors); the stored calc path still uses addLineTagScale via scaleForRecord. */
+function multPillEffective(ex: string, ln: HTMLElement, pill: HTMLElement, forDisplay = false): number {
+  const tags = forDisplay ? addLineDisplayScale(ex, ln) : addLineTagScale(ex, ln);
+  const v = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  if (!(Number.isFinite(v) && v > 0)) return tags;
+  return pill.dataset.multmode === "abs" ? v : Math.round(tags * v * 1e6) / 1e6;
+}
+/** Passive/active pseudo-tag for an owner-typed multiplier on top of (or replacing) the tag product. */
+function customMultPillLabel(pill: HTMLElement): string {
+  const v = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  if (!(Number.isFinite(v) && v > 0)) return "custom";
+  const r = Math.round(v * 100) / 100;
+  return pill.dataset.multmode === "abs" ? `=${r}` : `×${r}`;
+}
+function customMultPillHtml(): string {
+  return `<button type="button" class="wo-af-multpill" data-multval="" data-multmode="mult" title="Your own multiplier — multiply on top of the tags, or replace the total. Tap to set.">custom</button>`;
+}
+function customMultVtagHtml(): string {
+  return `<span class="addm-vtag" data-dim="${CUSTOM_MULT_ID}"><span class="addm-vtag-cap">multiplier</span>${customMultPillHtml()}</span>`;
+}
+function openCustomMultPicker(pill: HTMLElement): void {
+  const ln = pill.closest<HTMLElement>(".addm-line");
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  const ex = form ? addmCogEx(form) : "";
+  const round = (n: number) => Math.round(n * 100) / 100;
+  let val = pill.dataset.multval ? parseFloat(pill.dataset.multval) : NaN;
+  let mode: "mult" | "abs" = pill.dataset.multmode === "abs" ? "abs" : "mult";
+  const tagTotal = ln ? addLineTagScale(ex, ln) : 1;
+  const commit = () => {
+    if (Number.isFinite(val) && val > 0) pill.dataset.multval = String(val); else pill.dataset.multval = "";
+    pill.dataset.multmode = mode;
+    if (form) syncPendingFromModal(); // refreshes the pill label via syncAddmReal
+  };
+  const renderHtml = () => {
+    const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal;
+    return `<div class="mult-readout muted">tags = ×${round(tagTotal)}</div>` +
+      `<div class="inc-valrow"><input type="number" class="inc-val mult-val" step="0.05" min="0" value="${Number.isFinite(val) ? val : ""}" placeholder="1" inputmode="decimal" aria-label="Your multiplier" /></div>` +
+      `<div class="inc-units">` +
+      `<button type="button" class="inc-unit${mode === "mult" ? " is-on" : ""}" data-multmode="mult">× on top</button>` +
+      `<button type="button" class="inc-unit${mode === "abs" ? " is-on" : ""}" data-multmode="abs">= total</button>` +
+      `</div>` +
+      `<div class="inc-eq muted">= ×${round(eff)}</div>` +
+      `<button type="button" class="inc-floor" data-multclear>clear (use tags)</button>`;
+  };
+  openFloatingPicker(pill, {
+    className: "inc-pop mult-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const m = t.closest<HTMLElement>("[data-multmode]");
+      if (m?.dataset.multmode) { mode = m.dataset.multmode === "abs" ? "abs" : "mult"; rerender(); commit(); return; }
+      if (t.closest("[data-multclear]")) { val = NaN; mode = "mult"; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".mult-val");
+      if (vi) { const v = parseFloat(vi.value); val = Number.isFinite(v) ? v : NaN; const eq = pop.querySelector<HTMLElement>(".inc-eq"); const eff = Number.isFinite(val) && val > 0 ? (mode === "abs" ? val : tagTotal * val) : tagTotal; if (eq) eq.textContent = `= ×${round(eff)}`; commit(); }
+    },
+  });
+}
+
+// ── Handstand LEAN pill + picker (hand-to-wall distance → canonical palm-base cm) ──
+// Owner spec (docs/handstand-lean-model.md): the forward LEAN is the distance from the
+// hands to the wall. Enter it from any of 4 hand POINTS, in cm OR as a yoga-block side; it
+// converts to the canonical palm-base cm via the athlete's ONE hand length, then snaps to
+// the family's nearest discrete lean level (handstandLean.ts). Replaces the plain lean select.
+const LEAN_POINTS: readonly HandPoint[] = ["fingertips", "fingerKnuckles", "knuckles", "base"];
+const LEAN_POINT_LBL: Record<HandPoint, string> = { fingertips: "tips", fingerKnuckles: "knuckle", knuckles: "palm-knuckle", base: "palm" };
+function leanLevelKeys(ex: string): string[] {
+  const fam = familyOf(ex); const lv = fam ? famLevels(fam, "lean") : null;
+  return lv ? Object.keys(lv) : [];
+}
+// The pill shows the lean from the FINGERTIPS (clamped at 0 = no lean) for the athlete
+// being logged, so it matches how the owner measures it.
+const leanPillLabel = (level: string, username: string = els.athlete.value): string => {
+  const tip = leanFingertipCm(level, username);
+  return tip <= 0 ? "lean" : `lean ${tip}cm`;
+};
+/** Whether a lift's family has a lean dim (→ show the lean pill instead of a plain select). */
+function hasLeanDim(ex: string): boolean { return leanLevelKeys(ex).length > 0; }
+function leanPillHtml(ex: string, level?: string): string {
+  if (!hasLeanDim(ex)) return "";
+  const fam = familyOf(ex);
+  const dflt = fam ? famDefaultLevel(fam, "lean") : "0cm";
+  const lvl = level ?? dflt;
+  const capLbl = fam ? dimLabel("lean", fam) : "fwd lean";
+  return `<span class="addm-vtag" data-dim="lean"><span class="addm-vtag-cap">${escapeHtml(capLbl)}</span>` +
+    `<button type="button" class="wo-af-leanpill wo-af-dimpill${lvl !== dflt ? " is-set" : ""}" data-leanex="${escapeHtml(ex)}" data-leanlevel="${escapeHtml(lvl)}" data-leandefault="${escapeHtml(dflt)}" title="${escapeHtml(capLbl)} — distance from your hands to the wall. Tap to enter it from any hand point, in cm or yoga blocks.">${escapeHtml(leanPillLabel(lvl))}</button>` +
+    `</span>`;
+}
+function openLeanPicker(pill: HTMLElement): void {
+  const ex = pill.dataset.leanex ?? "";
+  const fam = familyOf(ex);
+  const username = els.athlete.value;
+  let unit: "cm" | "block" = "cm";
+  let point: HandPoint = DEFAULT_HAND_POINT;
+  let hand = handLengthFor(username);
+  const canonFromLevel = parseCmLevelKey(pill.dataset.leanlevel ?? "0cm") ?? 0;
+  let reading = Math.max(0, canonFromLevel - handPointOffsetCm(point, hand)); // cm read at `point`
+  let block: YogaBlockSide = nearestYogaBlockSide(reading);
+  const syncLeanBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
+  const syncLeanReadingFromBlock = () => { reading = yogaBlockCm(block); };
+  const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
+  const tagCm = (): number => leanFingertipCmFromReading(unit === "cm" ? reading : yogaBlockCm(block), point, hand);
+  const eqText = () => {
+    const t = tagCm();
+    return t <= 0 ? "→ tag no lean" : `→ tag ${t}cm`;
+  };
+  const commit = () => {
+    const level = leanLevelKey(canonical());
+    pill.dataset.leanlevel = level;
+    pill.textContent = leanPillLabel(level);
+    pill.classList.toggle("is-set", level !== (pill.dataset.leandefault ?? "0cm"));
+  };
+  const renderHtml = () =>
+    `<div class="inc-units">` +
+      `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-leanunit="cm">cm</button>` +
+      `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-leanunit="block">block</button>` +
+      `</div>` +
+      (unit === "cm"
+        ? `<div class="inc-valrow"><button type="button" class="inc-step" data-leanstep="-1" aria-label="Lower">−</button>` +
+          `<input type="number" class="inc-val lean-val" step="1" value="${reading}" inputmode="decimal" aria-label="Distance to the wall" />` +
+          `<span class="rom-unit-lbl muted">cm</span><button type="button" class="inc-step" data-leanstep="1" aria-label="Higher">+</button></div>`
+        : `<div class="rom-ref-chips lean-blocks">` + (["small", "medium", "large"] as YogaBlockSide[]).map((b) => `<button type="button" class="rom-ref-chip${b === block ? " is-on" : ""}" data-leanblock="${b}">${b} ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`) +
+      `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span><div class="rom-ref-chips">` +
+      LEAN_POINTS.map((p) => `<button type="button" class="rom-ref-chip${p === point ? " is-on" : ""}" data-leanpoint="${p}">${escapeHtml(LEAN_POINT_LBL[p])}</button>`).join("") + `</div></div>` +
+      `<div class="rom-ref lean-hand"><span class="rom-ref-lbl muted">your hand (tips→palm)</span>` +
+      `<input type="number" class="rom-ref-input lean-hand-val" step="1" min="1" value="${hand}" aria-label="Your hand length, fingertips to palm-base (cm)" /><span class="rom-unit-lbl muted">cm</span></div>` +
+      `<div class="inc-eq muted">${eqText()}</div>` +
+      `<button type="button" class="inc-floor" data-leandefaultbtn>no lean (default)</button>`;
+  openFloatingPicker(pill, {
+    className: "inc-pop rom-pop lean-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>("[data-leanunit]");
+      if (u?.dataset.leanunit) {
+        const newUnit = u.dataset.leanunit === "block" ? "block" : "cm";
+        if (newUnit === "cm" && unit === "block") syncLeanReadingFromBlock();
+        else if (newUnit === "block" && unit === "cm") syncLeanBlockFromReading();
+        unit = newUnit;
+        rerender(); commit(); return;
+      }
+      const s = t.closest<HTMLElement>("[data-leanstep]");
+      if (s?.dataset.leanstep && fam) {
+        const step = cmCurveStep(fam, "lean") * Number(s.dataset.leanstep);
+        reading = Math.max(0, Math.round((reading + step) * 10) / 10);
+        syncLeanBlockFromReading(); rerender(); commit(); return;
+      }
+      const bl = t.closest<HTMLElement>("[data-leanblock]");
+      if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; syncLeanReadingFromBlock(); rerender(); commit(); return; }
+      const pt = t.closest<HTMLElement>("[data-leanpoint]");
+      if (pt?.dataset.leanpoint) {
+        const newPoint = pt.dataset.leanpoint as HandPoint;
+        if (newPoint !== point) {
+          const canon = canonical();
+          point = newPoint;
+          reading = Math.max(0, canon - handPointOffsetCm(point, hand));
+          if (unit === "block") syncLeanBlockFromReading();
+        }
+        rerender(); commit(); return;
+      }
+      if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; syncLeanBlockFromReading(); rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const vi = t.closest<HTMLInputElement>(".lean-val");
+      if (vi) { const v = parseFloat(vi.value); if (Number.isFinite(v)) { reading = Math.max(0, v); syncLeanBlockFromReading(); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
+      const hi = t.closest<HTMLInputElement>(".lean-hand-val");
+      if (hi) { const v = parseFloat(hi.value); if (Number.isFinite(v) && v > 0) { hand = v; setHandLength(username, v); commit(); pop.querySelector(".inc-eq")!.textContent = eqText(); } return; }
+    },
+  });
+}
+function addmVariantField(ex: string): string {
+  const vf = ex ? afVariationField(ex) : "";
+  // Just the compact value-pills (owner: cram it, variants on the SAME line as weight/reps);
+  // no header/labels. Wrapped inline so it flows before the weight in one row.
+  const dims = vf.includes("wo-af-dims") ? vf : "";
+  // Each tag rides in a little column: a tiny gray CAPTION naming what it is (owner: "above the
+  // tag, very small gray letters — lean / rom …") over the pill. cap() wraps the ROM / incline
+  // pills the same way the dim pills are wrapped in variantSelectsHtml.
+  const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
+  // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
+  // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
+  // HSPU has its own cm hand-height `rom` dim; every other lift gets the generic %-ROM pill.
+  const rfam = familyOf(ex);
+  const showPctRom = tagActive(ex, rfam, "rom") && showsPctRomPill(ex, rfam);
+  const rom = showPctRom ? cap("ROM", romPillHtml(ex)) : "";
+  // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
+  // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
+  // one cm height). Tap the pill to set it; floor (0cm) is the default. (Only incline lifts.)
+  const incline = isInclineLevelExercise(ex)
+    ? cap("height", `<button type="button" class="wo-af-incpill" data-incdim="cm" data-incval="0" title="Set the hand height / incline — cm, SQ hole or Smith notch (all convert to one cm height)">↕ floor</button>`)
+    : "";
+  // Forward-LEAN pill (handstand families) — passive/active like every other tag: only on the set
+  // line when tagActive; the palette row is the single place to ＋add / ✓remove it.
+  const lean = hasLeanDim(ex) && tagActive(ex, rfam, "lean")
+    ? leanPillHtml(ex, rfam ? frequentLevelFor(ex, rfam, "lean", famDefaultLevel(rfam, "lean")) : "0cm")
+    : "";
+  // Custom MULTIPLIER tag — passive by default (palette ＋multiplier); only inline when active.
+  const customMult = ex && tagActive(ex, rfam, CUSTOM_MULT_ID) ? customMultVtagHtml() : "";
+  // No inline "＋ tag" button — the passive-tag PALETTE above the sets is the one place to add a
+  // tag (owner: "a list of all the tags above the sets, press ＋ to add"). Avoids two add paths.
+  return dims + incline + rom + lean + customMult;
+}
+/** Is a tag ACTIVE (shown inline next to the weight) for this exercise? The SINGLE source of truth
+ * for both the palette ✓/＋ and the inline pill's visibility, so they can't disagree.
+ *  - A tag with NO obvious (gray) baseline can never be passive → ALWAYS shown (not deselectable).
+ *  - Otherwise the owner's explicit shown/hidden override wins (so a meaningful-default tag like
+ *    support=b2w CAN be deselected → passive → reverts to its obvious baseline).
+ *  - With no override, a dim whose DEFAULT level is meaningful (non-gray, e.g. b2w) shows; a gray
+ *    default / ROM is passive until ＋added. */
+function tagActive(ex: string, fam: string | null, id: string): boolean {
+  if (!tagDeselectable(fam, id)) return true; // no obvious baseline → can't be passive → always on
+  const ov = addmTagShown[ex]?.[id];
+  if (ov !== undefined) return ov; // owner's explicit ✓/＋ choice
+  if (id === "rom" || id === CUSTOM_MULT_ID) return false; // passive until ＋added
+  return fam ? !isGray(fam, id, famDefaultLevel(fam, id)) : false;
+}
+/** The tag palette shown ABOVE the set lines, in TWO STACKED rows (owner: "passive tags above,
+ * active one layer below — one above another, not next to the weight"): the TOP row is the
+ * not-yet-added tags (dashed ＋ pills), the BOTTOM row the active ones (solid ✓ pills). Tapping a
+ * pill's body adds/removes it (an active tag also shows next to the weight, defaulted); each pill
+ * also carries a small ⓘ button (same pill) that opens the per-tag info/edit panel. Machine /
+ * counterweight / unilateral / machine-wt live in the DEFAULTS row above this palette. */
+function passivePaletteHtml(ex: string): string {
+  if (!ex) return "";
+  const fam = familyOf(ex);
+  const tags: { id: string; label: string }[] = [];
+  if (fam) for (const dim of famDimOrder(fam)) {
+    if (dim === "rom") continue;
+    if (dim === "tapContact" && !isWallTouchExercise(ex)) continue;
+    tags.push({ id: dim, label: dimLabel(dim, fam) });
+  }
+  // ROM passive tag: offered for almost every lift (HSPU promotes cm rom dim; others get %-ROM).
+  if (offersPctRomTag(ex)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
+  tags.push({ id: CUSTOM_MULT_ID, label: "multiplier" });
+  // Each tag is ONE pill = [label button that toggles add/remove] + [ⓘ info/edit button], so a tap
+  // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill
+  // opens more info / edit"). A tag with no obvious baseline can't be deselected → ✓ LOCKED.
+  const pill = (t: { id: string; label: string }, on: boolean): string => {
+    const locked = on && !tagDeselectable(fam, t.id);
+    const title = locked
+      ? `${t.label} — always tagged (no obvious default to fall back to)`
+      : on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`;
+    return `<span class="addm-tag${on ? " is-on" : ""}${locked ? " is-locked" : ""}">` +
+      `<button type="button" class="addm-passive-pill${on ? " is-on" : ""}${locked ? " is-locked" : ""}" data-passive="${escapeHtml(t.id)}" aria-pressed="${on}" title="${escapeHtml(title)}">${on ? "✓" : "＋"} ${escapeHtml(t.label)}</button>` +
+      `<button type="button" class="addm-tag-info" data-taginfo="${escapeHtml(t.id)}" aria-label="About ${escapeHtml(t.label)}" title="What “${escapeHtml(t.label)}” does — its options, ×difficulty, rename, and which exercises use it">ⓘ</button>` +
+      `</span>`;
+  };
+  const passivePills = tags.filter((t) => !tagActive(ex, fam, t.id)).map((t) => pill(t, false)).join("");
+  const activePills = tags.filter((t) => tagActive(ex, fam, t.id)).map((t) => pill(t, true)).join("");
+  // ＋ new tag — create a brand-new variation tag for this exercise (family lifts only; an
+  // unmodelled lift has no family to attach a dimension to). Sits at the end of the "add tag" row.
+  const newTagPill = fam ? `<button type="button" class="addm-newtag" data-newtag title="Create a brand-new tag for this exercise">＋ new tag</button>` : "";
+  // Two labelled rows, passive on top / active below; an empty row is dropped so the block stays
+  // tight. Separator under the whole palette splits it from the set lines beneath.
+  const grp = (lbl: string, pills: string) => pills ? `<div class="addm-passive-grp"><span class="addm-passive-lbl muted">${escapeHtml(lbl)}</span><div class="addm-passive-pills">${pills}</div></div>` : "";
+  const body = grp("add tag", passivePills + newTagPill) + grp("active", activePills);
+  return body ? `<div class="addm-passive" aria-label="Tags">${body}</div>` : "";
+}
+/** Re-render the add-modal's tag palette in place (after creating / deleting a tag or option). */
+function refreshAddmPalette(ex: string): void {
+  const slot = addModalEl?.querySelector<HTMLElement>(".addm-passive-slot");
+  if (slot) slot.innerHTML = passivePaletteHtml(ex);
+}
+/** The "＋ new tag" creator popup: name the tag + give its first option, then create it. The new
+ * tag is a normal passive pill afterwards (tap to add, ⓘ to add more options / tune ×difficulty). */
+function openNewTagCreator(anchor: HTMLElement, ex: string): void {
+  const fam = familyOf(ex);
+  if (!fam) return;
+  const renderHtml = (): string =>
+    `<div class="taginfo-hd">New tag</div>` +
+    `<div class="taginfo-sub muted">a new variation for ${escapeHtml(displayName(ex))} — name it and give one option to start</div>` +
+    `<div class="taginfo-lvl"><input type="text" class="taginfo-newtag-name" placeholder="tag name (e.g. grip)" aria-label="Tag name" /></div>` +
+    `<div class="taginfo-lvl"><input type="text" class="taginfo-newtag-opt" placeholder="first option (e.g. wide)" aria-label="First option" /></div>` +
+    `<button type="button" class="taginfo-toggle" data-newtag-create>＋ create tag</button>`;
+  openFloatingPicker(anchor, {
+    className: "inc-pop taginfo-pop",
+    renderHtml,
+    onClick: (t, _rerender) => {
+      if (!t.closest("[data-newtag-create]")) return;
+      const pop = t.closest<HTMLElement>(".taginfo-pop");
+      const name = pop?.querySelector<HTMLInputElement>(".taginfo-newtag-name")?.value ?? "";
+      const opt = pop?.querySelector<HTMLInputElement>(".taginfo-newtag-opt")?.value ?? "";
+      if (!name.trim()) return;
+      const dim = addUserDim(fam, name, opt);
+      closeFloatingPicker();
+      if (dim) { refreshAddmPalette(ex); const pill = addModalEl?.querySelector<HTMLElement>(`.addm-tag-info[data-taginfo="${CSS.escape(dim)}"]`); if (pill) openTagInfo(pill, ex, dim); }
+    },
+  });
+}
+/** SVG curve preview only (shown above the toggle). */
+function tagCmCurvePreviewHtml(fam: string, dim: string): string {
+  const def = famDefaultLevel(fam, dim);
+  const svg = cmCurveSpectrumSvg(fam, dim, { [dim]: def });
+  return svg ? `<div class="taginfo-curve-wrap">${svg}</div>` : "";
+}
+/** Curve-based tag settings (owner): parametric cm→× formula + named units + interval units. */
+function tagCmCurveEditorHtml(fam: string, dim: string): string {
+  const formula = cmCurveFormula(fam, dim);
+  const { named } = splitCmDimLevels(cmCurveBaseLevels(fam, dim));
+  const def = famDefaultLevel(fam, dim);
+  const ov = (k: keyof CmCurveFormula) => cmCurveFormulaOverrides[fam]?.[dim]?.[k] !== undefined;
+  const formulaRows =
+    `<label class="taginfo-lvl taginfo-formula"><span class="taginfo-cm-lbl">0cm</span><span class="muted">= ×1 (reference)</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("deeperPerCm") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">deeper</span>` +
+    `<input type="number" class="taginfo-mult" step="0.0001" value="${formula.deeperPerCm}" data-cmform="deeperPerCm" aria-label="× change per +1cm (easier)" title="× change per +1cm hand depth" />` +
+    `<span class="muted">× / +1cm</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("shallowerPerCm") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">shallower</span>` +
+    `<input type="number" class="taginfo-mult" step="0.0001" min="0" value="${formula.shallowerPerCm}" data-cmform="shallowerPerCm" aria-label="× change per −1cm (harder)" title="× change per −1cm below reference" />` +
+    `<span class="muted">× / −1cm</span></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("min") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">min ×</span>` +
+    `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${formula.min}" data-cmform="min" aria-label="Minimum multiplier" /></label>` +
+    `<label class="taginfo-lvl taginfo-formula${ov("max") ? " is-ov" : ""}"><span class="taginfo-cm-lbl">max ×</span>` +
+    `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${formula.max}" data-cmform="max" aria-label="Maximum multiplier" /></label>`;
+  const namedRows = Object.keys(named).length
+    ? Object.keys(named).map((lvl) => {
+        const ncm = getNamedUnitCm(fam, dim, lvl) ?? 0;
+        const curveF = ncm !== undefined ? cmCurveFactorAt(fam, dim, ncm) : 1;
+        const isDef = def === lvl;
+        return `<div class="taginfo-lvl taginfo-named">` +
+          `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(dim, lvl, fam))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
+          `<input type="number" class="taginfo-namedcm" step="1" min="0" value="${ncm}" data-namedlvl="${escapeHtml(lvl)}" aria-label="cm height for ${escapeHtml(lvl)}" title="cm equivalent" />` +
+          `<span class="taginfo-curve-at muted" title="× from the curve at this cm">→ ×${curveF}</span>` +
+          `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "Default on new sets." : "Make default."}">${isDef ? "★ default" : "default?"}</button>` +
+          `</div>`;
+      }).join("")
+    : "";
+  const yogaRows = (dim === "rom" || dim === "lean")
+    ? (["small", "medium", "large"] as const).map((side) =>
+        `<label class="taginfo-lvl taginfo-yoga"><span class="taginfo-cm-lbl">yoga ${side}</span>` +
+        `<input type="number" class="taginfo-yogacm" step="1" min="1" max="80" value="${yogaBlockCm(side)}" data-yogaside="${side}" aria-label="yoga ${side} cm" /><span class="muted">cm</span></label>`,
+      ).join("")
+    : "";
+  const stepRow = `<label class="taginfo-lvl taginfo-step"><span class="taginfo-cm-lbl">cm step</span>` +
+    `<input type="number" class="taginfo-cmstep" step="0.5" min="0.5" max="20" value="${cmCurveStep(fam, dim)}" data-cmstepdim="${escapeHtml(dim)}" aria-label="cm per step in the picker" /><span class="muted">cm / step</span></label>`;
+  const samples = cmCurveFormulaSamples(cmCurveBaseLevels(fam, dim), formula, 4);
+  const preview = samples.filter((_, i) => i % 2 === 0).map(({ cm, factor }) =>
+    `<span class="inc-prev-item">${cm}cm<span class="muted"> → ×${factor}</span></span>`,
+  ).join("");
+  return (
+    `<div class="taginfo-h muted">formula · cm → × (0cm = ×1; slopes + clamp — not anchor rows)</div>` +
+    `<div class="taginfo-levels taginfo-formulas">${formulaRows}</div>` +
+    (preview ? `<div class="inc-prev muted">${preview}</div>` : "") +
+    `<div class="taginfo-h muted">predictable units · cm step + yoga-block heights (picker intervals)</div>` +
+    `<div class="taginfo-levels taginfo-intervals">${stepRow}${yogaRows}</div>` +
+    (namedRows ? `<div class="taginfo-h muted">named units · fixed cm (blue, wall… — unpredictable references)</div><div class="taginfo-levels taginfo-nameds">${namedRows}</div>` : "") +
+    `<div class="taginfo-h muted">push-up SQ / Smith steps → Settings → incline</div>`
+  );
+}
+/** What KIND of tag a dimension is, in one plain phrase (owner: "what kind of tag is it"). */
+function tagKindText(fam: string | null, id: string): string {
+  if (id === "band") return "assistance band — subtracts kilograms from the load";
+  if (id === "rom") return "range of motion — cm formula (slopes + clamp); tune variables + named units";
+  if (id === "lean") return "forward lean — cm formula (slopes + clamp); tune variables + yoga-block heights";
+  if (fam && isUserDim(fam, id)) return `your own tag — ${Object.keys(famLevels(fam, id)).length} option(s), tune each ×difficulty`;
+  const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
+  if (levels && dimUsesCmCurve(levels)) return "cm scale — formula slopes + named units (not one row per cm)";
+  if (levels) {
+    const keys = Object.keys(levels);
+    return `pick one of ${keys.length} options — each has its own ×difficulty`;
+  }
+  return "a per-set attribute";
+}
+/** The per-tag INFO / EDIT panel opened by a pill's ⓘ (owner: "click a tag → info about it: what
+ * it affects, its options, what kind, edit everything, and which other exercises use it"). Reuses
+ * the existing family setters (setFamLabel / setFamFactor) so editing here can't drift from the
+ * inline dim pickers; the add/remove button reuses the palette pill's own click path. */
+function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
+  const fam = familyOf(ex);
+  if (id === CUSTOM_MULT_ID) {
+    const renderHtml = (): string => {
+      const on = tagActive(ex, fam, id);
+      return (
+        `<div class="taginfo-hd">multiplier</div>` +
+        `<div class="taginfo-sub muted">Your own × on top of the tags, or replace the total — separate from the gray combined × shown by the weight.</div>` +
+        `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle>${on ? "✓ on sets — tap to remove" : "＋ add to sets"}</button>`
+      );
+    };
+    openFloatingPicker(anchor, {
+      className: "inc-pop taginfo-pop",
+      renderHtml,
+      onClick: (t) => {
+        if (t.closest("[data-tagtoggle]")) {
+          const btn = addModalEl?.querySelector<HTMLElement>(`.addm-passive-pill[data-passive="${CSS.escape(id)}"]`);
+          closeFloatingPicker();
+          btn?.click();
+        }
+      },
+    });
     return;
   }
-  const sib = btn.nextElementSibling;
-  if (sib?.classList.contains("wo-addform")) {
-    sib.remove();
+  const label = dimLabel(id, fam);
+  const userDim = !!fam && isUserDim(fam, id);
+  const levels = fam && famHasDim(fam, id) ? famLevels(fam, id) : null;
+  const useCurve = !!levels && id !== "band" && (id === "rom" || id === "lean" || dimUsesCmCurve(levels));
+  // Which other exercises carry this tag — the logged lifts whose family has this dimension.
+  const usingFams = familiesUsingDim(FAMILIES, id);
+  const others = Array.from(new Set(computedRecords().map((r) => r.exerciseName)))
+    .filter((n) => n !== ex && usingFams.includes(familyOf(n) ?? ""))
+    .map((n) => displayName(n));
+  const renderHtml = (): string => {
+    const on = tagActive(ex, fam, id);
+    const locked = on && !tagDeselectable(fam, id);
+    const factorRange = levels ? (() => {
+      if (useCurve) {
+        const formula = cmCurveFormula(fam!, id);
+        const vs = cmCurveFormulaSamples(cmCurveBaseLevels(fam!, id), formula).map((p) => p.factor);
+        return vs.length ? `${Math.min(...vs)}× – ${Math.max(...vs)}×` : "";
+      }
+      const vs = Object.values(levels);
+      return `${Math.min(...vs)}× – ${Math.max(...vs)}×`;
+    })() : "";
+    const levelRows = !levels
+      ? `<div class="taginfo-sub muted">This tag has no fixed options to tune here.</div>`
+      : useCurve
+        ? tagCmCurveEditorHtml(fam!, id)
+        : `<div class="taginfo-h muted">options · rename or set ×difficulty</div>` +
+          `<div class="taginfo-levels">` + Object.keys(levels).map((lvl) => {
+            const ov = famFactorOverrides[fam!]?.[id]?.[lvl] !== undefined;
+            const isDef = famDefaultLevel(fam!, id) === lvl;
+            return `<div class="taginfo-lvl${ov ? " is-ov" : ""}">` +
+              `<input type="text" class="taginfo-name" value="${escapeHtml(afLevelText(id, lvl, fam!))}" data-tlvl="${escapeHtml(lvl)}" aria-label="Rename ${escapeHtml(lvl)}" />` +
+              (id === "band" ? `<span class="taginfo-mult muted">kg</span>` : `<input type="number" class="taginfo-mult" step="0.01" min="0.05" value="${levels[lvl]}" data-tlvl="${escapeHtml(lvl)}" aria-label="${escapeHtml(lvl)} multiplier" />`) +
+              `<button type="button" class="taginfo-def${isDef ? " is-on" : ""}" data-tdef="${escapeHtml(lvl)}" title="${isDef ? "This is the default level on new sets." : "Make this the default level on new sets."}">${isDef ? "★ default" : "default?"}</button>` +
+              `</div>`;
+          }).join("") + `</div>`;
+    return (
+      `<div class="taginfo-hd">${escapeHtml(label)}</div>` +
+      `<div class="taginfo-sub muted">${escapeHtml(tagKindText(fam, id))}${factorRange ? ` · ${escapeHtml(factorRange)}` : ""}</div>` +
+      (useCurve ? tagCmCurvePreviewHtml(fam!, id) : "") +
+      `<button type="button" class="taginfo-toggle${on ? " is-on" : ""}" data-tagtoggle${locked ? " disabled" : ""}>${on ? (locked ? "always on" : "✓ on sets — tap to remove") : "＋ add to sets"}</button>` +
+      levelRows +
+      (levels && !useCurve && id !== "band"
+        ? `<div class="taginfo-addopt"><input type="text" class="taginfo-newopt" placeholder="add an option…" aria-label="New option name" /><button type="button" class="taginfo-addbtn" data-addopt title="Add this option">＋ option</button></div>`
+        : "") +
+      `<div class="taginfo-h muted">used by</div>` +
+      `<div class="taginfo-used">${others.length ? others.map((n) => `<span class="taginfo-ex">${escapeHtml(n)}</span>`).join("") : `<span class="muted">only ${escapeHtml(displayName(ex))}</span>`}</div>` +
+      (userDim ? `<button type="button" class="taginfo-del" data-deltag title="Delete this tag everywhere">🗑 delete tag “${escapeHtml(label)}”</button>` : "")
+    );
+  };
+  openFloatingPicker(anchor, {
+    className: "inc-pop taginfo-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      if (t.closest("[data-tagtoggle]")) {
+        // Reuse the palette pill's own toggle path (inserts/removes the inline pill + re-renders
+        // the palette), then close — the anchor pill is rebuilt by that handler.
+        const btn = addModalEl?.querySelector<HTMLElement>(`.addm-passive-pill[data-passive="${CSS.escape(id)}"]`);
+        closeFloatingPicker();
+        btn?.click();
+        return;
+      }
+      const def = t.closest<HTMLElement>(".taginfo-def");
+      if (def?.dataset.tdef && fam) { setFamDefaultLevel(fam, id, def.dataset.tdef); rerender(); return; }
+      // ＋ option — add a new level to this tag, then re-render so it appears (and the palette below).
+      if (t.closest("[data-addopt]") && fam) {
+        const inp = t.closest<HTMLElement>(".taginfo-addopt")?.querySelector<HTMLInputElement>(".taginfo-newopt");
+        if (inp && inp.value.trim() && addUserLevel(fam, id, inp.value)) { refreshAddmPalette(ex); rerender(); }
+        return;
+      }
+      // 🗑 delete a user-created tag entirely → close + refresh the palette (the pill disappears).
+      if (t.closest("[data-deltag]") && fam && isUserDim(fam, id)) {
+        removeUserDim(fam, id);
+        closeFloatingPicker();
+        refreshAddmPalette(ex);
+        return;
+      }
+    },
+    onInput: (t, _pop, rerender) => {
+      if (!fam) return;
+      const nm = t.closest<HTMLInputElement>(".taginfo-name");
+      if (nm?.dataset.tlvl) { setFamLabel(fam, id, nm.dataset.tlvl, nm.value); return; }
+      const ff = t.closest<HTMLInputElement>("[data-cmform]");
+      if (ff?.dataset.cmform) {
+        const v = parseFloat(ff.value);
+        if (Number.isFinite(v)) setCmCurveFormulaField(fam, id, ff.dataset.cmform as keyof CmCurveFormula, v);
+        rerender();
+        return;
+      }
+      const ml = t.closest<HTMLInputElement>(".taginfo-mult");
+      if (ml?.dataset.tlvl) { const v = parseFloat(ml.value); if (Number.isFinite(v)) setFamFactor(fam, id, ml.dataset.tlvl, Math.round(v * 1000) / 1000); return; }
+      const ncm = t.closest<HTMLInputElement>(".taginfo-namedcm");
+      if (ncm?.dataset.namedlvl) { const v = parseFloat(ncm.value); if (Number.isFinite(v)) { setNamedUnitCm(fam, id, ncm.dataset.namedlvl, v); rerender(); } return; }
+      const ycm = t.closest<HTMLInputElement>(".taginfo-yogacm");
+      if (ycm?.dataset.yogaside) { const v = parseFloat(ycm.value); if (Number.isFinite(v)) setYogaBlockCm(ycm.dataset.yogaside as YogaBlockSide, v); }
+      const st = t.closest<HTMLInputElement>(".taginfo-cmstep");
+      if (st?.dataset.cmstepdim) { const v = parseFloat(st.value); if (Number.isFinite(v)) setCmCurveStep(fam, st.dataset.cmstepdim, v); }
+    },
+  });
+}
+/** The compact label for an incline pill: "floor" at 0cm, else the level tag (SQ5, 20cm…). */
+function inclinePillLabel(dim: LevelDim, val: number): string {
+  return levelCm(dim, val) === 0 ? "floor" : levelLabel(dim, val);
+}
+// Floating incline/height picker for the add-set pill (NOT a native control). Units are
+// cm / SQ hole / Smith notch — switching one CONVERTS the value to keep the same cm height,
+// and the readout shows that height + its difficulty ×. Outside-tap / Esc closes it.
+function openInclinePicker(pill: HTMLElement): void {
+  let dim = ((pill.dataset.incdim as LevelDim) || "cm");
+  let val = Number(pill.dataset.incval) || 0;
+  const units: LevelDim[] = ["cm", "sq", "smith"];
+  const commit = () => {
+    pill.dataset.incdim = dim; pill.dataset.incval = String(val);
+    pill.textContent = `↕ ${inclinePillLabel(dim, val)}`;
+    pill.classList.toggle("is-set", levelCm(dim, val) !== 0);
+  };
+  const renderHtml = () => {
+    const step = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1;
+    return `<div class="inc-units">` +
+      units.map((u) => `<button type="button" class="inc-unit${u === dim ? " is-on" : ""}" data-incunit="${u}">${escapeHtml(inclineDimLabel(u))}</button>`).join("") +
+      `</div>` +
+      `<div class="inc-valrow"><button type="button" class="inc-step" data-incstep="-1" aria-label="Lower">−</button>` +
+      `<input type="number" class="inc-val" step="${step}" value="${val}" inputmode="decimal" aria-label="Height value" />` +
+      `<button type="button" class="inc-step" data-incstep="1" aria-label="Higher">+</button></div>` +
+      `<div class="inc-eq muted">= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}</div>` +
+      `<button type="button" class="inc-floor" data-incfloor>floor (0cm)</button>`;
+  };
+  openFloatingPicker(pill, {
+    className: "inc-pop",
+    renderHtml,
+    onClick: (t, rerender) => {
+      const u = t.closest<HTMLElement>(".inc-unit");
+      if (u?.dataset.incunit) { const cm = levelCm(dim, val); dim = u.dataset.incunit as LevelDim; val = cmToLevel(dim, cm); rerender(); commit(); return; }
+      const s = t.closest<HTMLElement>(".inc-step");
+      if (s?.dataset.incstep) { const d = dim === "cm" ? 1 : dim === "smith" ? 0.5 : 1; val = Math.round((val + Number(s.dataset.incstep) * d) * 2) / 2; rerender(); commit(); return; }
+      if (t.closest("[data-incfloor]")) { dim = "cm"; val = 0; rerender(); commit(); return; }
+    },
+    onInput: (t, pop) => {
+      const inp = t.closest<HTMLInputElement>(".inc-val");
+      if (!inp) return;
+      const v = parseFloat(inp.value);
+      if (Number.isFinite(v)) { val = v; pop.querySelector(".inc-eq")!.textContent = `= ${levelCm(dim, val)}cm · ×${inclineScaleFor(dim, val)}`; commit(); }
+    },
+  });
+}
+/** Phase 1 of the equipment-model build (docs/machine-model-plan.md): the obvious per-exercise
+ * defaults — machine picker, counterweight assist, unilateral, machine base weight, ÷ multiplier.
+ * Shown INLINE above the passive tag palette (owner: separate defaults from optional tags). */
+function addmSettingsPanelInner(ex: string): string {
+  if (!ex) return `<span class="muted addm-cog-hint">Name the exercise first.</span>`;
+  const assisted = isAssistedMachine(ex);
+  const uni = isUni(ex);
+  // The machine weight / ÷ shown are the CURRENT equipment's (Default = the lift's own settings;
+  // a named machine = the registry's). assisted / unilateral stay exercise-level.
+  const eq = equipSettingsCurrent(ex);
+  const curId = currentEquipmentIdFor(ex);
+  const named = curId ? equipmentReg[curId] : null;
+  const equipOpts =
+    `<option value=""${!curId ? " selected" : ""}>Default</option>` +
+    Object.values(equipmentReg).map((e) => `<option value="${escapeHtml(e.id)}"${e.id === curId ? " selected" : ""}>${escapeHtml(e.name)}</option>`).join("") +
+    `<option value="__new__">＋ New machine</option>`;
+  return (
+    `<label class="addm-cog-num" title="Which machine / equipment this lift uses. New sets are stamped with it; switching never changes past sets. Settings below belong to the chosen machine.">machine <select class="addm-cog-equip" aria-label="Equipment / machine">${equipOpts}</select></label>` +
+    (named ? `<label class="addm-cog-num">name <input class="addm-cog-name" type="text" value="${escapeHtml(named.name)}" aria-label="Machine name" /></label>` : "") +
+    `<button type="button" class="addm-cog-pill${assisted ? " is-on" : ""}" data-cog="assisted" aria-pressed="${assisted}" title="Counterweight machine (pull-ups / dips) — a NEGATIVE logged weight is the machine's counterweight (reads ~${fmt(eq.divisor)}× the real help). Bands are a separate tag.">${assisted ? "counterweight ½" : "counterweight?"}</button>` +
+    `<button type="button" class="addm-cog-pill${uni ? " is-on" : ""}" data-cog="uni" aria-pressed="${uni}" title="Unilateral — each set counts as a right + a left set (single-arm / single-leg).">${uni ? "unilateral" : "unilateral?"}</button>` +
+    `<label class="addm-cog-num" title="Machine base weight (kg) — a hidden resistance the machine adds even at the lowest pin; shown as the 20+30 formula.">machine wt <input class="addm-cog-mw" type="number" inputmode="decimal" step="1" min="0" max="200" value="${eq.kgBase || ""}" placeholder="0" aria-label="Machine base weight (kg)" /> kg</label>` +
+    (assisted
+      ? `<label class="addm-cog-num" title="Machine multiplier — the dial over-read factor; the real effort is the dialed weight over this.">÷ <input class="addm-cog-mm" type="number" inputmode="decimal" step="0.1" min="0.5" max="5" value="${fmt(eq.divisor)}" placeholder="2" aria-label="Machine multiplier (dial over-read)" /></label>`
+      : "")
+  );
+}
+/** The DEFAULTS row above passive tags — machine / counterweight / unilateral / machine wt.
+ * Collapsed by default (owner: rarely changed); tap "defaults" to expand. */
+function addmDefaultTagsHtml(ex: string): string {
+  if (!ex) return "";
+  return (
+    `<details class="addm-default-tags" data-defex="${escapeHtml(ex)}" aria-label="Exercise defaults">` +
+    `<summary class="addm-default-sum"><span class="addm-default-lbl muted">defaults</span></summary>` +
+    `<div class="addm-default-pills">${addmSettingsPanelInner(ex)}</div>` +
+    `</details>`
+  );
+}
+/** Re-derive the open add-modal's default-tags row from the live exercise. */
+function refreshAddmSettings(): void {
+  const form = addModalEl?.querySelector<HTMLElement>(".wo-addform");
+  const slot = addModalEl?.querySelector<HTMLElement>(".addm-default-tags-slot");
+  if (!form || !slot) return;
+  const ex = addmCogEx(form);
+  const wasOpen = slot.querySelector<HTMLDetailsElement>("details.addm-default-tags")?.open ?? false;
+  slot.innerHTML = addmDefaultTagsHtml(ex);
+  if (wasOpen) slot.querySelector<HTMLDetailsElement>("details.addm-default-tags")?.setAttribute("open", "");
+}
+/** Re-derive the open add-modal's cog exercise (the typed new-lift name, else the fixed one). */
+function addmCogEx(form: HTMLElement): string {
+  const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
+  return (exInput ? exInput.value.trim() : (form.dataset.addex ?? "")) || "";
+}
+function closeAddModal(): void {
+  addModalEl?.remove();
+  addModalEl = null;
+  addmStrength = null; // drop the cached strength map (recomputed on next open)
+  document.removeEventListener("keydown", addModalEsc, true);
+  if (pendingAdd) { pendingAdd = null; if (document.getElementById("workoutsTable")) { const y = window.scrollY; renderWorkoutsPage(); restoreScrollY(y); } } // drop the ghost
+}
+/** Open the add popup for a lift (`exerciseName`) or a brand-new exercise (null). */
+function openAddModal(exerciseName: string | null, date: string, prefillOverride?: { weight: number | null; reps: number }, edit?: { sid: string; note: string; rawNote: string }): void {
+  closeAddModal();
+  const isEdit = !!edit;
+  const isNew = !exerciseName;
+  const ex = exerciseName ?? "";
+  const today = todayIso();
+  const { prefill: suggPrefill, chips } = ex ? addSetSuggestions(els.athlete.value, ex) : { prefill: null, chips: [] };
+  // An explicit prefill (e.g. the cog opening this sheet from a tapped set) wins over the suggestion.
+  const prefill = prefillOverride ?? suggPrefill;
+  // Variant = structured dim pickers for modelled lifts only (never conflated with notes).
+  // They live PER set-line now (afLine → addmVariantField), so each set has its own tags;
+  // the new-lift popup rebuilds every line's pickers when you PICK an exercise.
+  // Note — always a separate free-text field; past notes fill the datalist.
+  const notes = ex ? variationNotesFor(ex) : [];
+  const noteListId = `addmNotes-${++afNoteSeq}`;
+  const noteField =
+    `<div class="addm-field"><span class="addm-flbl">Note</span>` +
+    `<input class="wo-af-note" list="${noteListId}" placeholder="optional note" autocomplete="off" /></div>` +
+    `<datalist id="${noteListId}">${notes.map((n) => `<option value="${escapeHtml(n)}"></option>`).join("")}</datalist>`;
+  const suggSection = chips.length
+    ? `<div class="addm-sugg"><span class="addm-flbl">Suggested</span><div class="addm-sugg-row">` +
+      chips.map((c) =>
+        `<div class="addm-sugg-item">` +
+        `<button type="button" class="addm-chip" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}" aria-label="${escapeHtml(c.label)}" title="${escapeHtml(c.label)}">${c.rec ? variationChipsHtml(c.rec) : ""}${wr(c.weight, c.reps)}</button>` +
+        `<button type="button" class="addm-chip-go" data-fillw="${c.weight ?? ""}" data-fillr="${c.reps}" data-fills="${c.sets}" aria-label="Add this set directly" title="Add immediately">＋</button>` +
+        `</div>`
+      ).join("") +
+      `</div></div>`
+    : "";
+  const exHead = isNew
+    ? `<input class="wo-af-ex" list="addExerciseList" placeholder="search exercise…" autocomplete="off" aria-label="Exercise" />`
+    : `<div class="addm-exname">${escapeHtml(displayName(ex))}</div>`;
+  // The exercise-name field lives INSIDE the form span so onInlineAddGo's single
+  // read path (form.querySelector('.wo-af-ex')) finds it — when it sat outside the
+  // form, the lookup returned null, the name fell back to the empty data-addex, and
+  // Add silently no-op'd ("nothing happens" on a new exercise).
+  // New exercise: an EXPERIMENTAL toggle (owner) — mark the lift a scratchpad as you create it,
+  // so its sets never feed any metric while you're still exploring. A pressable pill (rule
+  // #toggle); onInlineAddGo reads its state and flags the new lift.
+  const exField = isNew
+    ? `<div class="addm-field"><span class="addm-flbl">Exercise</span>${exHead}` +
+      `<button type="button" class="wo-af-exp" aria-pressed="false" title="Experimental — a scratchpad while exploring; its sets are excluded from all 1RM, volume, graphs and leaderboards">experimental?</button>` +
+      `</div>`
+    : "";
+  // ROM is now a pill INSIDE the variant tag block (addmVariantField), not its own field (owner).
+  const form =
+    `<span class="wo-addform wo-addform--modal${isNew ? " wo-addform--new" : ""}" data-addex="${escapeHtml(ex)}" data-daydate="${escapeHtml(date)}" data-todaydate="${escapeHtml(today)}">` +
+    exField +
+    afWhenToggle(date, today) +
+    `<div class="addm-default-tags-slot">${addmDefaultTagsHtml(ex)}</div>` +
+    `<div class="addm-passive-slot">${passivePaletteHtml(ex)}</div>` +
+    `<div class="addm-lines">${afLine(ex)}</div>` +
+    `<button type="button" class="wo-af-addline" title="Add another set — another weight × reps line">+ set</button>` +
+    suggSection +
+    noteField +
+    `<div class="addm-actions">${AF_BUTTONS}</div>` +
+    `</span>`;
+  const wrap = document.createElement("div");
+  wrap.className = "addm-overlay";
+  wrap.innerHTML =
+    `<div class="addm-card" role="dialog" aria-modal="true" aria-label="${isEdit ? "Edit a set" : isNew ? "Add an exercise" : "Add a set"}">` +
+    `<div class="addm-head"><span class="addm-title">${isEdit ? `Edit set — ${escapeHtml(displayName(ex))}` : isNew ? "Add exercise" : `Add set — ${escapeHtml(displayName(ex))}`}</span>` +
+    `<button type="button" class="addm-x wo-af-cancel" aria-label="Close">×</button></div>` +
+    form +
+    `</div>`;
+  document.body.appendChild(wrap);
+  addModalEl = wrap;
+  if (prefill) {
+    const setv = (sel: string, v: string) => { const el = wrap.querySelector<HTMLInputElement>(sel); if (el && v) el.value = v; };
+    setv(".wo-af-weight", prefill.weight != null ? String(prefill.weight) : "");
+    setv(".wo-af-reps", String(prefill.reps));
+  }
+  // EDIT MODE (owner #persistent: "editing a set should open the SAME full add menu — weight,
+  // reps, note, tags, cog, proper CSS — not the old pills popover"). Prefill the ONE set's note +
+  // every variation tag/incline/ROM from its current values, mark the form so onInlineAddGo
+  // UPDATES this set instead of creating a new one, relabel Add→Save, and drop the add-only
+  // bits (+ set / Suggested). PB-46.
+  if (isEdit && edit) {
+    const formEl = wrap.querySelector<HTMLElement>(".wo-addform");
+    if (formEl) {
+      formEl.dataset.editsid = edit.sid;
+      formEl.dataset.editnote = edit.note;
+      formEl.dataset.editorignote = edit.rawNote;
+      // PB-54: a unilateral set must open with BOTH sides populated (the edit modal is the same
+      // editor as add — rule 65). Fill right + left from the set's stored divergence, then reveal
+      // the left inputs via syncAddmReal (the right/primary was already set from `prefill`).
+      if (isUni(ex)) {
+        const sv = sideValues(prefill?.reps ?? null, prefill?.weight ?? null, setSidesStore[edit.sid]);
+        const setIn = (sel: string, v: number | null) => { const el = formEl.querySelector<HTMLInputElement>(sel); if (el) el.value = v != null ? String(v) : ""; };
+        setIn(".wo-af-weight", sv.right.weight); setIn(".wo-af-reps", sv.right.reps);
+        setIn(".wo-af-weight-l", sv.left.weight); setIn(".wo-af-reps-l", sv.left.reps);
+        syncAddmReal(formEl);
+      }
+    }
+    // Free-text note = the set's RAW note (not the synthetic __set: key or auto tags).
+    const noteEl = wrap.querySelector<HTMLInputElement>(".wo-af-note");
+    if (noteEl) noteEl.value = edit.rawNote;
+    // Pre-select every variation pill to the set's EFFECTIVE vec (what its note implies + per-set
+    // picks). Set the <select> value BEFORE the body MutationObserver enhances it into an .xdd
+    // twin — the twin then renders the chosen level, and the rAF syncAddmVtags colours it.
+    const fam = familyOf(ex);
+    if (fam) {
+      const effVec = { ...rNote(fam, edit.note).vec, ...noteVecOverride(ex, edit.note) };
+      // PB-48: the add-modal renders only ACTIVE tags, so a dim this set CARRIES at a non-default
+      // level (but isn't a promoted/active tag) wouldn't be rendered. Insert its pill into each
+      // line's tag wrap so editing SHOWS (and can change) it; the loop below then pre-selects it.
+      for (const dim of famDimOrder(fam)) {
+        if (dim === "lean") continue; // lean = its own pill
+        const dflt = famDefaultLevel(fam, dim);
+        if (String(effVec[dim] ?? dflt) === dflt) continue; // at default → not a carried tag
+        for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          if (slot.querySelector(`.addm-vtag[data-dim="${CSS.escape(dim)}"]`)) continue;
+          const html = dimVtagHtml(ex, fam, dim, { note: edit.note }, effVec);
+          const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+          if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+          else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+        }
+      }
+      for (const sel of wrap.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+        const v = effVec[sel.dataset.dim!];
+        if (v != null && Array.from(sel.options).some((o) => o.value === String(v))) sel.value = String(v);
+      }
+    }
+    // Incline pill ← the set's per-set level (cm/SQ/Smith).
+    const lvl = setOverrides[edit.sid];
+    const incPill = wrap.querySelector<HTMLElement>(".wo-af-incpill");
+    if (incPill && lvl?.levelDim && lvl.levelValue !== undefined) {
+      incPill.dataset.incdim = lvl.levelDim;
+      incPill.dataset.incval = String(lvl.levelValue);
+      incPill.textContent = `↕ ${inclinePillLabel(lvl.levelDim, lvl.levelValue)}`;
+      incPill.classList.toggle("is-set", levelCm(lvl.levelDim, lvl.levelValue) !== 0);
+    }
+    // ROM pill ← the set's stored ROM override (unit + value + reference).
+    const rom = setOverrides[edit.sid]?.rom;
+    const romPill = wrap.querySelector<HTMLElement>(".wo-af-rompill");
+    if (romPill && rom) {
+      romPill.dataset.romunit = rom.unit;
+      romPill.dataset.romval = String(rom.val);
+      romPill.dataset.romref = rom.ref ?? "";
+      romPill.textContent = romPillLabel(rom.unit, rom.val);
+    }
+    // Custom ×multiplier — promote the tag when this set carries a stored override.
+    const ovMult = setOverrides[edit.sid];
+    if (ovMult?.scaleAbs != null || ovMult?.scale != null) {
+      setTagShown(ex, CUSTOM_MULT_ID, true);
+      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+      if (palette) palette.innerHTML = passivePaletteHtml(ex);
+      for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+        if (!slot.querySelector(`.addm-vtag[data-dim="${CUSTOM_MULT_ID}"]`))
+          slot.insertAdjacentHTML("beforeend", customMultVtagHtml());
+      }
+    }
+    const multPill = wrap.querySelector<HTMLElement>(".wo-af-multpill");
+    if (multPill) {
+      if (ovMult?.scaleAbs != null) { multPill.dataset.multval = String(ovMult.scaleAbs); multPill.dataset.multmode = "abs"; }
+      else if (ovMult?.scale != null) { multPill.dataset.multval = String(ovMult.scale); multPill.dataset.multmode = "mult"; }
+    }
+    // RIR pill ← the set's grade, if any.
+    const grade = rpeGrades[edit.sid];
+    const rirPill = wrap.querySelector<HTMLElement>(".addm-rir");
+    if (rirPill && grade) rirPill.dataset.picked = grade;
+    // Add-only bits make no sense when editing ONE set.
+    wrap.querySelector<HTMLElement>(".wo-af-addline")?.remove();
+    wrap.querySelector<HTMLElement>(".addm-sugg")?.remove();
+    // Add → Save.
+    const go = wrap.querySelector<HTMLElement>(".wo-af-go");
+    if (go) go.textContent = "Save";
+    // The set-management actions the OLD edit popover carried — kept on this modern sheet so
+    // routing every edit through ONE sheet (owner #super-persistent: "editing a set should look
+    // exactly like the add menu") doesn't lose flag / reset / delete. Sits above Save.
+    const nc = notComparableSets.has(edit.sid);
+    // "↺ reset" reverts a set to its ORIGINAL logged values — only meaningful for a
+    // StrengthLevel (CSV) set, which has an authoritative source to revert to. A hand-added
+    // set IS the source (manual entries get setNumber ≥ 100000 in mergeManualSets), so there's
+    // nothing to reset to — hide the button for those (owner).
+    const editSrc = liveRecords().find((r) => setId(r) === edit.sid);
+    const fromStrengthLevel = !!editSrc && (editSrc.setNumber ?? 0) < 100000;
+    const resetBtn = fromStrengthLevel
+      ? `<button type="button" class="addm-edit-act addm-edit-reset" data-editreset title="Revert this set to its original StrengthLevel values — discards your on-device edits (tags, multiplier, RIR, weight/reps changes) to this one set.">↺ reset</button>`
+      : "";
+    wrap.querySelector<HTMLElement>(".addm-actions")?.insertAdjacentHTML("beforebegin",
+      `<div class="addm-edit-foot">` +
+      `<button type="button" class="addm-edit-act addm-edit-exp${isExperimental(ex) ? " is-on" : ""}" data-editexp aria-pressed="${isExperimental(ex)}" title="Experimental — a scratchpad lift; its sets are excluded from all 1RM / volume / graphs / leaderboards AND auto-marked not comparable. Tap to toggle for ${escapeHtml(displayName(ex))}.">🧪 ${isExperimental(ex) ? "experimental" : "experimental?"}</button>` +
+      `<button type="button" class="addm-edit-act addm-edit-nc${nc ? " is-on" : ""}" data-editnc aria-pressed="${nc}" title="Not comparable — keep reps/sets but drop this set's 1RM &amp; volume">⊘ ${nc ? "not comparable" : "not comparable?"}</button>` +
+      resetBtn +
+      `<button type="button" class="addm-edit-act addm-edit-del" data-editdel title="Delete this set">🗑 delete</button>` +
+      `</div>`);
+  }
+  wrap.addEventListener("click", onAddModalClick);
+  // Live ghost preview: every input/change/click in the popup re-derives the pending set(s)
+  // and re-renders the history ghost. Seed it now, and scroll the lift's row up into view so
+  // the ghost is visible above the bottom-docked popup (owner).
+  // Exact-RIR override typed into an add-line's picker footer: update its data-picked grade + the
+  // button label live, WITHOUT rebuilding the menu (so the input keeps focus while typing).
+  wrap.addEventListener("input", (e) => {
+    const ri = (e.target as HTMLElement).closest<HTMLInputElement>(".rpe-exact");
+    if (!ri) return;
+    const dd = ri.closest<HTMLElement>(".addm-rir");
+    if (!dd) return;
+    const g = parseRirGrade(dd.dataset.picked) ?? { bands: [], exact: null };
+    const n = parseFloat(ri.value);
+    g.exact = Number.isFinite(n) ? n : null;
+    if (g.bands.length || g.exact !== null) dd.dataset.picked = formatRirGrade(g); else delete dd.dataset.picked;
+    const btn = dd.querySelector<HTMLElement>(".set-rpe-btn");
+    if (btn) btn.innerHTML = `${escapeHtml(rirLabel(dd.dataset.picked || dd.dataset.assumed || ""))}<span class="xdd-caret">▾</span>`;
+  });
+  wrap.addEventListener("input", syncPendingFromModal);
+  wrap.addEventListener("change", (ev) => {
+    syncPendingFromModal();
+    const sel = (ev.target as HTMLElement).closest<HTMLSelectElement>("select.wo-af-dim");
+    if (sel?.dataset.dim === "support") {
+      const formEl = wrap.querySelector<HTMLElement>(".wo-addform");
+      if (formEl) {
+        const ex = formEl.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+        const fam = ex ? familyOf(ex) : null;
+        if (fam && sel.value !== "back_to_wall" && tagActive(ex, fam, "shoulderDist")) setTagShown(ex, "shoulderDist", false);
+        if (fam && sel.value !== "ladder") {
+          if (tagActive(ex, fam, "ladderGrip")) setTagShown(ex, "ladderGrip", false);
+          if (tagActive(ex, fam, "ladderH")) setTagShown(ex, "ladderH", false);
+        }
+        refreshContextualDimTags(formEl);
+      }
+    }
+  });
+  // ⚙ cog number fields (machine weight / ÷) persist on change; the live preview then follows.
+  // No panel rebuild here (the input has already blurred) so the typed value stays put.
+  wrap.addEventListener("change", (ev) => {
+    const el = ev.target as HTMLElement;
+    const formEl = wrap.querySelector<HTMLElement>(".wo-addform")!;
+    const cex = wrap.querySelector<HTMLElement>(".addm-default-tags")?.dataset.defex ?? addmCogEx(formEl);
+    if (!cex) return;
+    const curId = currentEquipmentIdFor(cex); // null = Default (legacy per-exercise settings)
+    if (el.classList.contains("addm-cog-equip")) {
+      const v = (el as HTMLSelectElement).value;
+      if (v === "__new__") createEquipmentFor(cex);
+      else setCurrentEquipment(cex, v || null);
+      refreshAddmSettings(); syncPendingFromModal();
+    } else if (el.classList.contains("addm-cog-name")) {
+      if (curId && equipmentReg[curId]) { equipmentReg[curId]!.name = (el as HTMLInputElement).value.trim() || equipmentReg[curId]!.name; saveEquipment(); refreshAddmSettings(); }
+    } else if (el.classList.contains("addm-cog-mw")) {
+      const txt = (el as HTMLInputElement).value.trim();
+      const val = txt === "" ? null : parseFloat(txt);
+      const oldBase = curId && equipmentReg[curId] ? equipmentReg[curId]!.kgBase : machineWeightFor(cex);
+      const newB = val ?? 0;
+      if (newB === oldBase) return;
+      if (curId && equipmentReg[curId]) {
+        void applyMachineKgBaseWithSetPrompt({
+          ex: cex, equipId: curId, oldBase, newBase: val, inputEl: el as HTMLInputElement,
+          equipName: equipmentReg[curId]!.name,
+        });
+      } else {
+        void applyMachineKgBaseWithSetPrompt({
+          ex: cex, equipId: null, oldBase, newBase: val, inputEl: el as HTMLInputElement,
+        });
+      }
+      syncPendingFromModal();
+    } else if (el.classList.contains("addm-cog-mm")) {
+      const txt = (el as HTMLInputElement).value.trim();
+      const v = parseFloat(txt);
+      const val = txt === "" || !Number.isFinite(v) ? undefined : v;
+      if (curId && equipmentReg[curId]) setEquipFieldWithUndo(curId, "divisor", val ?? 2, cex);
+      else setMachineMultWithUndo(cex, val);
+      syncPendingFromModal(); // refresh the live dial/divisor preview immediately
+    }
+  });
+  // Collapse the tall fields while a weight/reps input is focused, so the sheet shrinks and
+  // the history ghost stays visible above the keyboard (owner).
+  const setTyping = () => {
+    const a = document.activeElement as HTMLElement | null;
+    wrap.querySelector(".addm-card")?.classList.toggle("is-typing", !!a?.matches?.(".wo-af-weight, .wo-af-reps"));
+  };
+  wrap.addEventListener("focusin", setTyping);
+  wrap.addEventListener("focusout", () => setTimeout(setTyping, 0));
+  syncPendingFromModal();
+  // The dim <select>s are enhanced into .xdd twins async (MutationObserver); re-run the
+  // tag visibility once the twins exist so default dims hide (else they'd flash visible).
+  requestAnimationFrame(() => { const f = wrap.querySelector<HTMLElement>(".wo-addform"); if (addModalEl && f) syncAddmVtags(f); });
+  if (!isNew && ex) requestAnimationFrame(() => {
+    const row = document.querySelector<HTMLElement>(`.wo-addset[data-addex="${CSS.escape(ex)}"][data-adddate="${CSS.escape(date)}"]`)?.closest<HTMLElement>(".wo-ex-line")
+      ?? document.querySelector<HTMLElement>(`.wo-exlink[data-exname="${CSS.escape(ex)}"]`)?.closest<HTMLElement>(".wo-ex-line");
+    row?.scrollIntoView({ block: "start", behavior: "smooth" });
+  });
+  document.addEventListener("keydown", addModalEsc, true);
+  // New-lift popup: rebuild the Variant pickers the moment a modelled exercise is
+  // PICKED (or typed) — so you set support/back-rest/obstacle etc. while first adding
+  // it, not only after. Keyed by family so it only rebuilds when the variation model
+  // actually changes (no thrash per keystroke); the injected <select>s are auto-xdd'd
+  // by the body MutationObserver. Owner: "change the popup based on the selected exercise".
+  if (isNew) {
+    const exInput = wrap.querySelector<HTMLInputElement>(".wo-af-ex");
+    if (exInput) {
+      let lastKey = ex ? (familyOf(ex) ?? "") : "";
+      const refreshVariant = () => {
+        const name = exInput.value.trim();
+        const key = name ? (familyOf(name) ?? "") : "";
+        addmStrength = null; // a different lift → recompute the strength anchor for the assumed RIR
+        if (key === lastKey) return; // same model → nothing to rebuild
+        lastKey = key;
+        // Rebuild EVERY set-line's variation pickers (each line carries its own now).
+        for (const lv of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) lv.innerHTML = name ? addmVariantField(name) : "";
+        // The passive-tag palette (＋ ROM …) is per-exercise → rebuild it for the typed lift.
+        const ps = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+        if (ps) ps.innerHTML = passivePaletteHtml(name);
+        const ds = wrap.querySelector<HTMLElement>(".addm-default-tags-slot");
+        if (ds) ds.innerHTML = addmDefaultTagsHtml(name);
+        // Rebuilt selects start showing every dim — re-run the only-set hide once they're
+        // xdd-enhanced (rAF), so defaults collapse in the Add-exercise modal too.
+        const f = wrap.querySelector<HTMLElement>(".wo-addform");
+        if (f) { syncAddmVtags(f); requestAnimationFrame(() => { if (addModalEl) syncAddmVtags(f); }); }
+      };
+      exInput.addEventListener("change", refreshVariant);
+      exInput.addEventListener("input", refreshVariant);
+      exInput.addEventListener("change", refreshAddmSettings);
+      exInput.addEventListener("input", refreshAddmSettings);
+    }
+  }
+  // Owner: do NOT auto-focus a field on open — that pops the on-screen keyboard the moment
+  // the menu appears. The keyboard should only show after the user taps a text/number field.
+}
+function onAddModalClick(e: MouseEvent): void {
+  const wrap = addModalEl;
+  if (!wrap) return;
+  const t = e.target as HTMLElement;
+  if (t === wrap) { closeAddModal(); return; } // backdrop tap
+  const form = wrap.querySelector<HTMLElement>(".wo-addform");
+  if (!form) return;
+  // Edit-mode footer (not-comparable / reset / delete) for the set being edited.
+  const editSid = form.dataset.editsid;
+  if (editSid) {
+    if (t.closest("[data-editdel]")) {
+      const src = liveRecords().find((r) => setId(r) === editSid);
+      closeAddModal();
+      deleteSetsWithUndo([editSid], src ? displayName(src.exerciseName) : "set");
+      return;
+    }
+    if (t.closest("[data-editreset]")) {
+      delete setOverrides[editSid]; saveSetOverrides();
+      closeAddModal();
+      refreshAfterDifficultyEdit();
+      return;
+    }
+    const expBtn = t.closest<HTMLElement>("[data-editexp]");
+    if (expBtn) {
+      // Per-EXERCISE experimental flag (owner: "why experimental? I didn't set it, can't unset
+      // it") — unsettable right here now, not only in the Index card. Experimental auto-implies
+      // not-comparable (computeRecord), so turning it off clears both the EXP badge and the
+      // grey "uncomparable" sets. Refresh so the history badge updates live behind the modal.
+      const exNow = form.dataset.addex ?? "";
+      const on = !isExperimental(exNow);
+      setExperimental(exNow, on);
+      expBtn.classList.toggle("is-on", on);
+      expBtn.setAttribute("aria-pressed", String(on));
+      expBtn.textContent = `🧪 ${on ? "experimental" : "experimental?"}`;
+      refreshAfterDifficultyEdit();
+      return;
+    }
+    const ncBtn = t.closest<HTMLElement>("[data-editnc]");
+    if (ncBtn) {
+      const on = !notComparableSets.has(editSid);
+      setSetNotComparable(editSid, on);
+      ncBtn.classList.toggle("is-on", on);
+      ncBtn.setAttribute("aria-pressed", String(on));
+      ncBtn.textContent = `⊘ ${on ? "not comparable" : "not comparable?"}`;
+      return;
+    }
+  }
+  // ↕ incline/height pill → the unit + value picker (cm / SQ / Smith).
+  const incPill = t.closest<HTMLElement>(".wo-af-incpill");
+  if (incPill) { openInclinePicker(incPill); return; }
+  // ROM pill → the unit (% / cm) + reference picker.
+  const romPill = t.closest<HTMLElement>(".wo-af-rompill");
+  if (romPill) { openRomPicker(romPill); return; }
+  // Lean pill → the hand-point + cm/block + hand-length distance picker.
+  const leanPill = t.closest<HTMLElement>(".wo-af-leanpill");
+  if (leanPill) { openLeanPicker(leanPill); return; }
+  // ROM cm pill → its floating cm-level popup (the lean-style picker; never clipped, unlike the
+  // old inline dropdown — PB-55).
+  const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
+  if (romDimPill) { openRomDimPicker(romDimPill); return; }
+  // Shoulder gap / forearm support / wall touch → floating chip picker (not the clipped inline dropdown).
+  const cmDimPill = t.closest<HTMLElement>(".wo-af-cmdimpill");
+  if (cmDimPill) { openCmDimPicker(cmDimPill); return; }
+  const fhDimPill = t.closest<HTMLElement>(".wo-af-fhdimpill");
+  if (fhDimPill) { openFloorHeightPicker(fhDimPill); return; }
+  // Custom multiplier pill → the value + mode (× on top / = total) picker.
+  const multPill = t.closest<HTMLElement>(".wo-af-multpill");
+  if (multPill) { openCustomMultPicker(multPill); return; }
+  // ⓘ on a tag pill → its info/edit panel (what the tag does, options + ×difficulty, rename,
+  // which exercises use it). A sibling of the toggle button, so it never triggers add/remove.
+  const infoBtn = t.closest<HTMLElement>(".addm-tag-info");
+  if (infoBtn?.dataset.taginfo) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) openTagInfo(infoBtn, ex, infoBtn.dataset.taginfo);
     return;
   }
-  btn.insertAdjacentHTML("afterend", inlineAddExerciseFormHtml(date));
-  btn.nextElementSibling?.querySelector<HTMLInputElement>(".wo-af-ex")?.focus();
+  // ＋ new tag → the create-a-brand-new-tag popup (name + first option). Only shown for family lifts.
+  const newTagBtn = t.closest<HTMLElement>("[data-newtag]");
+  if (newTagBtn) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) openNewTagCreator(newTagBtn, ex);
+    return;
+  }
+  // Tag palette ＋/✓ : SHOW or HIDE a tag for this exercise next to the weight. Hiding (deselect)
+  // is allowed only when the tag has an obvious baseline to fall back to (tagDeselectable); a
+  // locked tag does nothing. PB-48: a hidden tag is REMOVED from the DOM (insert/remove the one
+  // pill), so it can't leak — and every other line's picks survive (no full rebuild).
+  const passBtn = t.closest<HTMLElement>(".addm-passive-pill");
+  if (passBtn?.dataset.passive) {
+    const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
+    if (ex) {
+      const id = passBtn.dataset.passive;
+      const fam = familyOf(ex);
+      const shown = tagActive(ex, fam, id);
+      if (shown && !tagDeselectable(fam, id)) return; // locked — can't deselect (no obvious baseline)
+      setTagShown(ex, id, !shown);
+      const nowOn = !shown;
+      // A family WITH its own rom dim (e.g. HSPU) shows ROM as the cm pill (the generic dim path
+      // below builds it via dimVtagHtml → the floating-popup twin). Only families WITHOUT a rom dim
+      // use the generic %-ROM pill here.
+      if (id === "rom" && !FAMILIES[fam ?? ""]?.dims.rom) {
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>(".wo-af-rom");
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(AF_DIM_LBL["rom"] ?? "ROM")}</span>${romPillHtml(ex)}</span>`);
+          else if (!nowOn && existing) existing.closest(".addm-vtag")?.remove();
+        }
+      } else if (id === "lean" && hasLeanDim(ex)) {
+        const seeded = fam ? frequentLevelFor(ex, fam, "lean", famDefaultLevel(fam, "lean")) : "0cm";
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>('.addm-vtag[data-dim="lean"]');
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", leanPillHtml(ex, seeded));
+          else if (!nowOn && existing) existing.remove();
+        }
+      } else if (id === CUSTOM_MULT_ID) {
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CUSTOM_MULT_ID}"]`);
+          if (nowOn && !existing) slot.insertAdjacentHTML("beforeend", customMultVtagHtml());
+          else if (!nowOn && existing) existing.remove();
+        }
+      } else if (fam) {
+        for (const slot of form.querySelectorAll<HTMLElement>(".addm-line-vars")) {
+          const ln = slot.closest<HTMLElement>(".addm-line") ?? form;
+          const existing = slot.querySelector<HTMLElement>(`.addm-vtag[data-dim="${CSS.escape(id)}"]`);
+          if (nowOn && !existing) {
+            let vec = readAddLineVec(ln);
+            if (!dimAppliesInVec(fam, id, vec)) {
+              const req = requiredSupportForDim(id);
+              if (req) setLineSupport(ln, req);
+              vec = readAddLineVec(ln);
+            }
+            if (!dimAppliesInVec(fam, id, vec)) continue;
+            const html = dimVtagHtml(ex, fam, id);
+            const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
+            if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
+            else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
+          } else if (!nowOn && existing) existing.remove();
+        }
+      }
+      syncAddmVtags(form);
+      syncAddmReal(form);
+      const palette = wrap.querySelector<HTMLElement>(".addm-passive-slot");
+      if (palette) palette.innerHTML = passivePaletteHtml(ex);
+    }
+    return;
+  }
+  // Default-tags row: counterweight / unilateral toggles — flip the SSOT, rebuild in place.
+  const cogPill = t.closest<HTMLElement>(".addm-cog-pill");
+  if (cogPill) {
+    const cex = wrap.querySelector<HTMLElement>(".addm-default-tags")?.dataset.defex ?? addmCogEx(form);
+    if (cex) {
+      if (cogPill.dataset.cog === "assisted") setAssistedOverride(cex, !isAssistedMachine(cex));
+      else if (cogPill.dataset.cog === "uni") setUnilateralOverride(cex, !isUni(cex));
+      refreshAddmSettings();
+      syncPendingFromModal();
+    }
+    return;
+  }
+  // Add-line RIR picker: toggle the menu, toggle bands (multi-select, owner), "specify" an exact
+  // value, or "clear". The chosen grade rides on data-picked (encoded) and is read on Add.
+  const rirDd = t.closest<HTMLElement>(".addm-rir");
+  if (rirDd) {
+    const menu = rirDd.querySelector<HTMLElement>(".xdd-menu")!;
+    if (t.closest("[data-rirspec]")) {
+      const g = parseRirGrade(rirDd.dataset.picked);
+      if (g && g.bands.length) {
+        g.exact = g.exact !== null ? null : (rirGradeRep({ bands: g.bands, exact: null }) ?? null);
+        if (g.exact !== null) g.exact = Math.round(g.exact * 10) / 10;
+        rirDd.dataset.picked = formatRirGrade(g);
+        updateAddmRir(rirDd);
+        syncPendingFromModal();
+      }
+      return;
+    }
+    const optEl = t.closest<HTMLElement>(".set-rpe-opt");
+    if (optEl) {
+      const id = optEl.dataset.rir ?? "";
+      if (id === "") {
+        delete rirDd.dataset.picked;
+        updateAddmRir(rirDd);
+        menu.setAttribute("hidden", ""); rirDd.classList.remove("open"); // clear closes
+      } else {
+        const g2 = toggleRirBand(parseRirGrade(rirDd.dataset.picked), id);
+        if (g2) rirDd.dataset.picked = formatRirGrade(g2); else delete rirDd.dataset.picked;
+        updateAddmRir(rirDd); // keeps the menu open for a second pick
+      }
+      syncPendingFromModal();
+      return;
+    }
+    if (t.closest(".rpe-foot")) return; // tapping the avg / exact input — keep the menu open
+    const opening = menu.hasAttribute("hidden");
+    for (const m of form.querySelectorAll<HTMLElement>(".addm-rir .xdd-menu")) m.setAttribute("hidden", "");
+    for (const d of form.querySelectorAll<HTMLElement>(".addm-rir")) d.classList.remove("open");
+    menu.toggleAttribute("hidden", !opening);
+    rirDd.classList.toggle("open", opening);
+    return;
+  }
+  const chip = t.closest<HTMLElement>(".addm-chip");
+  if (chip && !t.closest(".addm-chip-go")) {
+    // Fill the FIRST set line (a suggestion is one set's weight × reps).
+    const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
+    fill(".wo-af-weight", chip.dataset.fillw);
+    fill(".wo-af-reps", chip.dataset.fillr);
+    syncPendingFromModal();
+    return;
+  }
+  const chipGo = t.closest<HTMLElement>(".addm-chip-go");
+  if (chipGo) {
+    // Direct-add: fill form with the suggestion then immediately log it.
+    const fill = (sel: string, v: string | undefined) => { const el = form.querySelector<HTMLInputElement>(sel); if (el && v != null) el.value = v; };
+    fill(".wo-af-weight", chipGo.dataset.fillw);
+    fill(".wo-af-reps", chipGo.dataset.fillr);
+    syncPendingFromModal();
+    if (onInlineAddGo(form)) closeAddModal();
+    return;
+  }
+  // "+ set" — append another weight×reps line (each line = one set). The new line COPIES
+  // the previous line's variation tags by default (owner), then stays independently editable.
+  if (t.closest(".wo-af-addline")) {
+    const lines = form.querySelector<HTMLElement>(".addm-lines");
+    if (lines) {
+      const exNow = addmCogEx(form); // the typed new-lift name, else the fixed one
+      const prev = lines.lastElementChild as HTMLElement | null; // copy this line's tags
+      lines.insertAdjacentHTML("beforeend", afLine(exNow));
+      const added = lines.lastElementChild as HTMLElement | null;
+      // Carry the previous set's picks across SYNCHRONOUSLY (before the body MutationObserver
+      // auto-enhances the new selects into .xdd, so the enhanced pill shows the copied value).
+      if (prev && added) copyLineVariation(prev, added);
+      syncAddmVtags(form);
+      // Re-hide the new line's default pills once its selects are enhanced (twins now exist).
+      requestAnimationFrame(() => { const f = addModalEl?.querySelector<HTMLElement>(".wo-addform"); if (addModalEl && f) syncAddmVtags(f); });
+      added?.querySelector<HTMLInputElement>(".wo-af-weight")?.focus();
+    }
+    syncPendingFromModal();
+    return;
+  }
+  // ✕ on a line — remove it (never the last remaining line).
+  const rmLine = t.closest<HTMLElement>(".wo-af-rmline");
+  if (rmLine) {
+    const lines = form.querySelector<HTMLElement>(".addm-lines");
+    if (lines && lines.querySelectorAll(".addm-line").length > 1) rmLine.closest(".addm-line")?.remove();
+    syncPendingFromModal();
+    return;
+  }
+  if (t.closest(".wo-af-go")) { if (onInlineAddGo(form)) closeAddModal(); return; }
+  if (t.closest(".wo-af-cancel")) { closeAddModal(); return; }
+  const expBtn = t.closest<HTMLElement>(".wo-af-exp");
+  if (expBtn) {
+    const on = expBtn.getAttribute("aria-pressed") !== "true";
+    expBtn.setAttribute("aria-pressed", String(on));
+    expBtn.classList.toggle("is-on", on);
+    expBtn.textContent = on ? "experimental" : "experimental?";
+    return;
+  }
+  const seg = t.closest<HTMLElement>(".wo-af-when .seg-btn");
+  if (seg) {
+    const activate = () => { for (const b of form.querySelectorAll<HTMLElement>(".wo-af-when .seg-btn")) b.classList.toggle("is-active", b === seg); };
+    if (seg.dataset.when === "pick") {
+      const cur = form.dataset.pickdate || form.dataset.daydate || todayIso();
+      openDatePicker(seg, cur, (iso) => { form.dataset.pickdate = iso; seg.textContent = shortDate(iso); seg.title = `Logging to ${shortDate(iso)} — tap to change`; activate(); syncPendingFromModal(); });
+    } else activate();
+    syncPendingFromModal(); // the ghost follows the chosen day
+  }
+}
+
+/** "+ set" → open the add popup prefilled for this lift. */
+function toggleInlineAddForm(btn: HTMLElement) {
+  openAddModal(btn.dataset.addex ?? "", btn.dataset.adddate ?? "");
+}
+
+/** "+ exercise" → open the add popup with a searchable exercise picker. */
+function toggleInlineAddExerciseForm(btn: HTMLElement) {
+  openAddModal(null, btn.dataset.adddate ?? "");
 }
 
 /** Log the set(s) from an inline form into the hand-logged sets, then refresh
  * the Workouts view in place (keeping the open weeks/days expanded). */
-function onInlineAddGo(form: HTMLElement) {
+/** Save an EDIT of one existing set (PB-46): the add-modal form opened in edit mode UPDATES the
+ * set's per-set overrides in place — weight/reps, the free note, every variation tag, incline,
+ * ROM and RIR — then re-renders and closes. Reuses the exact per-set setters the add path uses. */
+/** SINGLE SOURCE for a unilateral set's two sides, shared by the ADD and EDIT paths (rule 65 —
+ * add & edit must compute sides identically, not diverge). Given the right side (rW/rR) and the
+ * left inputs (lW/lR, NaN = empty → linked to the right), it stores the per-side divergence (or
+ * clears it when the sides are identical) and returns the BASE reps/weight the record should
+ * carry = the WEAKER side (so every 1RM/strength calc uses the weaker arm; volume sums both via
+ * explodeSides). PB-54: the edit path used to skip all of this, so editing a unilateral set lost
+ * its second side. */
+function applyUnilateralSides(id: string, rW: number | null, rR: number, lW: number, lR: number): { weight: number | null; reps: number } {
+  const res = resolveSides(rW, rR, lW, lR); // the PURE, tested core (unilateral.ts) — add & edit share it
+  setSideDivergence(id, res.divergence ?? {}); // null → {} → divergenceEmpty → clears the store key
+  return res.base;
+}
+function applySetEdit(form: HTMLElement): boolean {
+  const sid = form.dataset.editsid!;
+  const ex = form.dataset.addex ?? "";
+  const editNote = form.dataset.editnote || `__set:${sid}`;
+  const origNote = form.dataset.editorignote ?? "";
+  const ln = form.querySelector<HTMLElement>(".addm-line") ?? form;
+  const wTxt = ln.querySelector<HTMLInputElement>(".wo-af-weight")?.value.trim() ?? "";
+  const rTxt = ln.querySelector<HTMLInputElement>(".wo-af-reps")?.value.trim() ?? "";
+  const w = wTxt === "" ? null : parseFloat(wTxt);
+  const r = rTxt === "" ? null : Math.round(parseFloat(rTxt));
+  setSetOverrideField(sid, "weight", w !== null && Number.isFinite(w) ? w : null);
+  setSetOverrideField(sid, "reps", r !== null && Number.isFinite(r) ? r : null);
+  // PB-54: a unilateral set edits BOTH sides — read the left inputs and store the divergence via
+  // the SAME helper the add path uses, then set the base to the weaker side (rule 65 single source).
+  if (isUni(ex) && r !== null && Number.isFinite(r)) {
+    const lW = parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight-l")?.value.trim() || "");
+    const lR = Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps-l")?.value.trim() || ""));
+    const base = applyUnilateralSides(sid, w !== null && Number.isFinite(w) ? w : null, r, lW, lR);
+    setSetOverrideField(sid, "weight", base.weight);
+    setSetOverrideField(sid, "reps", base.reps);
+  }
+  setSetOverrideNote(sid, form.querySelector<HTMLInputElement>(".wo-af-note")?.value ?? "", origNote);
+  // Tags: write EVERY dim's chosen level to the set's vec, so a change back to default also applies.
+  for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+    if (s.dataset.dim) setNoteVecDim(ex, editNote, s.dataset.dim, s.value);
+  }
+  // Incline (cm/SQ/Smith) — floor (0cm) clears it.
+  const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
+  if (incPill && isInclineLevelExercise(ex)) {
+    const dim = incPill.dataset.incdim as LevelDim;
+    const val = Number(incPill.dataset.incval);
+    setSetOverrideLevel(sid, dim, Number.isFinite(val) && levelCm(dim, val) !== 0 ? val : null);
+  }
+  // ROM — read the pill exactly like onInlineAddGo; cleared at the default.
+  const romPill = ln.querySelector<HTMLElement>(".wo-af-rompill");
+  if (romPill) {
+    const unit = romPill.dataset.romunit === "cm" ? "cm" : "pct";
+    const v = parseFloat(romPill.dataset.romval ?? "");
+    const romDef = parseInt(romPill.dataset.romdefault ?? "", 10);
+    let rom: { unit: "pct" | "cm"; val: number; ref?: string } | null = null;
+    if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); rom = ref ? { unit, val: v, ref } : { unit, val: v }; } }
+    else if (Number.isFinite(v) && v !== romDef) rom = { unit: "pct", val: v };
+    setSetRom(sid, rom);
+  }
+  // Custom ×multiplier — replace the total (scaleAbs) or multiply on top (scale); set ONE, clear
+  // the other. No value → both cleared (back to the tag-derived total).
+  const multPill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+  if (multPill) {
+    const v = multPill.dataset.multval ? parseFloat(multPill.dataset.multval) : NaN;
+    const abs = multPill.dataset.multmode === "abs";
+    const ok = Number.isFinite(v) && v > 0;
+    setSetOverrideField(sid, "scaleAbs", ok && abs ? v : null);
+    setSetOverrideField(sid, "scale", ok && !abs ? v : null);
+  }
+  const rir = ln.querySelector<HTMLElement>(".addm-rir")?.dataset.picked || "";
+  if (rir) setRpe(sid, rir);
+  // PB-56 class: capture scroll BEFORE the modal closes (closing can reset scrollY), then
+  // defer the rebuild — same idiom as deleteSetsWithUndo / refreshAfterDifficultyEdit.
+  // Do NOT call renderWorkoutAnalysis here: it forces S.workoutsPage = 0 and rebuilds
+  // selectors/calendar, which yanks the history to the top. renderWorkoutsPage + renderWaGraph
+  // are enough (mirrors the add-set save path).
+  const y = window.scrollY;
+  closeAddModal();
+  showHydrating();
+  deferRender(() => {
+    renderAll();
+    if (document.getElementById("workoutsTable")) renderWorkoutsPage();
+    if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+    refreshExerciseInfo();
+    hideHydrating();
+  }, y);
+  return true;
+}
+function onInlineAddGo(form: HTMLElement): boolean {
+  // EDIT MODE (PB-46): the form is editing ONE existing set — UPDATE its per-set overrides in
+  // place (weight, reps, note, tags, incline, ROM, RIR) instead of creating new entries, using
+  // the SAME setters the add path uses but on the set's existing id.
+  if (form.dataset.editsid) return applySetEdit(form);
   // New-exercise form carries a search input; the per-exercise form carries the
   // name on the button's data-addex.
   const exInput = form.querySelector<HTMLInputElement>(".wo-af-ex");
@@ -14540,38 +21547,82 @@ function onInlineAddGo(form: HTMLElement) {
   if (exInput && !exerciseName) {
     if (msg) msg.textContent = "Pick or type an exercise.";
     exInput.focus();
-    return;
+    return false;
   }
-  const weight = parseFloat(form.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
-  const reps = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
-  const setsRaw = Math.round(parseFloat(form.querySelector<HTMLInputElement>(".wo-af-sets")!.value));
-  const sets = Number.isFinite(setsRaw) && setsRaw >= 1 ? setsRaw : 1;
-  // Chosen variation. Structured pickers (a modelled lift) → the picked levels are
-  // TAGS, not a note: we pin them straight onto each created set's per-set vec (the
-  // __set:<id> synthetic key) below and DON'T fabricate a note from them — tags are
-  // inferred FROM notes, but when you pick tags directly there's no note to create.
-  // Otherwise fall back to the free-text note the owner typed.
-  const dimEls = [...form.querySelectorAll<HTMLSelectElement>(".wo-af-dim")];
-  let note: string;
-  const chosenDims: [string, string][] = [];
-  if (dimEls.length) {
-    const fam = familyOf(exerciseName);
-    const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
-    for (const s of dimEls) { const dim = s.dataset.dim!; const lvl = s.value; if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]); }
-    note = ""; // picked tags carry the variation per-set; no auto-note text
-  } else {
-    note = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
-  }
+  // New-exercise EXPERIMENTAL toggle on → flag the lift as a scratchpad (owner) so its sets
+  // never feed any metric. Only the isNew form has .wo-af-exp.
+  if (exerciseName && form.querySelector<HTMLElement>(".wo-af-exp")?.getAttribute("aria-pressed") === "true")
+    setExperimental(exerciseName, true);
+  // Each .addm-line is ONE set, with its OWN weight × reps, RIR, variation tags and ROM
+  // (owner: "all sets should have their own separate tags"). Read every line; keep only
+  // those with valid reps.
+  const fam = familyOf(exerciseName);
+  const defs = fam ? FAMILIES[fam]?.defaults ?? {} : {};
+  const sharedNote = form.querySelector<HTMLInputElement>(".wo-af-note")?.value.trim() ?? "";
+  const lineEls = [...form.querySelectorAll<HTMLElement>(".addm-line")];
+  const setLines = (lineEls.length ? lineEls : [form])
+    .map((ln) => {
+      const weight = parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-weight")!.value);
+      const reps = Math.round(parseFloat(ln.querySelector<HTMLInputElement>(".wo-af-reps")!.value));
+      // Unilateral LEFT side (only present/visible for a unilateral lift). Empty = linked (same as
+      // the right/primary side); a value records a per-set divergence, with the WEAKER side used
+      // as the strength base (handled after the records are created).
+      const lwTxt = ln.querySelector<HTMLInputElement>(".wo-af-weight-l")?.value.trim() ?? "";
+      const lrTxt = ln.querySelector<HTMLInputElement>(".wo-af-reps-l")?.value.trim() ?? "";
+      const lWeight = lwTxt === "" ? NaN : parseFloat(lwTxt);
+      const lReps = lrTxt === "" ? NaN : Math.round(parseFloat(lrTxt));
+      // Only a MANUALLY-picked RIR is recorded; an untouched (assumed) picker stays empty so the
+      // new set keeps the same assumed-RIR behaviour as every other ungraded set.
+      const rir = (ln.querySelector?.<HTMLElement>(".addm-rir")?.dataset.picked) || "";
+      // This line's picked variation levels = TAGS (pinned to the set's per-set vec below),
+      // recorded only when they differ from the family default. Tags are inferred FROM notes,
+      // but when you pick them directly there's no note to fabricate.
+      const chosenDims: [string, string][] = [];
+      for (const s of ln.querySelectorAll<HTMLSelectElement>(".wo-af-dim[data-dim]")) {
+        const dim = s.dataset.dim!; const lvl = s.value;
+        if (lvl && lvl !== defs[dim]) chosenDims.push([dim, lvl]);
+      }
+      // The lean PILL (handstand families) carries its snapped canonical level on data-leanlevel —
+      // recorded as the `lean` tag when it's away from the default (0cm = no lean).
+      const leanPill = ln.querySelector<HTMLElement>(".wo-af-leanpill");
+      const leanLvl = leanPill?.dataset.leanlevel;
+      if (leanLvl && leanLvl !== (leanPill!.dataset.leandefault ?? "0cm")) chosenDims.push(["lean", leanLvl]);
+      // This line's ROM is a VARIATION, recorded as a per-set attribute below — NEVER as a note
+      // (owner: "tags/variations are not notes; notes are user-only"). Read the pill into a rom
+      // object: cm → always (a deliberate value); % → only when it differs from the default.
+      const note = sharedNote; // the free-text note is the USER's note only
+      let rom: { unit: "pct" | "cm"; val: number; ref?: string } | null = null;
+      const romPill = ln.querySelector<HTMLElement>(".wo-af-rompill");
+      if (romPill) {
+        const unit = romPill.dataset.romunit === "cm" ? "cm" : "pct";
+        const v = parseFloat(romPill.dataset.romval ?? "");
+        const romDef = parseInt(romPill.dataset.romdefault ?? "", 10);
+        if (unit === "cm") { if (Number.isFinite(v) && v > 0) { const ref = (romPill.dataset.romref ?? "").trim(); rom = ref ? { unit, val: v, ref } : { unit, val: v }; } }
+        else if (Number.isFinite(v) && v !== romDef) rom = { unit: "pct", val: v };
+      }
+      // This line's incline/height (push-ups): a non-floor cm/SQ/Smith level is pinned to the
+      // created set's per-set override below. Floor (0cm) = the default, left unset.
+      const incPill = ln.querySelector<HTMLElement>(".wo-af-incpill");
+      const incDim = incPill ? (incPill.dataset.incdim as LevelDim) : undefined;
+      const incVal = incPill ? Number(incPill.dataset.incval) : NaN;
+      // Custom ×multiplier: a typed value either multiplies on top of the tags (scale) or replaces
+      // the whole total (scaleAbs). Stored on the created set below.
+      const multPill = ln.querySelector<HTMLElement>(".wo-af-multpill");
+      const custMultVal = multPill?.dataset.multval ? parseFloat(multPill.dataset.multval) : NaN;
+      const custMultMode: "mult" | "abs" = multPill?.dataset.multmode === "abs" ? "abs" : "mult";
+      return { weight, reps, lWeight, lReps, rir, chosenDims, note, incDim, incVal, rom, custMultVal, custMultMode };
+    })
+    .filter((l) => Number.isFinite(l.reps) && l.reps >= 1);
   const username = els.athlete.value;
   const user = athleteLabel();
-  if (!username || !exerciseName) return;
-  if (!Number.isFinite(reps) || reps < 1) {
+  if (!username || !exerciseName) return false;
+  if (!setLines.length) {
     if (msg) msg.textContent = "Enter reps (1+).";
     form.querySelector<HTMLInputElement>(".wo-af-reps")?.focus();
-    return;
+    return false;
   }
   const startIdx = manualEntries.length; // setNumber for entry n is 100000+n (see mergeManualSets)
-  for (let i = 0; i < sets; i++) {
+  setLines.forEach((l, i) => {
     manualEntries.push({
       id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
       seq: (Date.now() % 2000000000) + i, // stable unique key for Supabase
@@ -14579,20 +21630,68 @@ function onInlineAddGo(form: HTMLElement) {
       username,
       date,
       exerciseName,
-      weight: Number.isFinite(weight) ? weight : null,
-      reps,
-      ...(note ? { notes: note } : {}),
+      weight: Number.isFinite(l.weight) ? l.weight : null,
+      reps: l.reps,
+      ...(l.note ? { notes: l.note } : {}),
     });
-  }
-  // Pin the picked tags to EACH created set's per-set vec (the __set:<id> synthetic
-  // key that variationNote() returns for a noteless model-lift set), so the chosen
+  });
+  // Pin EACH line's OWN picked tags to that set's per-set vec (the __set:<id> synthetic
+  // key that variationNote() returns for a noteless model-lift set), so every set's chosen
   // attributes are authoritative without inventing a note. Mirrors the setId formula
   // (username|exercise|date|setNumber) used at read time.
-  if (chosenDims.length && familyOf(exerciseName)) {
-    for (let i = 0; i < sets; i++) {
+  if (fam) {
+    for (let i = 0; i < setLines.length; i++) {
+      const l = setLines[i]!;
+      if (!l.chosenDims.length) continue;
       const synthNote = `__set:${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
-      for (const [dim, lvl] of chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
+      for (const [dim, lvl] of l.chosenDims) setNoteVecDim(exerciseName, synthNote, dim, lvl);
     }
+  }
+  // A manually-picked RIR per line → record it on the created set (same id formula). An untouched
+  // (assumed) picker is left unset, so the set keeps the standard assumed-RIR behaviour.
+  for (let i = 0; i < setLines.length; i++) {
+    if (setLines[i]!.rir) setRpe(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rir);
+  }
+  // A non-floor incline/height per line (push-ups) → pin it to the created set as a level
+  // override (cm/SQ/Smith). Floor (0cm) stays unset — it's the default.
+  if (isInclineLevelExercise(exerciseName)) {
+    for (let i = 0; i < setLines.length; i++) {
+      const { incDim, incVal } = setLines[i]!;
+      if (incDim && Number.isFinite(incVal) && levelCm(incDim, incVal) !== 0)
+        setSetOverrideLevel(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, incDim, incVal);
+    }
+  }
+  // ROM per line → a per-set attribute (NOT a note — owner). Pinned to the created set's id.
+  for (let i = 0; i < setLines.length; i++) {
+    if (setLines[i]!.rom) setSetRom(`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`, setLines[i]!.rom);
+  }
+  // Unilateral per-side values (owner): store a divergence when the two sides differ, and set the
+  // base record's weight/reps to the WEAKER side so every strength/1RM calc uses the weaker arm
+  // (volume/counting still sum both sides via explodeSides). Sides equal → stay linked (no store).
+  if (isUni(exerciseName)) {
+    for (let i = 0; i < setLines.length; i++) {
+      const l = setLines[i]!;
+      if (!(Number.isFinite(l.lWeight) || Number.isFinite(l.lReps))) continue; // no left side typed → linked
+      const id = `${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+      const base = applyUnilateralSides(id, Number.isFinite(l.weight) ? l.weight : null, l.reps, l.lWeight, l.lReps);
+      const ent = manualEntries[startIdx + i];
+      if (ent) { ent.weight = base.weight; ent.reps = base.reps; } // weaker side = the stored base
+    }
+  }
+  // Custom ×multiplier per line → store as scaleAbs (replace the total) or scale (multiply on top).
+  for (let i = 0; i < setLines.length; i++) {
+    const l = setLines[i]!;
+    if (!(Number.isFinite(l.custMultVal) && l.custMultVal > 0)) continue;
+    const id = `${username}|${exerciseName}|${date}|${100000 + startIdx + i}`;
+    if (l.custMultMode === "abs") setSetOverrideField(id, "scaleAbs", l.custMultVal);
+    else setSetOverrideField(id, "scale", l.custMultVal);
+  }
+  // STAMP each new set with the current equipment (Phase 3) — so a later equipment switch never
+  // rewrites these sets (owner: "only new sets"). Only when a non-default machine is chosen.
+  const stampEquip = currentEquipmentIdFor(exerciseName);
+  if (stampEquip) {
+    for (let i = 0; i < setLines.length; i++) setEquipment[`${username}|${exerciseName}|${date}|${100000 + startIdx + i}`] = stampEquip;
+    saveSetEquipment();
   }
   saveManual();
   mergeManualSets();
@@ -14605,6 +21704,14 @@ function onInlineAddGo(form: HTMLElement) {
     saveActiveSet(); refreshActiveSet();
   }
   if (waSelected.length && !waSelected.includes(exerciseName)) waSelected = [...waSelected, exerciseName];
+  // The Analysis history is scoped by a name-SNAPSHOT filter (waListExerciseFilter); on the
+  // analysis tab that snapshot is stale right after an add, so a just-logged (often brand-
+  // NEW) exercise stays hidden until the next analysis render — the recurring "I added it
+  // but it only shows after a delay" (PB-22, same class as PB-11). Recompute the filter from
+  // the now-current selection so renderWorkoutsPage below shows it immediately.
+  if (document.getElementById("tab-analysis")?.hidden === false && waSelected.length) {
+    waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
+  }
   // Which weeks/days are expanded right now — reopen them after the rebuild.
   const openDates = new Set(
     Array.from(document.querySelectorAll<HTMLElement>("tr.wo-row.open"))
@@ -14633,6 +21740,7 @@ function onInlineAddGo(form: HTMLElement) {
   // just-added set — not only the list. Graph-only, so the day group re-expanded above
   // isn't collapsed by a full re-render.
   if (document.getElementById("tab-analysis")?.hidden === false) renderWaGraph();
+  return true;
 }
 
 /** After a re-render, re-expand the workout rows whose group date is in the set. */
@@ -14640,7 +21748,7 @@ function reopenWorkoutGroups(dates: Set<string>) {
   for (const row of document.querySelectorAll<HTMLTableRowElement>("tr.wo-row")) {
     if (row.classList.contains("open")) continue;
     const grp = workoutGroups[Number(row.dataset.index)];
-    if (grp && dates.has(grp.date)) insertDetail(row, 2, workoutGroupHtml(grp));
+    if (grp && dates.has(grp.date)) insertDetail(row, 1, workoutGroupHtml(grp));
   }
 }
 
@@ -14813,7 +21921,14 @@ function installBackupHook() {
   const native = localStorage.setItem.bind(localStorage);
   localStorage.setItem = (k: string, v: string) => {
     native(k, v);
-    if (k.startsWith("colosseum.") && k !== AUTOBACKUP_AT_KEY && k !== AUTOBACKUP_ON_KEY) scheduleAutoBackup();
+    if (k.startsWith("colosseum.") && k !== AUTOBACKUP_AT_KEY && k !== AUTOBACKUP_ON_KEY && k !== SYNC_BASE_KEY) scheduleAutoBackup();
+    // Mirror shared keys to the cloud kv table (rule 41). Skip writes we made
+    // ourselves while applying a remote merge, or we'd echo them straight back.
+    if (!applyingRemoteKv && isSyncable(k)) {
+      kvDirty.add(k);
+      if (kvPushTimer) clearTimeout(kvPushTimer);
+      kvPushTimer = window.setTimeout(pushKvDirty, 1500);
+    }
   };
 }
 
@@ -15166,7 +22281,7 @@ function setSelArr(v: string[]): void { if (curSelScope === "graph") waGraphSel 
 //   • bestlifts — only the powerlifting trio (squat / bench / deadlift), sorted by
 //     how close the athlete is to the world record for their optimal weight class.
 type FreqPeriod = "1w" | "1mo" | "3mo" | "1y" | "all";
-let waFreqPeriod: FreqPeriod = "1mo";
+let waFreqPeriod: FreqPeriod = "3mo"; // owner: the graph's frequency view defaults to the last 3 months
 let waFreqMetric: "sets" | "hard" = "sets";
 const FREQ_PERIOD_NEXT: Record<FreqPeriod, FreqPeriod> = { "1w": "1mo", "1mo": "3mo", "3mo": "1y", "1y": "all", all: "1w" };
 const FREQ_PERIOD_LABEL: Record<FreqPeriod, string> = { "1w": "1 week", "1mo": "1 month", "3mo": "3 months", "1y": "1 year", all: "all time" };
@@ -15336,14 +22451,25 @@ let searchFindHistory = false;
 // instead of the grouped view, so the bottom search bar FINDS a lift in the Index
 // (rather than jumping to the Analysis view).
 let bwSearchQuery = "";
-type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness";
-let waGroupBy: WaGroupBy = "bestlifts"; // default: rank the powerlifting trio by world-record %
-// The picker's "Group by" mode is REMEMBERED PER ATHLETE (owner request): switching
-// to an athlete restores the last mode they used; a fresh athlete falls back to the default.
-const WA_GROUPBY_KEY = "colosseum.waGroupBy.byUser.v1";
-const waGroupByByUser = loadJsonObject<Record<string, string>>(WA_GROUPBY_KEY);
+type WaGroupBy = "none" | ExerciseFilterDim | "frequency" | "bestlifts" | "effectiveness" | "priorities";
+// Group-by is now PER SCOPE (owner defaults): the GRAPH picker groups by FREQUENCY (last 3
+// months), the HISTORY picker by DISCIPLINE. `waGroupBy` mirrors whichever scope is currently
+// rendering — renderSelector / the category menu set it from waGroupByScope[scope] — so every
+// picker-grouping read still uses the plain `waGroupBy` it always did.
+const WA_GROUPBY_DEFAULT: Record<SelScope, WaGroupBy> = { graph: "frequency", hist: "discipline" };
+const waGroupByScope: Record<SelScope, WaGroupBy> = { ...WA_GROUPBY_DEFAULT };
+let waGroupBy: WaGroupBy = waGroupByScope.hist;
+// Remembered PER ATHLETE × scope (owner): switching athlete restores their last modes; a
+// fresh athlete falls back to the per-scope defaults above.
+const WA_GROUPBY_KEY = "colosseum.waGroupBy.byScope.v1";
+const waGroupByByUser = loadJsonObject<Record<string, { graph?: WaGroupBy; hist?: WaGroupBy }>>(WA_GROUPBY_KEY);
 function saveWaGroupByForUser(): void {
-  if (els.athlete.value) { waGroupByByUser[els.athlete.value] = waGroupBy; saveJson(WA_GROUPBY_KEY, waGroupByByUser); }
+  if (els.athlete.value) { waGroupByByUser[els.athlete.value] = { ...waGroupByScope }; saveJson(WA_GROUPBY_KEY, waGroupByByUser); }
+}
+function loadWaGroupByForUser(): void {
+  const saved = waGroupByByUser[els.athlete.value];
+  waGroupByScope.graph = (saved?.graph as WaGroupBy) ?? WA_GROUPBY_DEFAULT.graph;
+  waGroupByScope.hist = (saved?.hist as WaGroupBy) ?? WA_GROUPBY_DEFAULT.hist;
 }
 // Groups (of the current Group-by dimension) turned OFF — their exercises are
 // filtered out of the picker. Tap a group header in the Exercises dropdown to
@@ -15377,6 +22503,185 @@ let waShowMissing = false;
 // Universal Analytics Graph state (TASKS 25–29): enabled metrics + config.
 const waMetrics = new Set<string>(["e1rm", "strength"]); // default graph view: 1RM + Strength score (no decay)
 const waGraphConfig: GraphConfig = { ...DEFAULT_GRAPH_CONFIG };
+// Strength-line rolling WINDOW (owner): the (non-decay) Strength line takes the best top set
+// within this window at each date instead of the all-time running max — so it can DROP when you
+// haven't beaten it lately. Device-local view pref. "all" = the legacy lifetime-best behaviour.
+const STRENGTH_WINDOWS: { id: string; label: string; short: string; ms: number | undefined }[] = [
+  { id: "all", label: "all-time", short: "all", ms: undefined },
+  { id: "1d", label: "per day", short: "1d", ms: 86400000 },
+  { id: "1w", label: "1 week", short: "1w", ms: 7 * 86400000 },
+  { id: "2w", label: "2 weeks", short: "2w", ms: 14 * 86400000 },
+  { id: "1mo", label: "1 month", short: "1mo", ms: 30 * 86400000 },
+  { id: "3mo", label: "3 months", short: "3mo", ms: 91 * 86400000 },
+  { id: "6mo", label: "6 months", short: "6mo", ms: 182 * 86400000 },
+  { id: "12mo", label: "12 months", short: "12mo", ms: 365 * 86400000 },
+];
+const STRENGTH_WINDOW_KEY = "colosseum.strengthWindow.v1";
+let strengthWindowId: string = (() => {
+  try { const v = localStorage.getItem(STRENGTH_WINDOW_KEY); if (v && STRENGTH_WINDOWS.some((w) => w.id === v)) return v; } catch { /* ignore */ }
+  return "all";
+})();
+function currentStrengthWindow() { return STRENGTH_WINDOWS.find((w) => w.id === strengthWindowId) ?? STRENGTH_WINDOWS[0]!; }
+function cycleStrengthWindow(): void {
+  const i = STRENGTH_WINDOWS.findIndex((w) => w.id === strengthWindowId);
+  strengthWindowId = STRENGTH_WINDOWS[(i + 1) % STRENGTH_WINDOWS.length]!.id;
+  try { localStorage.setItem(STRENGTH_WINDOW_KEY, strengthWindowId); } catch { /* ignore */ }
+}
+// Adjustable strength-decay MODEL (device-local): the owner dials the fade curve's
+// complexity level + variables in the graph Options to SEE it on their data. Persisted so
+// the chosen experiment sticks; merged over the defaults so older saves get any new fields.
+const DECAY_PARAMS_KEY = "colosseum.decayParams.v1";
+function loadDecayParamsFrom(key: string): DecayParams {
+  try {
+    const raw = JSON.parse(localStorage.getItem(key) ?? "null") as Partial<DecayParams> | null;
+    if (raw && typeof raw === "object") {
+      const lvl = raw.level === 1 || raw.level === 2 || raw.level === 3 || raw.level === 4 ? raw.level : DEFAULT_DECAY_PARAMS.level;
+      return { ...DEFAULT_DECAY_PARAMS, ...raw, level: lvl };
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_DECAY_PARAMS };
+}
+function loadDecayParams(): DecayParams { return loadDecayParamsFrom(DECAY_PARAMS_KEY); }
+function saveDecayParams(): void {
+  try { localStorage.setItem(DECAY_PARAMS_KEY, JSON.stringify(waGraphConfig.decayParams)); } catch { /* ignore */ }
+}
+waGraphConfig.decayParams = loadDecayParams();
+// OFFICIAL strength curve (owner): the decay model the owner "makes official" becomes the
+// canonical strength estimate that drives every set's predicted RIR. Stored separately so
+// experimenting with the graph's live decay params doesn't change the official curve until
+// they press the button.
+const OFFICIAL_DECAY_KEY = "colosseum.officialDecay.v1";
+function officialDecay(): DecayParams { return loadDecayParamsFrom(OFFICIAL_DECAY_KEY); }
+function makeDecayOfficial(): void {
+  try { localStorage.setItem(OFFICIAL_DECAY_KEY, JSON.stringify(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS)); } catch { /* ignore */ }
+}
+/** Does the live graph decay model match the official one? (drives the button's ✓ state). */
+function isDecayOfficial(): boolean {
+  try { return JSON.stringify(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) === JSON.stringify(officialDecay()); } catch { return false; }
+}
+// Projection fit-window (ms timestamps): the two draggable vertical lines bounding which
+// logged sets feed the forecast. null = open (data start / end). Reset when the forecast
+// is off; clamped so from < to.
+let projFitFrom: number | null = null;
+let projFitTo: number | null = null;
+// Build the projection fit-window markers for whatever records a graph is drawing, and
+// set the matching config bounds. Shared by the full multi-graph AND the single-lift
+// carousel so the draggable lines + ceiling-approach window behave identically (PROJ-1).
+// Returns undefined (and clears the bounds) when the forecast isn't drawn.
+function projectionFitMarkers(records: readonly SetRecord[], drawMetricIds: readonly string[]): { id: string; x: number; color?: string; label?: string }[] | undefined {
+  if (!drawMetricIds.includes("predicted")) { waGraphConfig.projectionFrom = undefined; waGraphConfig.projectionTo = undefined; return undefined; }
+  let lo = Infinity, hi = -Infinity;
+  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t < lo) lo = t; if (t > hi) hi = t; } }
+  if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) { waGraphConfig.projectionFrom = undefined; waGraphConfig.projectionTo = undefined; return undefined; }
+  // Clamp any saved window into THIS lift's span (a window set on another lift must not
+  // bound a different lift's data into emptiness).
+  const clamp = (v: number | null, dflt: number) => (v == null || v < lo || v > hi ? dflt : v);
+  const from = clamp(projFitFrom, lo), to = clamp(projFitTo, hi);
+  waGraphConfig.projectionFrom = from;
+  waGraphConfig.projectionTo = to;
+  return [
+    { id: "from", x: from, color: "#2f8f88", label: "fit ⟵" },
+    { id: "to", x: to, color: "#2f8f88", label: "⟶ fit" },
+  ];
+}
+// Commit a dragged fit-window line, then re-render (both graph views go through scheduleWaGraph).
+function onProjMarkerDrag(id: string, x: number): void {
+  if (id === "from") projFitFrom = x; else projFitTo = x;
+  if (projFitFrom != null && projFitTo != null && projFitFrom > projFitTo) { const t = projFitFrom; projFitFrom = projFitTo; projFitTo = t; }
+  scheduleWaGraph();
+}
+// CUSTOM SET STRENGTH (rule 55): the hand-set per-(athlete|exercise) EFFECTIVE 1RM the owner
+// dials in by dragging the Nuzzo fit — on the analysis reps×kg graph (green curve) OR on the
+// exercise card's Curve graph (the "1RM" line). ONE persisted SSOT shared by both, the
+// most-accurate strength estimate. Positions the curve view; doesn't touch logged data.
+// Persisted device-local (a display pref, rule 41).
+const RVW_FIT_KEY = "colosseum.rvwFit.v1";
+const rvwFitOverrides: Record<string, number> = (() => {
+  try { const o = JSON.parse(localStorage.getItem(RVW_FIT_KEY) ?? "{}"); return o && typeof o === "object" ? o : {}; }
+  catch { return {}; }
+})();
+const rvwFitKey = (exercise: string) => `${els.athlete.value}|${exercise}`;
+function saveRvwFit(): void {
+  try { localStorage.setItem(RVW_FIT_KEY, JSON.stringify(rvwFitOverrides)); } catch { /* ignore */ }
+}
+/** The hand-set "CUSTOM SET STRENGTH" (rule 55): the EFFECTIVE 1RM the owner dialed in by
+ * dragging the Nuzzo fit — the most-accurate per-(athlete,exercise) strength estimate, or
+ * null if never set. ONE SSOT, shared by the exercise-card Curve fit AND the analysis
+ * reps×kg fit. */
+function rvwFitOf(exercise: string): number | null {
+  const v = rvwFitOverrides[rvwFitKey(exercise)];
+  return typeof v === "number" && v > 0 ? v : null;
+}
+/** Persist the custom set strength from an EFFECTIVE 1RM (analysis reps×kg fit path). */
+function setCustomStrength(exercise: string, effOneRm: number): void {
+  if (!(effOneRm > 0)) return; // dragged past zero → ignore (keep the last sensible fit)
+  rvwFitOverrides[rvwFitKey(exercise)] = Math.round(effOneRm * 10) / 10;
+  saveRvwFit();
+}
+function onRvwFitDrag(exercise: string, effOneRm: number): void {
+  setCustomStrength(exercise, effOneRm);
+  scheduleWaGraph();
+  scheduleExInfoGraph();
+}
+// Reps×weight time WINDOW (owner: two toggles in the Options menu, not a pager). The MODE
+// picks the window family: "inc" = increasing windows anchored to now (last day → … → all);
+// "2w" = fixed rolling 2-week blocks (last 2wk, 2–4 wk ago, …). A second toggle cycles WHICH
+// window within the mode. The rvw render filters the plotted sets to it; anchored to the
+// latest logged set.
+type RvwMode = "inc" | "2w";
+let rvwWindowMode: RvwMode = "inc";
+let rvwIncIdx = 0;     // index into RVW_INC_WINDOWS — 0 = All time (default: all sets)
+let rvw2wIdx = 0;      // rolling 2-week bucket: 0 = last 2 wk, 1 = 2–4 wk ago, …
+let rvw2wMaxIdx = 0;   // furthest bucket with data (computed from span) — bounds the cycle
+const RVW_WINDOW_MS = 14 * 86_400_000;
+const RVW_INC_WINDOWS: { label: string; ms: number | null }[] = [
+  { label: "All time", ms: null },
+  { label: "Last day", ms: 86_400_000 },
+  { label: "Last week", ms: 7 * 86_400_000 },
+  { label: "Last 2 wk", ms: 14 * 86_400_000 },
+  { label: "Last month", ms: 30 * 86_400_000 },
+  { label: "Last 3 mo", ms: 91 * 86_400_000 },
+  { label: "Last 6 mo", ms: 182 * 86_400_000 },
+  { label: "Last year", ms: 365 * 86_400_000 },
+];
+function rvwWindowRecords(records: readonly SetRecord[]): SetRecord[] {
+  let latest = 0, earliest = Infinity;
+  for (const r of records) { const t = Date.parse(r.date); if (Number.isFinite(t)) { if (t > latest) latest = t; if (t < earliest) earliest = t; } }
+  if (!latest) return records as SetRecord[];
+  rvw2wMaxIdx = Number.isFinite(earliest) ? Math.max(0, Math.floor((latest - earliest) / RVW_WINDOW_MS)) : 0;
+  if (rvwWindowMode === "inc") {
+    const w = RVW_INC_WINDOWS[rvwIncIdx] ?? RVW_INC_WINDOWS[0]!;
+    if (w.ms == null) return records as SetRecord[];
+    const lo = latest - w.ms;
+    return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo; });
+  }
+  const hi = latest - rvw2wIdx * RVW_WINDOW_MS, lo = hi - RVW_WINDOW_MS;
+  return records.filter((r) => { const t = Date.parse(r.date); return Number.isFinite(t) && t > lo && t <= hi; });
+}
+function cycleRvwWindow(): void {
+  if (rvwWindowMode === "inc") rvwIncIdx = (rvwIncIdx + 1) % RVW_INC_WINDOWS.length;
+  else rvw2wIdx = rvw2wIdx >= rvw2wMaxIdx ? 0 : rvw2wIdx + 1;
+}
+/** The FULL (all-windows) reps×weight extent for the plotted lift(s) — so the rvw axes can
+ * be pinned to it and paging a 2-week window (or dragging the fit) doesn't re-scale the
+ * frame (owner: "when changing weeks the graph shouldn't jump … no autofit"). */
+function rvwAxisExtent(records: readonly SetRecord[], exNames: readonly string[]): { xMin: number; xMax: number; yMax: number } | undefined {
+  const set = new Set(exNames);
+  let xMin = Infinity, xMax = -Infinity, yMax = 0;
+  for (const r of records) {
+    if (!set.has(r.exerciseName)) continue;
+    const w = r.origWeight != null ? r.origWeight : r.weight;
+    if (w == null || r.reps == null || r.reps <= 0) continue;
+    if (w < xMin) xMin = w; if (w > xMax) xMax = w; if (r.reps > yMax) yMax = r.reps;
+  }
+  if (!Number.isFinite(xMin) || xMax <= xMin) return undefined;
+  const pad = (xMax - xMin) * 0.04 || 1;
+  return { xMin: xMin - pad, xMax: xMax + pad, yMax: yMax + 1 };
+}
+function rvwWindowLabel(): string {
+  if (rvwWindowMode === "inc") return (RVW_INC_WINDOWS[rvwIncIdx] ?? RVW_INC_WINDOWS[0]!).label;
+  return rvw2wIdx === 0 ? "Last 2 wk" : `${rvw2wIdx * 2}–${(rvw2wIdx + 1) * 2} wk ago`;
+}
 // S.waPerBodyweight now lives on S (appState).
 // User-assigned taxonomy metadata (TASK 24), saved on this device, merged into the
 // metadata the filter engine reads so saved joints/movements/planes drive filtering.
@@ -15403,6 +22708,23 @@ const waMeta = (name: string, dim: ExerciseFilterDim): string[] =>
   // name keyword-matches nothing), so they group exactly where their members do.
   : syntheticMembers(name).length ? [...new Set(syntheticMembers(name).flatMap((m) => waMeta(m, dim)))]
   : exerciseMetaValues(name, dim, userTaxonomy);
+/** EVERY grouping tag a lift carries across ALL taxonomy dimensions (muscle group,
+ * body part, discipline, movement, function, equipment, joint, tier…), lowercased —
+ * so the search bar can match a GROUPING word ("bicep", "calisthenics", "push") and
+ * return that whole group, not just lifts whose NAME contains the word. Memoised for
+ * one synchronous render pass (waChipListBase is called several times per render),
+ * then dropped on the next microtask so an override edit is reflected immediately. */
+let groupTagCache: Map<string, string[]> | null = null;
+function exerciseGroupTags(name: string): string[] {
+  if (!groupTagCache) { groupTagCache = new Map(); queueMicrotask(() => { groupTagCache = null; }); }
+  let tags = groupTagCache.get(name);
+  if (!tags) {
+    tags = [];
+    for (const dim of FILTER_DIMS) for (const v of waMeta(name, dim)) if (v) tags.push(v.toLowerCase());
+    groupTagCache.set(name, tags);
+  }
+  return tags;
+}
 /** Distinct selectable exercises for the current athlete, tagged by identity:
  * their logged lifts are "original"; the synthetic group derived names they have
  * are "combined" / "comparison_group". De-duplicated by name (originals win). */
@@ -15561,112 +22883,112 @@ function refreshHistorySearch(): void {
   waListExerciseFilter = historyFilterWithSearch(histFilterNames(waSelected));
 }
 
-/** A big section title from a lift selection: a big total-COUNT badge, then the first
- * 5 lift NAMES, then "… +N" when there are more (never a wall of text, but always
- * shows the count up front and up to 5 names). `removable` makes each name a
- * tap-to-remove-from-graph button (graph title) vs plain text (history title). Shared
- * so the graph and Calendar/history titles look IDENTICAL (the recurring "one has the
- * count / cap, the other doesn't" bug). */
-const TITLE_NAME_CAP = 5;
+/** A section title from a lift selection (owner redesign, no count badge): up to
+ * TITLE_NAME_CAP lifts list every one as a tap-to-act chip; MORE than that collapse to a
+ * single "N exercises ▾" dropdown opening the full clickable list. `removable` makes each
+ * name a tap-to-act button (graph / history) vs plain text. Shared so the graph and
+ * Calendar/history titles look IDENTICAL. */
+const TITLE_NAME_CAP = 6;
 // Whether each title is EXPANDED to show ALL its lift names (tap the "… +N" to toggle).
 // When a title is expanded its selector hides the now-redundant picked-lift pills.
 const titleExpanded: Record<"graph" | "hist", boolean> = { graph: false, hist: false };
 function liftSelectionTitle(sel: readonly string[], remove: "graph" | "hist" | null = null): string {
-  if (sel.length === 0) return "";
+  // PB-29: an empty graph/history selection MUST still render its title controls (the
+  // +/✕/= toolbar, the "Select an exercise" CTA, the Pick tab) so you can always add a
+  // lift back. Only the NON-removable (plain-text) title collapses to nothing when empty —
+  // the early-out used to fire for EVERY empty selection, short-circuiting the empty-state
+  // markup built below (the recurring "removed all lifts → no placeholder, no add buttons").
+  if (sel.length === 0 && !remove) return "";
   // The title names lifts for its area (graph / hist), so it shows that area's mode.
   const prevNameScope = nameScope;
   if (remove) nameScope = remove;
   try {
   const sep = `<span class="wa-title-sep"> · </span>`;
-  // Each name is a tap-to-REMOVE button (from the graph OR the history selection); the
-  // capture handler (PB-5) removes it instead of collapsing the section. Tapping EMPTY
-  // space / the caret still toggles the fold. `remove` doubles as the SelScope for the
-  // per-lift Combine / Compare lens toggles appended to each.
-  const expanded = remove ? titleExpanded[remove] : false;
-  const shown = expanded ? sel.length : TITLE_NAME_CAP;
-  const shownSel = sel.slice(0, shown);
-  // Longest visible name → the grid's min column width, so long names fall to 2 columns
-  // and short ones fit 3 (auto-fit), all vertically aligned (owner request).
-  const maxNameLen = Math.max(4, ...shownSel.map((n) => displayName(n).length));
-  const names = shownSel.map((n) => {
-    // The name opens a small popup menu (Info / Combine / Compare / Remove) and is
-    // COLOURED by its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
-    if (!remove) return escapeHtml(displayName(n));
-    return `<button type="button" class="wa-title-lift${lensClass(remove, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${remove}" title="${escapeHtml(displayName(n))} — tap for Info / Combine / Compare / Remove">${escapeHtml(displayName(n))}</button>`;
-    // Grid layout (CSS) handles the spacing/alignment, so no inline " · " separator for
-    // the button form; the plain-text form keeps it.
-  }).join(remove ? "" : sep);
-  // The "… +N" trailer is a TOGGLE: tap to expand the title to ALL names (which hides
-  // the redundant picked-lift pills below), tap again ("less") to collapse it.
-  let more = "";
-  if (sel.length > TITLE_NAME_CAP) {
-    more = remove
-      ? (expanded
-          ? `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show fewer">… less</button>`
-          : `<button type="button" class="wa-title-more" data-titleexpand="${remove}" title="Show all ${sel.length} — and hide the pills below">… +${sel.length - TITLE_NAME_CAP}</button>`)
-      : `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
+  // Per-title font STEP: longer names shrink (s1→s2→s3) so more shows before the hard
+  // CLIP (owner: 2–3 sizes, then truncate — and NO "…" ellipsis, a subtle cut-off). A
+  // char-length heuristic picks the step (computed per chip from its shown label, which may
+  // be a merged group's name); the CSS clip is the real guarantee that every title stays a
+  // single line whatever its length.
+  // The title BODY (owner redesign): no count badge ever. With ≤ TITLE_NAME_CAP lifts list
+  // every one as a tap-to-act chip (two balanced columns). With MORE, collapse to a single
+  // "N exercises ▾" dropdown button that opens the whole clickable list (data-titlelist) —
+  // each entry keeps the same Info / Combine / Compare / Remove popup as the inline chips.
+  let bodyHtml = "";
+  if (remove) {
+    const scope = remove; // narrowed to a non-null SelScope
+    // Each name opens a small popup (Info / Combine / Compare / Remove) and is COLOURED by
+    // its lens state — replaces the old inline ⓘ ⊕ ⇄ button cluster.
+    // When a lift is MERGED into a group (combine lens), the title shows the GROUP's name
+    // (e.g. "Squat pattern"), not the seed member — owner: "I press Belt Squat as a merged
+    // exercise but the top still says Belt Squat; it should say Squat pattern." Tapping the
+    // chip still opens the seed lift's menu (whose member list isolates a single exercise).
+    const titleName = (n: string): string => {
+      const cg = chosenGroup(scope, n, "combine");
+      return cg ? (cg.label || cg.derivedName || displayName(n)) : displayName(n);
+    };
+    const liftChip = (n: string): string => {
+      const label = titleName(n);
+      const sc = label.length <= 12 ? " wa-tl-s1" : label.length <= 17 ? " wa-tl-s2" : " wa-tl-s3";
+      return `<button type="button" class="wa-title-lift${sc}${lensClass(scope, n)}" data-liftmenu="${escapeHtml(n)}" data-liftscope="${scope}" title="${escapeHtml(label)} — tap for Info / Combine / Compare / Remove / pick a member">${escapeHtml(label)}</button>`;
+    };
+    if (sel.length > TITLE_NAME_CAP) {
+      // More than TITLE_NAME_CAP (6) lifts → the title is a COUNT ("7 exercises"), not the
+      // top lift's name (owner: showing one lift's name misrepresented a big mixed selection).
+      // Still non-boxy — a plain bold title + a ▾ that opens the data-titlelist floating menu;
+      // the whole thing is the dropdown trigger. "exercises" is its own text node so i18n swaps it.
+      bodyHtml = `<span class="wa-tl-lead"><button type="button" class="wa-title-exsum" data-titlelist="${scope}" aria-haspopup="true" title="Show all ${sel.length} exercises — tap any to combine / compare / remove"><span class="wa-exsum-n">${sel.length}</span> exercises <span class="xdd-caret">▾</span></button></span>`;
+    } else {
+      // ≤ cap → TWO INDEPENDENT columns (even/odd split so it still reads row-major); a long
+      // name in one column NEVER widens or heightens the other (owner: "two separate columns").
+      const c0: string[] = [], c1: string[] = [];
+      sel.forEach((n, i) => (i % 2 === 0 ? c0 : c1).push(liftChip(n)));
+      bodyHtml = `<span class="wa-tlcols"><span class="wa-tlcol">${c0.join("")}</span><span class="wa-tlcol">${c1.join("")}</span></span>`;
+    }
+  } else {
+    // Plain-text (non-removable) form: inline names with " · " separators, "… +N" trailer.
+    bodyHtml = sel.slice(0, TITLE_NAME_CAP).map((n) => escapeHtml(displayName(n))).join(sep);
+    if (sel.length > TITLE_NAME_CAP) bodyHtml += `<span class="wa-title-more">… +${sel.length - TITLE_NAME_CAP}</span>`;
   }
-  // When EVERY selectable lift is picked, show a single big "All Exercises" title
-  // instead of listing the top 5 + "+N" (owner request) — and drop the count with it.
-  const allNames = waSelectorExercises().map((e) => e.name);
-  const isAll = sel.length > TITLE_NAME_CAP && allNames.length > 0 && sel.length >= allNames.length && allNames.every((n) => sel.includes(n));
-  // The count badge is only useful when the title is TRUNCATED (names hidden behind
-  // "… +N"). When every name fits, or it's the "All Exercises" title, drop it
-  // (owner request) — the names (or "All Exercises") already say how many.
-  const truncated = sel.length > TITLE_NAME_CAP && !expanded;
-  const count = (truncated && !isAll) ? `<span class="wa-title-count" title="${sel.length} lift${sel.length === 1 ? "" : "s"} selected">${sel.length}</span>` : "";
-  // "All Exercises" — a big, plain-BLACK title (not the small grey italic "all
-  // exercises"); tapping it still expands to the full list to remove individual lifts.
-  const allLabel = isAll && !expanded
-    ? (remove
-        ? `<button type="button" class="wa-title-allbig" data-titleexpand="${remove}" title="All ${sel.length} exercises selected — tap to list them">All Exercises</button>`
-        : `<span class="wa-title-allbig">All Exercises</span>`)
-    : "";
-  // "Deselect all" and "Match" are no longer in the title — both moved into the picker
-  // slide-in drawer as small text buttons beside Select all / Complete (their family),
-  // sized by tier (docs/ui-taste.md). See `clearBtn` / `matchTool` in renderSelector.
   // "Pick" — a thin WHITE PAPER sticky-note TAB peeking from the right screen edge of the
   // title row (the visible edge of the picker note). DRAG it left (or tap) to pull the full
-  // drawer out — the handle now LOOKS like the drawer it opens (PB-13). A "‹" pull-hint +
-  // grip make the drag obvious (the open concern logged in PB-13). The drag/tap handlers key
-  // off `.wa-title-picker[data-titlepicker]`, so the gesture wiring is unchanged. Capture-
-  // handled so it doesn't toggle the fold it sits in.
+  // drawer out — the handle now LOOKS like the drawer it opens (PB-13). The "=" Match tool
+  // moved INTO that drawer (the ⚙ menu's "≈ Match" button) so the title carries no toolbar.
   const pickerBtn = remove
-    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">Pick</span></button>`
+    ? `<button type="button" class="wa-title-picker" data-titlepicker="${remove}" title="Exercise picker — drag the note out, or tap" aria-label="Open exercise picker &amp; settings"><span class="wa-pick-pull" aria-hidden="true">‹</span><span class="wa-pick-tab-txt">+</span></button>`
     : "";
-  // Wrap the whole title in a FIXED-HEIGHT, 2-line-clamped box (collapsed) so adding /
-  // removing a lift never changes the title's height — otherwise the reflow shoves the
-  // picker pills below up/down and you mis-tap (owner report). Expanding (… +N) opts
-  // out of the clamp to show every name.
-  // The picked-lift names lay out as a vertically-aligned GRID (2–3 columns by name
-  // length) when they're tappable buttons; the "all exercises" / plain-text forms stay inline.
-  // --gcols-min tracks the longest name; the +pad is kept SMALL so a column is only as
-  // wide as the name needs — otherwise the over-pad nudged it past half the row and
-  // auto-fit collapsed to ONE column even when two fit (owner: "if two columns fit, use 2").
-  const grid = !!remove && !allLabel;
-  const seltitleAttrs = grid
-    ? ` class="wa-seltitle wa-seltitle--grid" style="--gcols-min: calc(${maxNameLen}ch + 0.4rem)"`
+  // Nothing picked → the title ITSELF is the pick prompt: a button that FILLS the title
+  // (so it can't collapse) and opens the picker drawer.
+  const emptyCta = remove && sel.length === 0
+    ? `<button type="button" class="wa-title-pickcta" data-titlepicker="${remove}">Select an exercise</button>`
+    : "";
+  // Two-column layout only while listing chips (≤ cap, non-empty); the dropdown / empty /
+  // plain-text forms stay inline.
+  const cols = !!remove && sel.length > 0 && sel.length <= TITLE_NAME_CAP;
+  const seltitleAttrs = cols
+    ? ` class="wa-seltitle wa-seltitle--cols"`
     : ` class="wa-seltitle"`;
-  return `<span class="wa-seltitle-box${expanded ? " is-expanded" : ""}${remove ? " has-pick" : ""}">${count}<span${seltitleAttrs}>${allLabel || `${names}${more}`}</span>${pickerBtn}</span>`;
+  return `<span class="wa-seltitle-box${remove ? " has-pick" : ""}"><span${seltitleAttrs}>${emptyCta || bodyHtml}</span>${pickerBtn}</span>`;
   } finally { nameScope = prevNameScope; }
 }
 /** History DEFAULT: every selectable exercise for the current athlete (all groups). */
 function defaultHistorySelection(): string[] {
   return waSelectorExercises().map((e) => e.name);
 }
-/** Graph DEFAULT: the TOP 5 most-frequently-trained lifts of the LAST 3 MONTHS for the
- * current athlete (what they're working on now), falling back to the all-time default
+/** Graph DEFAULT (owner): the TOP 3 most-frequently-trained lifts of the LAST 3 MONTHS for
+ * the current athlete (what they're working on now), falling back to the all-time default
  * if nothing's been logged recently. */
 function defaultGraphSelection(): string[] {
   const has = new Set(waSelectorExercises().map((e) => e.name));
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
-  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 5);
+  return (byFreq.length ? byFreq : defaultSelection()).slice(0, 3);
 }
 function renderWorkoutAnalysis(): void {
+  ensureHistoryTabApplied(); // active history tab's selection drives the title/picker below
   // First time in: pre-select ALL of the athlete's lifts in BOTH selectors so the
   // view opens as a real selection (pills shown), not the implicit aggregate.
+  dbg(`HD render seeded=${analysisSeeded} waSel=${waSelected.length}`); // DIAG #super-persistent (every analysis render)
   if (!analysisSeeded) {
     analysisSeeded = true;
     // History opens with EVERY exercise (all groups); the GRAPH opens with the TOP 5
@@ -15677,6 +22999,7 @@ function renderWorkoutAnalysis(): void {
     if (waGraphSel.length === 0) waGraphSel = defaultGraphSelection();
   }
   setAnalysisAthletePicker(true); // athlete chooser pinned at the top of the view
+  renderWorkoutPlanIfShown(); // keep the Plan card fresh for the current athlete/data
   const mode = waMode();
   // The Workout-history section's collapsible summary doubles as its title, so it
   // reflects the current mode (Exercise analysis / Compare / Exercise list / …).
@@ -15691,7 +23014,11 @@ function renderWorkoutAnalysis(): void {
     // from the graph — see the data-graphremove handler) + "… +N" when there are more.
     // A "Graph" label rides along, shown by CSS ONLY when the fold is COLLAPSED (the
     // picked exercises are noise when the chart isn't even open — owner request).
-    graphSummary.innerHTML = waGraphSel.length === 0 ? "Graph" : `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
+    // Even with NOTHING picked we still render the full title (toolbar + Pick tab), just
+    // with no names — otherwise clearing all lifts (✕) would remove the very + / Pick
+    // affordances you need to pick again (owner report). Collapsed still reads "Graph"
+    // via the CSS-swapped .wa-graph-closed label.
+    graphSummary.innerHTML = `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
     graphSummary.classList.toggle("is-bigtitle", waGraphSel.length > 0);
   }
   if (mode === "single" || mode === "compare") {
@@ -15715,7 +23042,7 @@ function renderWorkoutAnalysis(): void {
       // Mirror the GRAPH title exactly: just the selected lift name(s), big — no
       // "Workout history" prefix, no member breakdown, no ℹ. Collapsed, a plain
       // "Workout history" shows instead (CSS swaps them on the fold's open state).
-      calHistTitle.innerHTML = waSelected.length ? `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle(waSelected, "hist")}` : "Workouts";
+      calHistTitle.innerHTML = `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle(waSelected, "hist")}`;
       calHistTitle.classList.toggle("is-bigtitle", waSelected.length > 0);
     }
     // The More-info button moved next to the title, so the old stats slot is empty.
@@ -15731,7 +23058,12 @@ function renderWorkoutAnalysis(): void {
     setAnalysisMainPanel("workouts");
     if (contentTitle) contentTitle.textContent = searching ? `${athleteLabel()} — workouts` : `${athleteLabel()} — no lifts picked`;
     const calHistTitle = document.getElementById("waCalHistSummary");
-    if (calHistTitle) { calHistTitle.textContent = "Workouts"; calHistTitle.classList.remove("is-bigtitle"); } // nothing selected → plain section title
+    // Nothing selected: still render the title with its + / ✕ / = toolbar and Pick tab so
+    // you can pick again (clearing all must not strand you with no picker — owner report).
+    if (calHistTitle) {
+      calHistTitle.innerHTML = `<span class="wa-hist-eyebrow">Workouts</span><span class="wa-hist-closed">Workouts</span>${liftSelectionTitle([], "hist")}`;
+      calHistTitle.classList.remove("is-bigtitle");
+    }
     stats?.setAttribute("hidden", "");
     withNameScope("hist", renderWorkoutsPage); // the analysis history shows the HISTORY area's name mode
     }
@@ -15820,6 +23152,9 @@ function renderSelector(scope: SelScope): void {
   const sel = document.getElementById(scope === "graph" ? "waExerciseSelector" : "waExerciseSelectorHist");
   if (!sel) return;
   curSelScope = scope;
+  // s2 (simplified-2) fixes the picker grouping to Discipline and hides the chooser (owner) —
+  // s1/adv keep the per-scope choice. The scope store is untouched, so adv re-reads it.
+  waGroupBy = viewTier === "s2" ? "discipline" : waGroupByScope[scope]; // this scope's grouping drives every picker read below
   // This selector (and the chips/pills it draws) shows THIS area's name mode.
   const prevNameScope = nameScope;
   nameScope = scope;
@@ -15842,11 +23177,12 @@ function renderSelector(scope: SelScope): void {
   const isLocal = !!nameModeByScope[scope]; // diverged from the global default
   const nameToggle =
     `<button type="button" class="wa-name-opt name-mode-opt${isLocal ? " is-local" : ""}" data-waname="${nextName}" title="Lift labels here — tap to cycle: code → short → full (this area only; the Settings picker sets all areas)">${curName === "code" ? "Code" : curName === "short" ? "Short" : "Full"}</button>`;
-  // Owner-chosen display order: Frequency · Best lifts · Discipline · Muscle group ·
-  // Effectiveness · Function · Tier. (None was already removed from this menu.)
+  // Owner-chosen display order: Frequency · Best lifts · Priorities · Discipline ·
+  // Muscle group · Effectiveness · Function · Tier. (None was already removed.)
   const groupOptList: { value: string; label: string }[] = [
     { value: "frequency", label: "Frequency" },
     { value: "bestlifts", label: "Best lifts" },
+    { value: "priorities", label: "Priorities" },
     { value: "discipline", label: FILTER_DIM_LABELS["discipline"] },
     { value: "muscleGroup", label: FILTER_DIM_LABELS["muscleGroup"] },
     { value: "effectiveness", label: "Effectiveness" },
@@ -15885,8 +23221,13 @@ function renderSelector(scope: SelScope): void {
   // the picker's current group / search / identity filter (vs "Select all" = shown only).
   const everyEx = scope === "graph" ? [] : waSelectorExercises().map((e) => e.name);
   const completeOn = everyEx.length > 0 && everyEx.every((n) => cur.includes(n));
+  // GRAPH has a fixed lift budget, so there's no real "Select all" — "First N" is the
+  // graph's equivalent. But people LOOK for "Select all" (it's in the history picker), so
+  // we still show it, permanently DISABLED (grey), with a tooltip pointing at First N —
+  // discoverable, not functional (owner: "people might search for it so put it back, grey").
   const selAllToggle = scope === "graph"
-    ? `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
+    ? `<button type="button" class="wa-clear wa-selall" disabled title="The graph plots a fixed budget of ${graphExerciseCap()} lifts, so there's no “select all” — use “First ${graphExerciseCap()}” instead">Select all</button>` +
+      `<button type="button" class="wa-clear wa-selfirst"${selectable.length ? "" : " disabled"} title="Plot the first ${graphExerciseCap()} shown lifts (the graph's budget) — top of the current order">First ${graphExerciseCap()}</button>`
     : `<button type="button" class="wa-clear wa-selall"${allOn || !selectable.length ? " disabled" : ""} title="Select every shown lift (respects the current filter)">Select all</button>` +
       `<button type="button" class="wa-clear wa-complete"${completeOn ? " disabled" : ""} title="Select EVERY exercise — the whole catalogue, ignoring the picker's filter / group">Complete</button>`;
   // "Deselect all" — the title's old oversized ✕, demoted into the drawer next to its
@@ -15900,11 +23241,12 @@ function renderSelector(scope: SelScope): void {
   const foldTools = `<div class="wa-chips-tools">${missingToggle}${searchActive}</div>`;
   const settingsBlock = `<div class="wa-fold-settings">${toggles}${nameToggle}</div>`;
   const prevChipScroll = sel.querySelector<HTMLElement>(".wa-chips-wrap")?.scrollTop ?? 0;
-  // Collapse the (often long) exercise-chip picker under a fold so it doesn't fill the
-  // screen — the selected lifts stay visible as pills above. Default CLOSED; auto-open
-  // while searching (so matches show), and preserve the open state across re-renders.
-  const prevChipsFold = sel.querySelector<HTMLElement>(".wa-chips-fold");
-  const chipsFoldOpen = waSearchQuery.trim() ? true : prevChipsFold ? prevChipsFold.classList.contains("is-open") : false;
+  // The whole picker (group-by, First-N / Clear / ⚙ and the chip grid) lives ONLY in the
+  // slide-out Pick drawer now — it must NEVER appear inline between the title and the chart,
+  // not even while searching (owner request — SEL-48). So the inline card stays hidden;
+  // openPickDrawer() is the only thing that reveals it (as the drawer). A search still
+  // filters the chips — you see them by opening Pick (which has its own search box).
+  const chipsFoldOpen = false;
   // Everything but Group lives in the ⚙ popout now: pick-mode, Select all / Clear,
   // Match, Show missing, the identity toggles and name mode. Its open state MUST
   // survive the re-render every inner toggle triggers — otherwise tapping any option
@@ -15975,12 +23317,16 @@ function renderSelector(scope: SelScope): void {
   // tab on the title. NOTHING of it sits inline between the title and the chart (owner
   // request). Only the graph's "Trim to N" stays inline — a contextual action on the
   // current selection, not part of the picker.
+  // In-panel search box (owner request) — drives the existing waSearchQuery, so typing
+  // filters the chips across the WHOLE catalogue (not just the shown First N), and the
+  // placeholder auto-translates (it's an LT key). Sits between the controls and chips.
+  const pickSearch = `<input type="search" class="wa-chip-search" data-scope="${scope}" placeholder="Search exercises…" aria-label="Search exercises…" autocomplete="off" value="${escapeHtml(waSearchQuery)}">`;
   const pickBody = showGrid
-    // Exercise mode: controls + the chip grid (filled by renderWaChipsScope below).
-    ? `<div class="wa-pick-controls">${groupCtl}${controls}</div>` +
+    // Exercise mode: controls + search + the chip grid (filled by renderWaChipsScope below).
+    ? `<div class="wa-pick-controls">${groupCtl}${controls}</div>` + pickSearch +
       `<div id="waChips-${scope}" class="wa-chips wa-chips-wrap wa-chips-inline"></div>`
-    // Category mode: controls + the whole-category strip (selPills = .wa-catstrip).
-    : `<div class="wa-pick-controls">${groupCtl}${controls}</div>${selPills}`;
+    // Category mode: controls + search + the whole-category strip (selPills = .wa-catstrip).
+    : `<div class="wa-pick-controls">${groupCtl}${controls}</div>` + pickSearch + selPills;
   sel.innerHTML =
     (trimBtn ? `<div class="wa-sel-header"><div class="wa-sel-tools">${trimBtn}</div></div>` : "") +
     // A manual fold (not <details>) so the group dropdown's / ⚙'s own menus aren't clipped.
@@ -16039,7 +23385,11 @@ function waChipListBase(): { name: string; identity: ExerciseIdentity; missing?:
   return list.filter((e) => !q
     || e.name.toLowerCase().includes(q)
     || codeFor(e.name).toLowerCase().includes(q)
-    || shortFor(e.name).toLowerCase().includes(q));
+    || shortFor(e.name).toLowerCase().includes(q)
+    // A body-part / muscle / discipline / any-grouping word matches every lift in that
+    // group, so "bicep" or "calisthenics" finds them all (then Filter / Find-in-history /
+    // Graph / Select-all all inherit it, since they read this same list).
+    || exerciseGroupTags(e.name).some((t) => t.includes(q)));
 }
 /** EVERY group key (of the current Group-by dimension) an exercise belongs to — an
  * exercise in several muscle groups (e.g. a squat trains Quads AND Glutes) shows
@@ -16049,6 +23399,12 @@ function waGroupKeys(name: string): string[] {
   if (waGroupBy === "none" || isSpecialGroupBy(waGroupBy)) return [""];
   // Effectiveness: ONE bucket per lift = its highest muscle-training level (0–4).
   if (waGroupBy === "effectiveness") return [`Level ${maxMgLevel(name)}`];
+  // Priorities: bucket by the athlete's focus-lift level (Max effort → Maintain);
+  // everything not on the plan goes under "Not a focus".
+  if (waGroupBy === "priorities") {
+    const lvl = athletePriorities(els.athlete.value)[name]?.level;
+    return [lvl ? PRIORITY_LABEL[lvl] : "Not a focus"];
+  }
   // "Strength" is too broad: when grouping by Discipline, split strength lifts by
   // their MUSCLE GROUPS instead (Chest, Back, Quads…) — each as its own pill.
   if (waGroupBy === "discipline") {
@@ -16079,6 +23435,8 @@ function waGroupIsStrength(key: string): boolean {
 function waGroupRank(key: string): number {
   // Effectiveness: highest level first (Level 4 → Level 0).
   if (waGroupBy === "effectiveness") return 4 - (Number(key.slice(6)) || 0);
+  // Priorities: Max effort → Maintain in PRIORITY order, "Not a focus" last.
+  if (waGroupBy === "priorities") { const i = PRIORITY_LEVELS.map((l) => PRIORITY_LABEL[l]).indexOf(key); return i === -1 ? 99 : i; }
   // Discipline grouping splits Strength into muscle-group pills — rank those inside
   // Strength's slot (by muscle order) so they lead and stay together.
   if (waGroupBy === "discipline" && waGroupIsStrength(key))
@@ -16211,6 +23569,13 @@ function ensurePickBackdrop(): void {
 }
 function openPickDrawer(scope: SelScope): void {
   if (pickDrawerScope === scope) return;
+  // PB-36: the graph picker card lives INSIDE #waGraphFull; if graphFullShown=false that
+  // parent is display:none, making even a position:fixed child invisible. Ensure full mode
+  // is shown first so the card has a rendered box when we make it the drawer.
+  if (scope === "graph" && !graphFullShown) {
+    graphFullShown = true;
+    renderWaGraph(); // unhides #waGraphFull and re-renders the summary (Pick tab stays)
+  }
   pickDrawerScope = scope;
   curSelScope = scope; // chip taps in the drawer act on THIS selector's selection
   document.body.classList.add("wa-pick-open"); // free the drawer from the sticky selector's stacking context
@@ -16408,6 +23773,7 @@ function renderWaCatMenu(): void {
   const m = document.getElementById("waCatMenu");
   if (!m || waCatMenuKey === null) return;
   curSelScope = waCatMenuScope;
+  waGroupBy = viewTier === "s2" ? "discipline" : waGroupByScope[waCatMenuScope]; // s2 fixes grouping to Discipline (match the picker — else the drill-in is empty)
   const key = waCatMenuKey;
   const items = sortCatMenuItems(waCatItems(key), key);
   const sel = waSelCount(items);
@@ -16435,7 +23801,7 @@ function scheduleWaGraph(): void {
   waGraphRaf = requestAnimationFrame(() => { // would shift the page; pin scroll.
     waGraphRaf = 0;
     renderWaGraph();
-    if (window.scrollY !== y) window.scrollTo(0, y);
+    if (window.scrollY !== y) restoreScrollY(y);
   });
 }
 // A chart-ONLY re-plot, set up at the end of each renderWaGraph: re-runs the SVG
@@ -16490,6 +23856,55 @@ let graphCarLifts: string[] = [];
 // When the search "Graph → Plot on single view" action runs, the carousel cycles THESE
 // matched lifts instead of the default top-by-frequency reel. Cleared on athlete change.
 let graphCarOverride: string[] | null = null;
+// ---- Custom graph dashboard (CHART-160+, docs/graph-dashboard-plan.md) -------------------
+// The owner's build-your-own setup: tabs → a swipe reel of bubbles, each bubble an
+// independent graph (type × view × exercises × ×BW), persisted at colosseum.graphDash.v1.
+// graphDash is the SSOT (per bubble); each bubble renders through the SAME pure
+// analyticsGraph engine via buildBubbleInput — never a stub. dashBubbleIdx is the
+// reel position within the active tab (which bubble's slide is showing).
+// PER-ATHLETE dashboards (owner): each athlete has completely separate tabs/bubbles. graphDash
+// holds the CURRENT athlete's dashboard; dashUser tracks whose it is, so ensureDashUser() can
+// swap it when the athlete changes (saving the outgoing one first).
+let graphDash: GraphDashboard = defaultDashboard();
+let dashUser = "";
+let dashBubbleIdx = 0;
+let dashEditTab: string | null = null; // the tab whose name is being inline-edited (null = none)
+// PB-37: which bubble's lifts are currently LOADED into the shared graph selection (waGraphSel).
+// Lets the dashboard tell a bubble SWITCH (load bubble→picker) from a user EDIT (the +/✕/=
+// title toolbar or picker changed waGraphSel → write picker→bubble). Without this the render
+// kept mirroring the bubble back over the toolbar's edit, so changing the exercise never stuck.
+let dashLoadedBubbleId: string | null = null;
+// PB-39: which bubble the LIVE chart stage element currently holds. While it's the SAME
+// bubble we REUSE the stage element across re-renders (so analyticsGraph.update() keeps the
+// user's live pan/zoom instead of a fresh mount re-applying a stale saved view) — only a real
+// bubble SWITCH builds a new stage, whose fresh mount restores that bubble's saved view.
+let dashStageBubbleId: string | null = null;
+/** The bubble currently showing in the reel (active tab, clamped index). */
+function currentBubble(): GraphBubble {
+  const t = activeTab(graphDash);
+  if (dashBubbleIdx >= t.bubbles.length) dashBubbleIdx = 0;
+  return t.bubbles[dashBubbleIdx]!;
+}
+function persistDash(): void { saveDashboardFor(dashUser || els.athlete.value, graphDash); }
+/** A brand-new athlete's dashboard: 1 tab, 1 bubble showing their TOP-3 most-frequent lifts
+ * (multi-overlay so all three plot). Owner: "all start with 1 tab 1 bubble of top 3 frequent." */
+function freshDashboardFor(): GraphDashboard {
+  const top3 = defaultGraphSelection().slice(0, 3);
+  const d0 = defaultDashboard();
+  const t0 = d0.tabs[0]!;
+  return updateBubble(d0, t0.id, t0.bubbles[0]!.id, { exercises: top3, view: top3.length > 1 ? "multi" : "single" });
+}
+/** Make graphDash match the CURRENT athlete — load theirs (or seed a fresh one), saving the
+ * outgoing athlete's first. Cheap no-op when the athlete hasn't changed. */
+function ensureDashUser(): void {
+  const user = els.athlete.value;
+  if (user === dashUser && dashUser !== "") return;
+  if (dashUser) saveDashboardFor(dashUser, graphDash);
+  dashUser = user;
+  graphDash = loadDashboardFor(user) ?? freshDashboardFor();
+  dashBubbleIdx = 0;
+  dashLoadedBubbleId = null;
+}
 /** The carousel reel: the search-chosen lifts if "plot on single view" set them, else the
  * current athlete's top lifts by frequency (last 90d). */
 function graphCarouselLifts(): string[] {
@@ -16499,6 +23914,10 @@ function graphCarouselLifts(): string[] {
     if (kept.length) return kept.slice(0, 20);
     graphCarOverride = null; // none of the override lifts exist for this athlete → fall back
   }
+  // The graph SELECTION drives the reel next (so the single view's ⇆ switch / the picker
+  // choose what you flip through), falling back to top-by-frequency only when nothing's picked.
+  const sel = waGraphSel.filter((n) => has.has(n));
+  if (sel.length) return sel.slice(0, 20);
   const cutoff90 = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
   const recent = activeRecords().filter((r) => r.date && r.date >= cutoff90);
   const byFreq = exerciseCounts(recent, els.athlete.value).map((c) => c.exerciseName).filter((n) => has.has(n));
@@ -16507,21 +23926,51 @@ function graphCarouselLifts(): string[] {
 /** Draw ONE single-exercise, single-athlete chart into `container`, reusing the full
  * graph engine + the current global options (so a slide looks like the full graph minus
  * the multi-select). */
+/** Graph-TYPE TABS (owner): a 2-tab strip sitting ON TOP of the plot (like the
+ * Stats/Graph/History tabs) that flips the whole graph between the weight-over-time view
+ * and the reps × weight scatter. Drives the SAME state as the Options-menu "Reps versus
+ * weight" toggle (one source of truth). Each tab SETS its mode (data-warvwset); tabs are an
+ * explicit owner request here (overriding the usual single cycling pill). */
+function graphTypeTabsHtml(): string {
+  const on = S.waRepsVsWeight;
+  return `<div class="wa-graphtabs" role="tablist" aria-label="Graph type">` +
+    `<button type="button" class="wa-graphtab${on ? "" : " is-on"}" data-warvwset="time" role="tab" aria-selected="${!on}" title="Plot weight / strength over time">↗ Over time</button>` +
+    `<button type="button" class="wa-graphtab${on ? " is-on" : ""}" data-warvwset="rvw" role="tab" aria-selected="${on}" title="Plot every set at weight (x) × reps (y)">✦ Reps × kg</button>` +
+  `</div>`;
+}
 function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.formula = currentFormula();
+  waGraphConfig.strengthWindow = currentStrengthWindow().ms;
+  // Honour the graph-type toggle on the carousel too (it shares waGraphConfig with the full graph).
+  waGraphConfig.repsVsWeight = S.waRepsVsWeight;
+  waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
   const fm = waGraphConfig.formula;
   const sm = currentStrengthByUserExercise(fm);
-  waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+  waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? (waGraphConfig.decayParams?.level === 4 ? assumedPhase1Rir(r.exerciseName) : predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm));
   const user = els.athlete.value;
   const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
   const exs = lensExpand("graph", [exercise]);
   const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  // Same forecast ceiling + draggable fit-window as the full graph, so a projection viewed
+  // on the carousel curves toward the ceiling and gets the same period control (PROJ-1).
+  waGraphConfig.ceilingOf = (rs) => {
+    const r = rs[0];
+    if (!r) return null;
+    return worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null);
+  };
+  const projMarkers = projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
   renderAnalyticsGraph(container, {
     exercises: exs,
-    records: recs,
+    records: S.waRepsVsWeight ? rvwWindowRecords(recs) : recs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
+    xMarkers: projMarkers,
+    onMarkerDrag: onProjMarkerDrag,
+    onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
+    rvwFitOf,
+    onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"),
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(user)?.weight ?? null,
@@ -16574,7 +24023,7 @@ function stepGraphSlide(d: number): void {
  * `scopeExercises` (the multi-graph's picked lifts, or the carousel's single lift), reading
  * the open state of its sub-folds from `container` so a tap doesn't snap them shut (rule 24).
  * Used by BOTH the full multi-graph bar and the single-lift carousel foot. */
-function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null): string {
+function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement | null, opts?: { skipRvw?: boolean; dashType?: string }): string {
   const scopeAllowed = allGraphsAllowed
     ? new Set(ALL_GRAPH_METRIC_IDS)
     : metricsAllowedForScope(graphPerms, scopeExercises);
@@ -16583,7 +24032,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "predicted"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "pctBest"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const openMetricGroups = new Set<string>();
@@ -16601,10 +24050,17 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
       })
       .join("");
     const nOn = g.ids.filter((id) => waMetrics.has(id)).length;
+    const mInfo = g.label === "Weight" ? "mWeight" : g.label === "Strength" ? "mStrength" : "mVolume";
+    // The Strength line's rolling-WINDOW pill (owner): only meaningful when the Strength line
+    // is on — it picks the period the "best top set = strength" is taken over (all-time …
+    // down to per-day). A cycling pill (rule #toggle).
+    const winPill = g.label === "Strength" && waMetrics.has("strength")
+      ? `<button type="button" class="wa-metric wa-strwin" data-wastrwin title="Strength line window: at each date the line is your best top set within this period (smaller = tracks your recent best and can drop; 'all' = lifetime best, never drops). Tap to cycle.">best: ${escapeHtml(currentStrengthWindow().short)}</button>`
+      : "";
     return (
       `<details class="wa-metric-group"${nOn || openMetricGroups.has(g.label) ? " open" : ""}>` +
-      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}</summary>` +
-      `<div class="wa-metric-chips">${chips}</div></details>`
+      `<summary class="wa-metric-group-sum">${escapeHtml(g.label)}${nOn ? ` <span class="muted">(${nOn})</span>` : ""}${infoBtn(mInfo)}</summary>` +
+      `<div class="wa-metric-chips">${chips}${winPill}</div></details>`
     );
   }).join("");
   const c = waGraphConfig;
@@ -16612,31 +24068,30 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const compact = getTimeCompact();
   const onoff = (on: boolean, attr: string, label: string, title: string) =>
     `<button type="button" class="wa-name-opt${on ? " is-on" : ""}" ${attr} title="${title}">${label}</button>`;
-  const lensCount = [c.prediction, c.decay, waHardOnly].filter(Boolean).length;
+  const lensCount = [c.decay, waHardOnly].filter(Boolean).length;
   const openCfgGroups = new Set<string>();
   if (container) for (const d of container.querySelectorAll<HTMLDetailsElement>(".wa-cfg-group"))
     if (d.open) { const lbl = d.querySelector(".wa-cfg-group-sum")?.childNodes[0]?.textContent?.trim(); if (lbl) openCfgGroups.add(lbl); }
-  const cfgGroup = (label: string, sub: string, body: string) =>
-    `<details class="wa-cfg-group"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
+  const cfgGroup = (label: string, sub: string, body: string, infoKey?: string) =>
+    `<details class="wa-cfg-group" data-cfggroup="${escapeHtml(label)}"${openCfgGroups.has(label) ? " open" : ""}><summary class="wa-cfg-group-sum">${label}${sub ? ` <span class="muted">${sub}</span>` : ""}${infoKey ? infoBtn(infoKey) : ""}</summary><div class="wa-cfg-body">${body}</div></details>`;
   const cfgData = cfgGroup("Data", `${c.aggregation === "none" ? "every set" : c.aggregation} · ${c.interval}${c.smoothing ? ` · ~${c.smoothing}` : ""}${compact ? " · compacted" : ""}`,
     `<label class="wa-gcfg-f">Aggregate<select class="wa-cfg" data-wacfg="aggregation">${opt("none", c.aggregation, "Every set")}${opt("max", c.aggregation, "Max")}${opt("avg", c.aggregation, "Average")}${opt("sum", c.aggregation, "Sum")}</select></label>` +
-    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("month", c.interval, "Month")}</select></label>` +
+    `<label class="wa-gcfg-f">Interval<select class="wa-cfg" data-wacfg="interval">${opt("day", c.interval, "Day")}${opt("week", c.interval, "Week")}${opt("biweek", c.interval, "Bi-week")}${opt("month", c.interval, "Month")}${opt("quarter", c.interval, "3 months")}${opt("halfyear", c.interval, "6 months")}${opt("year", c.interval, "12 months")}</select></label>` +
     `<button type="button" class="wa-name-opt" data-wasmooth title="Smoothing window — sets averaged together (0 = off). Tap to cycle.">Smoothing: ${c.smoothing}</button>` +
-    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."));
+    onoff(compact, `data-watime="1"`, compact ? "⇄ Compacted time" : "⇄ Realistic time", compact ? "Gaps squeezed. Tap for real spacing." : "Real time spacing. Tap to squeeze gaps."), "data");
   const cfgLines = cfgGroup("Lines & filter", lensCount ? `${lensCount} on` : "",
     onoff(waHardOnly, `data-wahardonly="1"`, "Hard sets only", "Drop easy / warm-up sets (high reps-in-reserve). Also applies to the calendar.") +
-    onoff(c.prediction, `data-wacfgtoggle="prediction"`, "Prediction", "Add a logarithmic strength forecast line.") +
-    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."));
+    onoff(c.decay, `data-wacfgtoggle="decay"`, "Decay", "Fade strength by time off (use-it-or-lose-it)."), "lines");
   const cfgBars = hasBarMetric
     ? cfgGroup("Bars & axes", "",
         `<label class="wa-gcfg-f" title="Bar (Volume) transparency — 1 solid, lower see-through.">Opacity<input class="wa-cfg" data-wacfg="opacity" type="range" min="0.1" max="1" step="0.05" value="${c.opacity}" /></label>` +
         `<label class="wa-gcfg-f" title="Bar girth — fatten or slim the bars (grouped bars get thin when many lifts are shown).">Bar girth<input class="wa-cfg" data-wacfg="barGirth" type="range" min="0.5" max="4" step="0.25" value="${c.barGirth}" /></label>` +
         `<label class="wa-gcfg-f" title="Right-axis height vs the left (kg) axis: 1 = auto, below 1 makes the right-axis bars taller, above 1 shorter.">Right axis ↕<input class="wa-cfg" data-wacfg="rightHeadroom" type="range" min="0.25" max="4" step="0.25" value="${c.rightHeadroom}" /></label>` +
-        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`)
+        `<label class="wa-gcfg-f" title="Move the Volume bars UP or DOWN, away from the 1RM and other lines on the same dates. 0 = on the floor.">Volume shift<span class="wa-shift-val"> ${c.volumeYShift > 0 ? "+" : ""}${Math.round(c.volumeYShift * 100)}%</span><input class="wa-cfg" data-wacfg="volumeYShift" type="range" min="-0.8" max="0.8" step="0.05" value="${c.volumeYShift}" /></label>`, "bars")
     : "";
   const cfgSpread = hasSetMetric
     ? cfgGroup("Set spread", "",
-        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`)
+        `<label class="wa-gcfg-f" title="Set spread — how far a session's sets fan out on the per-set / Weight Range views: 0 = stacked on one line, ~1 = across its own day, up to ~10 = fanned over several days (best in realistic time).">Spread<input class="wa-cfg" data-wacfg="spread" type="range" min="0" max="9.8" step="0.1" value="${c.spread}" /></label>`, "spread")
     : "";
   const cfgAllGraphs = onoff(allGraphsAllowed, `data-allgraphs="1"`, allGraphsAllowed ? "All graphs" : "Approved only", allGraphsAllowed ? "Showing ALL graphs, ignoring per-exercise approval. Tap for approved-only." : "Showing only approved graphs. Tap to show all.");
   const cfgAssist = onoff(assistLoggedView, `data-assistview="1"`, assistLoggedView ? "Assist: logged ×2" : "Assist: real ½",
@@ -16646,21 +24101,130 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const cfgPotential = cfgGroup("Potential (log)", c.potentialLog ? `axis · ceiling ${c.potentialCeiling ?? "—"}` : c.potentialNativeLog ? `native · ceiling ${c.potentialCeiling ?? "—"}` : "",
     onoff(!!c.potentialLog, `data-wacfgtoggle="potentialLog"`, "Log to potential", "Space the strength AXIS by distance to a lifetime-potential ceiling — values stay in kg, the axis just compresses near the ceiling. An approach-to-ceiling reads straight; a true plateau still flattens.") +
     onoff(!!c.potentialNativeLog, `data-wacfgtoggle="potentialNativeLog"`, "Native log (exp.)", "EXPERIMENTAL: transform each data POINT's value to its log-distance from the ceiling and plot THAT on a normal linear axis (the plotted numbers become the log values).") +
-    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`);
+    `<label class="wa-gcfg-f" title="Lifetime-potential ceiling (kg) both log views converge on — set it ABOVE your current best 1RM.">Ceiling (kg)<input class="wa-cfg" data-wacfg="potentialCeiling" type="number" step="1" min="1" inputmode="numeric" value="${c.potentialCeiling ?? ""}" /></label>`, "potential");
+  // Projection — the log-curve forecast line (ln(x+a)+b fit). Lives right under the
+  // Volume & frequency metric group. ON/OFF reuses the "predicted" metric so it draws
+  // through the existing render path; horizon + basis are cycle pills.
+  const projOn = waMetrics.has("predicted");
+  const projDays = c.predictionDays;
+  const projDaysLbl = projDays >= 365 ? `${Math.round(projDays / 365)} yr` : `${Math.round(projDays / 30)} mo`;
+  const projBasis = c.projectionBasis ?? "records";
+  const projBasisLbl = projBasis === "records" ? "Records" : projBasis === "hard" ? "Hard sets" : "All sets";
+  const windowSet = projFitFrom != null || projFitTo != null;
+  const cfgProjection = cfgGroup("Projection", projOn ? `${projDaysLbl} · ${projBasisLbl.toLowerCase()}` : "",
+    `<button type="button" class="wa-metric${projOn ? " is-on" : ""}" data-wametric="predicted" title="Draw a strength forecast that rises steeply early and flattens toward your ceiling (the Potential ceiling if set, else this lift's world record).">Show forecast line</button>` +
+    `<button type="button" class="wa-name-opt" data-waprojdays title="How far ahead the forecast projects. Tap to cycle.">Ahead <span class="muted">${projDaysLbl}</span></button>` +
+    `<button type="button" class="wa-name-opt" data-waprojbasis title="Which logged sets the curve is fitted to (warm-ups always excluded). Tap to cycle.">Fit <span class="muted">${projBasisLbl}</span></button>` +
+    (projOn
+      ? (windowSet
+          ? `<button type="button" class="wa-name-opt is-on" data-waprojwinreset title="Reset the fit window back to all your data.">Window: custom ✕</button>`
+          : `<span class="muted wa-proj-hint">drag the ⟵ ⟶ lines to set the fit window</span>`)
+      : ""), "projection");
+  // Reps versus weight — a whole-different plot: every set at weight(x) × reps(y) per
+  // lift, with an optional per-lift best-fit line. When ON it replaces the time graph.
+  const cfgRepsWeight = cfgGroup("Reps versus weight", S.waRepsVsWeight ? (S.waRepsVsWeightFit ? "on · best-fit" : "on") : "",
+    onoff(S.waRepsVsWeight, `data-warvw="1"`, "Weight × reps scatter", "Plot every set at weight (x) × reps (y) for each selected lift, instead of the time graph. Add more lifts to overlay them.") +
+    onoff(S.waRepsVsWeightFit, `data-warvwfit="1"`, "Best-fit line", "Draw a straight best-fit line through each lift's points."), "repsweight");
+  // Reps×kg time window — two toggles (mode + which window), shown only when the rvw scatter
+  // is active. Replaces the old ‹ › pager (owner: "all of this should be in the options menu").
+  const cfgWindow = S.waRepsVsWeight
+    ? cfgGroup("Set window", rvwWindowLabel(),
+        onoff(rvwWindowMode === "2w", `data-rvwmode="1"`, rvwWindowMode === "2w" ? "Rolling 2-week" : "Increasing", rvwWindowMode === "2w" ? "Fixed 2-week periods (last 2 wk, 2–4 wk ago…). Tap for increasing windows." : "Increasing windows anchored to now (last day → … → all time). Tap for fixed 2-week periods.") +
+        `<button type="button" class="wa-name-opt" data-rvwcycle="1" title="Cycle which time window the reps×kg scatter shows.">${escapeHtml(rvwWindowLabel())}</button>`, "window")
+    : "";
+  // Strength-decay MODEL controls (owner): pick a complexity level (Linear → Log → Full)
+  // and dial ITS variables, live on the data — so the fade curve can be checked. Shown when
+  // the Strength Decay metric or the Decay fade is on. Percent fields (floor / loss-per-day /
+  // growth cap / calibration) display ×100; the input handler converts them back.
+  const dp = c.decayParams ?? DEFAULT_DECAY_PARAMS;
+  const decayShown = waMetrics.has("strengthDecay") || c.decay;
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  const dField = (field: string, label: string, value: number, step: number, title: string) =>
+    `<label class="wa-gcfg-f" title="${escapeHtml(title)}">${label}<input class="wa-cfg" data-wadecay="${field}" type="number" step="${step}" inputmode="decimal" value="${value}" /></label>`;
+  const dLvlLabel = dp.level === 1 ? "Linear" : dp.level === 2 ? "Log" : dp.level === 3 ? "Full" : "Phases";
+  const dCommon =
+    dField("graceDays", "Grace (days)", dp.graceDays, 1, "Days of full strength after a session before any fade begins.") +
+    dField("floor", "Floor %", Math.round(dp.floor * 100), 1, "Never fades below this % of the peak (muscle memory).");
+  const dByLevel = dp.level === 1
+    ? dField("linearLossPerDay", "Loss %/day", r3(dp.linearLossPerDay * 100), 0.1, "Percent of the peak lost each day after the grace (a straight-line fade).")
+    : dp.level === 2
+      ? dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
+        dField("stabilityDays", "Stability (days)", dp.stabilityDays, 1, "Durability: bigger = a flatter, slower fade.")
+      : dp.level === 3
+        ? dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Strength lost per natural-log unit of (days past grace ÷ stability). Higher = faster fade.") +
+          dField("stabilityDays", "Base stability", dp.stabilityDays, 1, "Starting durability (days); grows with each session.") +
+          dField("stabilityGrowth", "Stability ×/session", r3(dp.stabilityGrowth), 0.1, "Durability is multiplied by this each session — the more you train it, the slower it fades.") +
+          dField("maxStability", "Max stability", dp.maxStability, 5, "Cap on durability (days).") +
+          dField("maxGrowthFraction", "Growth cap %", r3(dp.maxGrowthFraction * 100), 1, "A single session can't raise the level beyond this % above your all-time peak.") +
+          dField("calibrationThreshold", "Calibration %", Math.round(dp.calibrationThreshold * 100), 1, "A returning set at ≥ this % of the prior level proves the gap was 'maintained' — bumps stability up to the gap's length.")
+        : // LEVEL 4 — PHASES: fade fields (log) + the three phases + the phase-1 RIR assumption.
+          dField("lossPerLog", "Loss / log", r3(dp.lossPerLog), 0.01, "Fade speed between sessions (logarithmic).") +
+          dField("stabilityDays", "Stability (days)", dp.stabilityDays, 1, "Durability of the between-session fade: bigger = slower fade.") +
+          dField("phase1EndSets", "Phase 1 end (sets)", dp.phase1EndSets, 1, "Hard-set count where the BEGINNER phase ends (≈ 5–10).") +
+          dField("phase2EndSets", "Phase 2 end (sets)", dp.phase2EndSets, 5, "Hard-set count where the INTERMEDIATE phase ends (≈ 100–300).") +
+          dField("phase1Pace", "Pace 1 · beginner", r3(dp.phase1Pace), 0.05, "How much of an upward jump the line accepts per session in phase 1 (1 = full = fast & chaotic).") +
+          dField("phase2Pace", "Pace 2 · interm.", r3(dp.phase2Pace), 0.05, "Upward-jump acceptance in phase 2 (moderate, the odd bigger jump).") +
+          dField("phase3Pace", "Pace 3 · advanced", r3(dp.phase3Pace), 0.05, "Upward-jump acceptance in phase 3 (small — slow, stable).") +
+          dField("phase1RirUpper", "RIR · upper", dp.phase1RirUpper, 1, "Assumed reps-in-reserve for an un-graded UPPER-body set in phase 1.") +
+          dField("phase1RirLower", "RIR · lower", dp.phase1RirLower, 1, "Assumed RIR for un-graded legs / lower back / erector sets in phase 1.");
+  const decayLevelPill = `<button type="button" class="wa-name-opt" data-wadecaylevel="1" title="Decay model complexity — Linear → Log → Full → Phases (3 growth phases by hard-set count, each with its own pace; only the world record caps gains). Tap to cycle.">Model: ${dLvlLabel}</button>`;
+  // Owner: show the FORMULA + what each variable does INLINE (mobile has no hover for the
+  // field tooltips). Level-aware: the active model's equation, then a one-line gloss per knob.
+  const dFormula = dp.level === 1
+    ? "retention = 1 − r · (days − grace)"
+    : dp.level === 4
+      ? "level = decayed + pace · (set − decayed) · capped only by the world record"
+      : "retention = 1 − k · ln(1 + (days − grace) ÷ S)";
+  const dGlossCommon =
+    "<li><b>Grace</b> — days of full strength after a session before any fade starts.</li>" +
+    "<li><b>Floor</b> — the lowest % of your peak it can fade to (muscle memory).</li>";
+  const dGlossLevel = dp.level === 1
+    ? "<li><b>Loss %/day (r)</b> — % of the peak lost each day past the grace (a straight line).</li>"
+    : dp.level === 2
+      ? "<li><b>Loss / log (k)</b> — fade speed: strength lost per ln-unit of (days past grace ÷ S).</li>" +
+        "<li><b>Stability (S)</b> — durability in days; bigger = a flatter, slower fade.</li>"
+      : dp.level === 3
+        ? "<li><b>Loss / log (k)</b> — fade speed per ln-unit of (days past grace ÷ S).</li>" +
+          "<li><b>Base / Max stability (S)</b> — durability in days; starts at Base, capped at Max.</li>" +
+          "<li><b>Stability ×/session</b> — S is multiplied by this each session (trained lifts fade slower).</li>" +
+          "<li><b>Growth cap</b> — one session can't raise the level beyond this % above your all-time peak.</li>" +
+          "<li><b>Calibration</b> — a returning set ≥ this % of the prior level raises S to the gap's length.</li>"
+        : "<li><b>Phase ends (sets)</b> — beginner runs to the 1st count, intermediate to the 2nd, then advanced. Boundary lines mark them on the graph.</li>" +
+          "<li><b>Pace 1/2/3</b> — the fraction of an upward jump accepted per session in each phase: beginner fast (1), advanced slow. The rest accrues over later sessions.</li>" +
+          "<li><b>RIR upper / lower</b> — when a phase-1 set has no logged RIR, assume this (3 upper, 6 lower) to judge true effort. Log your RIR to override it.</li>" +
+          "<li><b>Loss / log · Stability</b> — the between-session fade, same as the Log model.</li>";
+  const dExtra = dp.level === 3
+    ? `<p class="wa-decay-note">The Full model also blends noisy high-RIR sets toward the current level, and each training day steps the line to that set's estimated 1RM (capped).</p>`
+    : dp.level === 4
+      ? `<p class="wa-decay-note">Three phases by hard-set count — beginner (fast, chaotic) → intermediate (predictable, the odd jump) → advanced (slow, stable). Gains are capped ONLY by the world record. Boundary lines show where each phase ends. (Dragging them + the phase-1 level is coming next.)</p>`
+      : `<p class="wa-decay-note">The line steps to each session's estimated 1RM, then sags by the formula above until the next session.</p>`;
+  const decayExplain = `<div class="wa-decay-explain"><p class="wa-decay-formula"><code>${dFormula}</code></p><ul class="wa-decay-gloss">${dGlossCommon}${dGlossLevel}</ul>${dExtra}</div>`;
+  // "Make official" (owner): promotes THIS curve to the canonical strength model that drives
+  // every set's predicted RIR. ★ when the live params already match the official ones.
+  const officialOn = isDecayOfficial();
+  const decayOfficialBtn = `<button type="button" class="wa-name-opt${officialOn ? " is-on" : ""}" data-wadecayofficial="1" title="Make THIS strength-decay curve the OFFICIAL one — then every set's predicted RIR (pRIR) is judged against it.">${officialOn ? "★ Official curve" : "Make official"}</button>`;
+  const cfgDecay = decayShown
+    ? cfgGroup("Decay model", dLvlLabel, decayLevelPill + decayOfficialBtn + dCommon + dByLevel + decayExplain, "decaymodel")
+    : "";
   const cfgUi =
     `<div class="wa-gmenu-grid">` +
     `<div class="wa-gmenu-cell">${cfgData}</div>` +
     `<div class="wa-gmenu-cell">${cfgLines}</div>` +
-    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}</div>` +
+    `<div class="wa-gmenu-cell wa-metric-row" role="group" aria-label="Graph metric">${metricChips}${cfgDecay}${cfgProjection}${opts?.skipRvw ? "" : cfgRepsWeight}${cfgWindow}</div>` +
     `<div class="wa-gmenu-cell">${cfgBars}${cfgSpread}${cfgPotential}</div>` +
-    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${cfgAssist}</div>` +
+    `<div class="wa-gmenu-cell wa-gmenu-span">${cfgAllGraphs}${infoBtn("allgraphs")}${cfgAssist}${infoBtn("assist")}</div>` +
     `</div>`;
   if (container) { const prevGcfg = container.querySelector<HTMLDetailsElement>(".wa-graph-fold"); if (prevGcfg) S.waGraphFoldOpen = prevGcfg.open; }
   const activeLabels = GRAPH_METRICS.filter((m) => waMetrics.has(m.id)).map((m) => m.label);
   const sumText = activeLabels.length ? activeLabels.join(", ") : "none selected";
+  // Graph-TYPE toggle, moved INTO the menu (owner: "the reps×kg / over-time button should be
+  // in the options menu"). data-dashtype cycles the per-bubble type via the existing handler.
+  const typeRow = opts?.dashType !== undefined
+    ? `<div class="wa-gmenu-typerow"><button type="button" class="wa-name-opt gmenu-type" data-dashtype="1" title="Graph type — tap to switch Over time ⇄ Reps × kg">${opts.dashType === "rvw" ? "✦ Reps × kg" : "↗ Over time"}</button>${infoBtn("type")}</div>`
+    : "";
   return `<details class="wa-graph-fold"${S.waGraphFoldOpen ? " open" : ""}>` +
     `<summary class="wa-graph-fold-sum"><span class="wa-graph-fold-lbl">Options</span> <span class="muted wa-graph-fold-cur">· ${escapeHtml(sumText)}</span></summary>` +
-    `<div class="wa-graph-menu">${cfgUi}</div>` +
+    `<div class="wa-graph-menu"><button type="button" class="wa-gmenu-close" data-wagmenuclose title="Close options" aria-label="Close options">✕</button>${typeRow}${cfgUi}</div>` +
     `</details>`;
 }
 /** Build the graph "min" carousel: title + ×BW quick-option + chart stage + prev/next +
@@ -16677,7 +24241,15 @@ function renderGraphMini(): void {
   // slide's lift — so the single view tweaks metrics/aggregation/etc. without leaving it.
   const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
   host.innerHTML =
-    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button></div>` +
+    graphTypeTabsHtml() +
+    // Single-view title tools (owner): a SWITCH icon (pick a different lift to view — "add"
+    // makes no sense in a one-lift view) + "=" to match the top history lift. NO "✕" — you
+    // can only switch, never empty a single view.
+    `<div class="gmini-head"><button type="button" class="gmini-title wa-title-lift" id="gminiTitle"></button>` +
+      `<span class="gmini-tools">` +
+        `<button type="button" class="wa-title-tool" data-gmswitch="1" title="Switch exercise — pick a different lift to view" aria-label="Switch exercise">⇆</button>` +
+        `<button type="button" class="wa-title-tool" data-gmmatch="1" title="Match the top history lift" aria-label="Match the top history lift">=</button>` +
+      `</span></div>` +
     `<div class="gmini-stagewrap">` +
       `<div id="gminiStage" class="gmini-stage wa-graph-chart"></div>` +
       // On-chart corner toolbar (top-right edge), like the multi-graph view: the chart's
@@ -16690,9 +24262,938 @@ function renderGraphMini(): void {
       `<div class="gmini-dots">${dots}</div>` +
       `<button type="button" class="gmini-nav" data-gmnav="1" aria-label="Next lift">›</button>` +
       optionsFold +
+      // Compare moved to the Multi view when the carousel became the default single
+      // view (CHART-151); surface it here too — it opens Multi with compare on.
+      (lockedUsername() === null && rosterUsers().length >= 2
+        ? `<button type="button" class="ms-more gmini-compare" data-gmcompare="1" title="Compare other athletes on the graph (opens the multi-graph)">Compare</button>`
+        : "") +
       `<button type="button" class="ms-more gmini-more" data-gmmore="1" title="Show the full multi-exercise, multi-athlete graph">Multi ▾</button>` +
     `</div>`;
   paintGraphSlide();
+}
+
+// ===== Custom graph dashboard render (CHART-160+) ==========================================
+/** Assemble the pure analyticsGraph input for ONE bubble from its OWN config — the reuse seam
+ * that lets every bubble render through the SAME proven engine (renderGraphSlideChart's input,
+ * parameterised on the bubble instead of globals). single → first lift only; multi → all. */
+function buildBubbleInput(
+  bubble: GraphBubble,
+  viewPersist?: { getSavedView: () => GraphBubble["savedView"]; setSavedView: (v: GraphBubble["savedView"]) => void },
+): Parameters<typeof renderAnalyticsGraph>[1] {
+  const formula = currentFormula();
+  const user = els.athlete.value;
+  const isRvw = bubble.type === "rvw";
+  // COMPARE other athletes (owner): when the Compare row is open, overlay every athlete on
+  // the pill row; otherwise just the primary. The exercise cap shrinks so users × exercises
+  // never exceeds WA_GRAPH_MAX, exactly like the legacy full graph.
+  const athletes = waCompareOpen ? graphAthleteList() : [user];
+  const multiAthlete = athletes.length > 1;
+  const exCap = Math.max(1, Math.floor(WA_GRAPH_MAX / athletes.length));
+  const exsBase = bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
+  const exs = lensExpand("graph", exsBase).slice(0, exCap);
+  const recs = applyHardSetsFilter(computedRecords().filter((r) => athletes.includes(r.username)));
+  const sm = currentStrengthByUserExercise(formula);
+  // Per-bubble config CLONE so a bubble's type/×BW never leak to its neighbours (the bug the
+  // owner hit). The shared Options knobs (aggregation/decay…) ride the base config for now.
+  const cfg: GraphConfig = {
+    ...waGraphConfig,
+    formula,
+    // PB-51: the Strength line's "best top set" window. MUST be set here (the choke point for
+    // the ACTIVE dashboard chart) — not trusted from the waGraphConfig spread, which is only
+    // ever stamped in the dormant carousel / dead legacy paths, so it stayed undefined here and
+    // the line silently fell back to all-time runningMax (the "best: 1d does nothing" bug).
+    strengthWindow: currentStrengthWindow().ms,
+    repsVsWeight: isRvw,
+    repsVsWeightFit: isRvw ? S.waRepsVsWeightFit : false,
+    rirOf: (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, formula),
+    ceilingOf: (rs) => {
+      const r = rs[0];
+      return r ? worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null) : null;
+    },
+  };
+  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
+  // Metrics come from the GLOBAL Options menu (shared across bubbles for now); type/view/
+  // lifts/×BW are the per-bubble dials. (bubble.metrics is reserved for future per-bubble metrics.)
+  const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
+  // PROJECTION fit-window: the dashboard bubble was missing the draggable "fit ⟵ / ⟶ fit"
+  // lines the carousel/full graph have (owner: "fit data points for the projection graph not
+  // working"). Build them here too — projectionFitMarkers also sets the projection window
+  // bounds on waGraphConfig, so copy those onto this bubble's cloned cfg. (rvw ignores xMarkers.)
+  const projMarkers = isRvw ? undefined : projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
+  cfg.projectionFrom = waGraphConfig.projectionFrom;
+  cfg.projectionTo = waGraphConfig.projectionTo;
+  // "Remember my pan/zoom across bubble/tab switches + refresh" (owner). The saved view is
+  // restored ONLY while the plotted CONTENT is unchanged (this signature) — change the lift /
+  // metric / type / athlete / time-compaction and it re-fits instead of keeping a stale frame.
+  const tabId = activeTab(graphDash).id;
+  // DATA FINGERPRINT in the saved-view signature: the saved pan/zoom is kept only while the
+  // PLOTTED DATA is unchanged. Without this, logging a set didn't change the sig, so the frozen
+  // view was restored and update() only re-fit the right axis — the new datapoint fell outside
+  // the stale frame and was clipped off-screen (owner: "I add a set but don't see the dot").
+  // Folding count + latest date + a cheap value-sum in means any add / delete / edit re-fits.
+  const plotted = recs.filter((r) => exs.includes(r.exerciseName));
+  let dataMax = "";
+  let dataSum = plotted.length;
+  for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
+  const sig = JSON.stringify([bubble.type, bubble.view, bubble.perBodyweight, exs, drawMetricIds, getTimeCompact(), athletes, dataSum, dataMax]);
+  const savedViewSource = viewPersist?.getSavedView() ?? bubble.savedView;
+  const initialView = savedViewSource && savedViewSource.sig === sig ? savedViewSource.box : null;
+  // PHASES (decay level 4): mark where the beginner / intermediate phases end, placed by
+  // cumulative set count (first phase1End sets = beginner, up to phase2End = intermediate).
+  // Auto-placed for now; dragging them is the next increment. Only on the time chart, when
+  // the Strength Decay metric is on. (Multi-lift uses the combined set timeline.)
+  const phaseLines: { x: number; color?: string; label?: string }[] = [];
+  if (!isRvw && cfg.decayParams?.level === 4 && drawMetricIds.includes("strengthDecay")) {
+    const dpp = cfg.decayParams;
+    const dates = plotted.map((r) => Date.parse(r.date)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+    const at = (n: number) => dates[Math.min(dates.length - 1, Math.max(0, n))]!;
+    if (dates.length > dpp.phase1EndSets) phaseLines.push({ x: at(dpp.phase1EndSets), color: "#8a6d3b", label: "beginner→inter." });
+    if (dates.length > dpp.phase2EndSets) phaseLines.push({ x: at(dpp.phase2EndSets), color: "#6c4ab0", label: "inter.→advanced" });
+  }
+  // 80% / 60%-of-1RM intensity ZONES that FOLLOW EACH DAY's strength (owner: not the all-time
+  // record). Build the effective strength curve (the decay model) and ribbon 60–80% / 80–100%
+  // of it, converted to ADDED kg (pct×effective − bodyweight share) so the zones sit under the
+  // plotted 1RM line. Single lift, kg view.
+  let areaBands: { points: { x: number; yTop: number; yBot: number }[]; fill: string }[] | undefined;
+  if (!isRvw && !bubble.perBodyweight && exs.length === 1) {
+    const { pts, offset } = effectiveDecayInput(plotted, cfg.formula, cfg);
+    const effCurve = decayedStrengthSeries(pts, Date.now(), 4, cfg.decayParams, null, 0); // EFFECTIVE (no peel)
+    if (effCurve.length) {
+      const band = (lo: number, hi: number, fill: string) => ({
+        points: effCurve.map((p) => ({ x: p.x, yBot: lo * p.y - offset, yTop: hi * p.y - offset })),
+        fill,
+      });
+      areaBands = [
+        band(0.6, 0.8, "rgba(120,120,120,0.07)"), // 60–80% hypertrophy
+        band(0.8, 1.0, "rgba(120,120,120,0.13)"), // 80–100% strength
+      ];
+    }
+  }
+  return {
+    exercises: exs,
+    records: isRvw ? rvwWindowRecords(recs) : recs,
+    rvwAxis: isRvw ? rvwAxisExtent(recs, exs) : undefined,
+    metrics: drawMetricIds,
+    config: cfg,
+    initialView,
+    areaBands,
+    // A thin red "today" reference line on the time axis (owner: "mark today as a little red").
+    // Anchored to midnight today so it lines up with today's datapoint; meaningless on the
+    // reps×kg (weight-axis) view, so only on time charts.
+    xRefLines: isRvw ? undefined : [{ x: Date.parse(todayIso()), color: "#cf5a4a", label: "today" }, ...phaseLines],
+    onViewChange: (box) => {
+      // Persist only — never re-render here (that would destroy the chart mid-gesture).
+      const next = box ? { sig, box } : null;
+      if (viewPersist) { viewPersist.setSavedView(next); return; }
+      graphDash = setBubbleView(graphDash, tabId, bubble.id, next);
+      persistDash();
+    },
+    onPointHistory: (ex) => openExerciseInfo(ex), // popup "→ in history" link
+    height: 300, // one constant plot height across all bubble types (stable reel, owner)
+    xMarkers: projMarkers, // projection fit-window lines (drag to set the forecast fit range)
+    onMarkerDrag: onProjMarkerDrag,
+    rvwFitOf,
+    onRvwFitDrag,
+    codeOf: (ex: string) => displayName(ex, "graph"),
+    perBodyweight: bubble.perBodyweight,
+    bodyweight: athProfile(user)?.weight ?? null,
+    worldRecordKg: (ex: string, u?: string) => {
+      const uu = u ?? user;
+      return worldRecordKg(ex, athProfile(uu)?.sex ?? "m", athProfile(uu)?.weight ?? null);
+    },
+    emptyOnNoExercises: true,
+    // Multi-athlete overlay: each series scales to its OWN athlete's bodyweight / sex.
+    ...(multiAthlete
+      ? {
+          users: athletes,
+          userLabelOf: (u: string) => rosterUsers().find((r) => r.username === u)?.user ?? u,
+          bodyweightOf: (u: string) => athProfile(u)?.weight ?? null,
+        }
+      : {}),
+  };
+}
+
+/** Persist the global waMetrics selection onto the active bubble (per-bubble metrics). */
+function dashWriteMetrics(): void {
+  const tab = activeTab(graphDash);
+  graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { metrics: [...waMetrics] });
+  persistDash();
+}
+/** Re-sync the shared graph picker + S.* flags to the active bubble, then re-render. Called
+ * by the dashboard control handlers after they mutate graphDash. */
+function refreshDash(): void {
+  const b = currentBubble();
+  waGraphSel = [...b.exercises];
+  S.waRepsVsWeight = b.type === "rvw";
+  S.waPerBodyweight = b.perBodyweight;
+  renderSelector("graph");
+  renderWaGraph();
+}
+
+// Long-press tab menu (owner): a small floating menu — Duplicate / Add tab / Rename / Delete —
+// opened by a long-press or right-click on a tab (no inline icons cluttering the strip).
+function closeDashTabMenu(): void { document.getElementById("dashTabMenu")?.remove(); }
+/**
+ * ON-SCREEN debug console — the mobile-debug tool (full guide: docs/onscreen-debug.md).
+ * Phones have NO devtools console, so `dbg("msg")` paints the recent lines to a fixed green
+ * panel bottom-left. Instrument every step of a failing flow with it, then ONE screenshot shows
+ * exactly where it breaks — this is how PB-38's root (panel-scoped handler vs body-appended menu)
+ * was finally found (owner: "#super persistent and #max debug worked, keep the green console").
+ * Owner: keep it SHORT + COLLAPSABLE — tap the ▾/▸ header to collapse (state persisted), ✕ to
+ * clear, and the body is height-capped + scrolls. HIDDEN by default now — turn it on via the
+ * admin Settings ⚙ "🐞 Debug console" toggle (or `localStorage.setItem("colosseum.dbg","on")`).
+ * Also exposed as `window.dbg` for ad-hoc desktop-console use.
+ */
+// 🔍 On-screen CSS / element inspector — eruda devtools, loaded on demand (admin Settings toggle).
+// First tap fetches eruda from the CDN + opens the panel; later taps toggle it. The Elements
+// panel's pointer lets you tap any element to see its box model (padding / margin / border / size)
+// + computed styles — the tappable inspector phones otherwise lack (pairs with dbg() + the CSS
+// box-viewer rule 68). Loaded from CDN, NOT bundled: this app inlines into ONE index.html
+// (vite-singlefile), so bundling eruda (~0.7 MB) would bloat the single deliverable for everyone;
+// CDN-on-toggle keeps the file lean and only the admin who taps it ever downloads eruda.
+interface ErudaLike { init: (opts?: unknown) => void; show: (name?: string) => void; hide: () => void }
+let erudaMod: ErudaLike | null = null;
+let erudaShown = false;
+function loadScriptOnce(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src; s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error(`script load failed: ${src}`));
+    document.head.appendChild(s);
+  });
+}
+async function toggleInspector(): Promise<void> {
+  const btn = els.inspectToggleBtn;
+  try {
+    if (!erudaMod) {
+      if (btn) btn.textContent = "🔍 Loading…";
+      await loadScriptOnce("https://cdn.jsdelivr.net/npm/eruda@3");
+      erudaMod = (window as unknown as { eruda?: ErudaLike }).eruda ?? null;
+      if (!erudaMod) throw new Error("eruda global missing after load");
+      erudaMod.init();
+      // Open STRAIGHT to the Elements panel — that's the box-model / CSS view the owner wants
+      // (padding · margin · border · size + computed styles), not the Console it defaults to.
+      erudaMod.show("elements");
+      erudaShown = true;
+    } else if (erudaShown) {
+      erudaMod.hide(); erudaShown = false;
+    } else {
+      erudaMod.show("elements"); erudaShown = true;
+    }
+  } catch (e) {
+    dbg(`inspect LOAD-FAILED ${e instanceof Error ? e.message : String(e)}`);
+    if (btn) btn.textContent = "🔍 Inspect (load failed)";
+    return;
+  }
+  if (btn) {
+    btn.setAttribute("aria-pressed", String(erudaShown));
+    btn.textContent = erudaShown ? "🔍 Inspect (CSS) ✓" : "🔍 Inspect (CSS)";
+  }
+}
+// 📦 BOX inspector — our own fast box-model viewer (eruda has too many tabs to find this).
+// ON: outlines EVERY element (colour-cycled by nesting depth, the rule-68 CSS box-viewer) so all
+// boxes appear at once; AND turns taps into a measure — tap any element to draw a devtools-style
+// 4-layer highlight (margin orange · border yellow · padding green · content blue) with a label
+// showing tag/id/class, W×H, and the margin/padding numbers. No bundle cost — pure DOM/CSS.
+let boxInspectOn = false;
+function boxLayer(o: HTMLElement, c: string): HTMLElement {
+  const d = document.createElement("div");
+  d.style.cssText = `position:fixed;pointer-events:none;z-index:2147483646;background:${c}`;
+  o.appendChild(d);
+  return d;
+}
+let boxOverlay: { wrap: HTMLElement; margin: HTMLElement; border: HTMLElement; padding: HTMLElement; content: HTMLElement; label: HTMLElement } | null = null;
+function setBox(el: HTMLElement, x: number, y: number, w: number, h: number): void {
+  el.style.left = `${x}px`; el.style.top = `${y}px`; el.style.width = `${Math.max(0, w)}px`; el.style.height = `${Math.max(0, h)}px`;
+}
+function px(v: string): number { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
+function measureBox(target: HTMLElement): void {
+  if (!boxOverlay) {
+    const wrap = document.createElement("div");
+    wrap.id = "boxDbgOverlay";
+    wrap.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483646";
+    document.body.appendChild(wrap);
+    const margin = boxLayer(wrap, "rgba(246,178,107,0.45)");   // orange
+    const border = boxLayer(wrap, "rgba(255,229,127,0.55)");   // yellow
+    const padding = boxLayer(wrap, "rgba(147,196,125,0.55)");  // green
+    const content = boxLayer(wrap, "rgba(111,168,220,0.55)");  // blue
+    const label = document.createElement("div");
+    label.style.cssText = "position:fixed;pointer-events:none;z-index:2147483647;background:#111;color:#fff;font:10px/1.35 monospace;padding:3px 5px;border-radius:3px;max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    wrap.appendChild(label);
+    boxOverlay = { wrap, margin, border, padding, content, label };
+  }
+  const o = boxOverlay;
+  const r = target.getBoundingClientRect();
+  const cs = getComputedStyle(target);
+  const m = { t: px(cs.marginTop), r: px(cs.marginRight), b: px(cs.marginBottom), l: px(cs.marginLeft) };
+  const b = { t: px(cs.borderTopWidth), r: px(cs.borderRightWidth), b: px(cs.borderBottomWidth), l: px(cs.borderLeftWidth) };
+  const p = { t: px(cs.paddingTop), r: px(cs.paddingRight), b: px(cs.paddingBottom), l: px(cs.paddingLeft) };
+  setBox(o.margin, r.left - m.l, r.top - m.t, r.width + m.l + m.r, r.height + m.t + m.b);
+  setBox(o.border, r.left, r.top, r.width, r.height);
+  setBox(o.padding, r.left + b.l, r.top + b.t, r.width - b.l - b.r, r.height - b.t - b.b);
+  setBox(o.content, r.left + b.l + p.l, r.top + b.t + p.t, r.width - b.l - b.r - p.l - p.r, r.height - b.t - b.b - p.t - p.b);
+  const sel = `${target.tagName.toLowerCase()}${target.id ? "#" + target.id : ""}${target.classList.length ? "." + Array.from(target.classList).slice(0, 2).join(".") : ""}`;
+  const r4 = (o2: { t: number; r: number; b: number; l: number }) => `${o2.t}/${o2.r}/${o2.b}/${o2.l}`;
+  o.label.textContent = `${sel}  ${Math.round(r.width)}×${Math.round(r.height)}  m ${r4(m)}  p ${r4(p)}  b ${r4(b)}`;
+  // park the label just above the element, clamped into view
+  const ly = r.top - m.t - 20 > 4 ? r.top - m.t - 20 : r.bottom + m.b + 4;
+  o.label.style.left = `${Math.max(4, Math.min(r.left, window.innerWidth - 8))}px`;
+  o.label.style.top = `${Math.min(ly, window.innerHeight - 20)}px`;
+}
+// Measure on LONG-PRESS only — a normal tap is NEVER blocked, so the page stays fully usable while
+// Boxes is on (the old version hijacked every click and froze the UI, even the Settings menu).
+let boxPressTimer: number | null = null;
+let boxPressAt: { x: number; y: number } | null = null;
+let boxSuppressClick = false;
+function cancelBoxPress(): void { if (boxPressTimer != null) { clearTimeout(boxPressTimer); boxPressTimer = null; } boxPressAt = null; }
+function onBoxDown(e: PointerEvent): void {
+  const t = e.target as HTMLElement;
+  if (!t || t.closest("#boxDbgOverlay")) return;
+  boxPressAt = { x: e.clientX, y: e.clientY };
+  boxPressTimer = window.setTimeout(() => {
+    measureBox(t);
+    boxSuppressClick = true; // swallow ONLY the click that ends this long-press (so it doesn't also activate)
+    boxPressTimer = null;
+  }, 350);
+}
+function onBoxMove(e: PointerEvent): void {
+  if (boxPressAt && (Math.abs(e.clientX - boxPressAt.x) > 10 || Math.abs(e.clientY - boxPressAt.y) > 10)) cancelBoxPress();
+}
+function onBoxClickCapture(e: Event): void {
+  if (boxSuppressClick) { e.preventDefault(); e.stopPropagation(); boxSuppressClick = false; }
+}
+function toggleBoxInspect(): void {
+  boxInspectOn = !boxInspectOn;
+  const btn = document.getElementById("boxInspectBtn");
+  if (boxInspectOn) {
+    if (!document.getElementById("boxDbgStyle")) {
+      const s = document.createElement("style");
+      s.id = "boxDbgStyle";
+      // outline EVERY element; cycle 3 hues by depth so nested boxes are tellable apart.
+      // `outline` is drawn outside the box and takes no layout space, so it never shifts/hides anything.
+      s.textContent = "*{outline:1px solid rgba(232,93,117,.35)!important}" +
+        "* * {outline-color:rgba(111,168,220,.35)!important}" +
+        "* * * {outline-color:rgba(147,196,125,.35)!important}" +
+        "* * * * {outline-color:rgba(232,93,117,.35)!important}";
+      document.head.appendChild(s);
+    }
+    document.addEventListener("pointerdown", onBoxDown, true);
+    document.addEventListener("pointermove", onBoxMove, true);
+    document.addEventListener("pointerup", cancelBoxPress, true);
+    document.addEventListener("pointercancel", cancelBoxPress, true);
+    document.addEventListener("click", onBoxClickCapture, true);
+  } else {
+    document.getElementById("boxDbgStyle")?.remove();
+    boxOverlay?.wrap.remove(); boxOverlay = null;
+    cancelBoxPress(); boxSuppressClick = false;
+    document.removeEventListener("pointerdown", onBoxDown, true);
+    document.removeEventListener("pointermove", onBoxMove, true);
+    document.removeEventListener("pointerup", cancelBoxPress, true);
+    document.removeEventListener("pointercancel", cancelBoxPress, true);
+    document.removeEventListener("click", onBoxClickCapture, true);
+  }
+  if (btn) { btn.setAttribute("aria-pressed", String(boxInspectOn)); btn.textContent = boxInspectOn ? "📦 Boxes ✓" : "📦 Boxes"; }
+}
+const dbgLines: { t: string; err: boolean }[] = [];
+function dbgCollapsed(): boolean { try { return localStorage.getItem("colosseum.dbgCollapsed") === "1"; } catch { return false; } }
+// The green console is HIDDEN by default now (owner) — it only shows when explicitly
+// switched ON via the admin Settings ⚙ toggle (localStorage colosseum.dbg === "on").
+// (Old behaviour was the reverse: shown unless "off".)
+// `dbgForced` is flipped on by an uncaught error so a CRASH self-reports on-screen even when the
+// console is toggled off (owner asked for visible errors) — transient, never persisted.
+let dbgForced = false;
+function dbgVisible(): boolean { if (dbgForced) return true; try { return localStorage.getItem("colosseum.dbg") === "on"; } catch { return false; } }
+function renderDbg(): void {
+  if (!dbgVisible()) { document.getElementById("dbgOverlay")?.remove(); return; }
+  let el = document.getElementById("dbgOverlay");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "dbgOverlay";
+    el.style.cssText = "position:fixed;left:0;bottom:0;z-index:2147483647;max-width:100vw;background:rgba(0,0,0,0.82);color:#3f6;font:10px/1.3 monospace";
+    el.addEventListener("click", (e) => {
+      const t = e.target as HTMLElement;
+      if (t.id === "dbgClear") { dbgLines.length = 0; renderDbg(); return; }
+      // anywhere else on the header toggles collapse (persisted)
+      if (t.closest("#dbgHead")) { try { localStorage.setItem("colosseum.dbgCollapsed", dbgCollapsed() ? "0" : "1"); } catch { /* ignore */ } renderDbg(); }
+    });
+    document.body.appendChild(el);
+  }
+  const collapsed = dbgCollapsed();
+  const hasErr = dbgLines.some((l) => l.err);
+  // Errors render RED, normal trace GREEN (header too) — one screenshot tells a crash from flow (owner: "red logs").
+  const lines = dbgLines.map((l) => `<span style="color:${l.err ? "#f55" : "#3f6"}">${escapeHtml(l.t)}</span>`).join("\n");
+  el.innerHTML =
+    `<div id="dbgHead" style="display:flex;gap:8px;align-items:center;padding:2px 6px;cursor:pointer;opacity:0.85">` +
+    `<span style="color:${hasErr ? "#f55" : "#3f6"}">dbg ${collapsed ? "▸" : "▾"}</span><span style="margin-left:auto">${dbgLines.length}</span><span id="dbgClear" style="padding:0 4px">✕</span></div>` +
+    (collapsed ? "" : `<div id="dbgBody" style="max-height:18vh;overflow:auto;padding:0 6px 3px;white-space:pre-wrap;word-break:break-all">${lines}</div>`);
+  const body = document.getElementById("dbgBody");
+  if (body) body.scrollTop = 0; // owner: auto-scroll to the TOP (show the start of the trace)
+}
+function dbg(msg: string, isErr = false): void {
+  if (!dbgVisible()) return;
+  dbgLines.push({ t: `${new Date().toTimeString().slice(0, 8)} ${msg}`, err: isErr });
+  while (dbgLines.length > 40) dbgLines.shift();
+  renderDbg();
+}
+// Expose for ad-hoc use from a desktop console or other modules.
+(window as unknown as { dbg?: (m: string, e?: boolean) => void }).dbg = dbg;
+// Surface any uncaught JS error / promise rejection on the on-screen console (phones have no
+// devtools) — the owner asked for visible error logging. A crash FORCES the green console open
+// (dbgForced) even when it's toggled off, so the error self-reports in red instead of the page
+// just looking "frozen". The force is transient (not persisted) — a refresh clears it.
+if (typeof window !== "undefined") {
+  const onCrash = (msg: string) => { dbgForced = true; dbg(msg, true); };
+  window.addEventListener("error", (e) => onCrash(`ERR ${e.message} @ ${(e.filename || "").split("/").pop() ?? ""}:${e.lineno}`));
+  window.addEventListener("unhandledrejection", (e) => onCrash(`REJECT ${String((e as PromiseRejectionEvent).reason).slice(0, 90)}`));
+}
+// PB-44 history-tab reset diagnostic: pullMergeKv RELOADS the page when a cloud merge changes
+// localStorage, which clears the in-memory green console — so the `HD sync` line that would
+// explain a wipe vanishes. Stash it in localStorage (timestamped) and replay it into the console
+// after the reload. Kept until the console is actually ON, so it can't be missed on a silent boot.
+const HD_DIAG_KEY = "colosseum.__hdDiag";
+function hdDiagPush(line: string): void {
+  try {
+    const arr = JSON.parse(localStorage.getItem(HD_DIAG_KEY) || "[]") as string[];
+    arr.push(`${new Date().toTimeString().slice(0, 8)} ${line}`);
+    while (arr.length > 8) arr.shift();
+    localStorage.setItem(HD_DIAG_KEY, JSON.stringify(arr));
+  } catch { /* ignore */ }
+}
+function replayHdDiag(): void {
+  if (!dbgVisible()) return; // keep the breadcrumb until the console is on, so a wipe is never missed
+  try {
+    const arr = JSON.parse(localStorage.getItem(HD_DIAG_KEY) || "[]") as string[];
+    if (!arr.length) return;
+    for (const t of arr) dbgLines.push({ t: `HDprev ${t}`, err: t.includes("SHRINK") });
+    while (dbgLines.length > 40) dbgLines.shift();
+    localStorage.removeItem(HD_DIAG_KEY);
+    renderDbg();
+  } catch { /* ignore */ }
+}
+function closeDashBubbleMenu(): void { document.getElementById("dashBubbleMenu")?.remove(); }
+/** The "＋" view-bubble menu (rule 32: fixed + clampMenuIntoView). Mirrors openDashTabMenu —
+ * appended to <body>, actions handled at DOCUMENT level (PB-38 root fix). */
+function openDashBubbleMenu(anchor: HTMLElement): void {
+  closeDashBubbleMenu();
+  const canDelete = activeTab(graphDash).bubbles.length > 1;
+  const m = document.createElement("div");
+  m.id = "dashBubbleMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-bubmenu="add">＋ Add view</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-bubmenu="duplicate">⧉ Duplicate view</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-bubmenu="delete">✕ Delete view</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+  dbg(`bub menu OPEN (in <body>, ${m.querySelectorAll("[data-bubmenu]").length} items)`);
+}
+function openDashTabMenu(anchor: HTMLElement, tabId: string): void {
+  closeDashTabMenu();
+  const canDelete = graphDash.tabs.length > 1;
+  const m = document.createElement("div");
+  m.id = "dashTabMenu"; m.className = "dash-tab-menu";
+  m.innerHTML =
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="duplicate" data-tab="${escapeHtml(tabId)}">⧉ Duplicate</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="rename" data-tab="${escapeHtml(tabId)}">✎ Rename</button>` +
+    `<button type="button" class="dash-tab-menu-opt" data-tabmenu="add">＋ Add tab</button>` +
+    (canDelete ? `<button type="button" class="dash-tab-menu-opt dash-tab-menu-del" data-tabmenu="delete" data-tab="${escapeHtml(tabId)}">✕ Delete</button>` : "");
+  document.body.appendChild(m);
+  clampMenuIntoView(m, anchor);
+  dbg(`menu OPEN (in <body>, ${m.querySelectorAll("[data-tabmenu]").length} items)`);
+}
+// PER-SETTING info (owner: "a separate info button for each setting, not a general one").
+// Each group/control in the Options menu carries a small ℹ; tapping it shows just that
+// setting's explanation in a small popup. Keyed lookup keeps the long text out of attributes.
+const SETTING_INFO: Record<string, string> = {
+  type: "Over time — track the metrics across dates. Reps × kg — plot every set as weight (x) × reps (y) instead.",
+  data: "Aggregate — combine each interval's sets (every set / max / average / sum). Interval — bucket width (day / week / bi-week / month). Smoothing — average neighbouring points to smooth the line. Time — squeeze empty gaps, or show real calendar spacing.",
+  lines: "Hard sets only — drop easy / warm-up sets (high reps-in-reserve); also applies to the calendar. Decay — fade strength during time off training (use-it-or-lose-it).",
+  bars: "Opacity — bar transparency. Bar girth — bar thickness. Right axis — bar height vs the kg axis. Volume shift — move the bars up or down, away from the lines.",
+  spread: "Set spread — how far a session's sets fan out on the per-set views: 0 = stacked on one line, higher = spread across days.",
+  potential: "Log to potential — compress the strength axis near a lifetime ceiling so an approach reads straight. Native log — transform each point's value (experimental). Ceiling — the kg target both converge on.",
+  projection: "Show forecast — a curve that rises early then flattens toward your ceiling. Ahead — how far it projects. Fit — which logged sets it's fitted to. Window — drag the ⟵ ⟶ lines to limit the fit range.",
+  repsweight: "Weight × reps scatter — plot every set as weight (x) × reps (y) instead of the time graph. Best-fit — a straight line through each lift's points.",
+  window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
+  mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
+  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
+  decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. Phases: three growth phases by hard-set count (beginner → intermediate → advanced), each with its own growth PACE (how fast it accepts gains); only the world record caps gains, and phase 1 reads your RIR (assumes 3 upper / 6 lower when none is logged). Boundary lines mark each phase on the graph. All levels share the grace days and the floor. Full formulas: Plan → Formulas → 'How the numbers work'.",
+  mVolume: "Volume / Volume load — weight × reps summed per interval (bars). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
+  allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
+  assist: "Assisted-machine sets: show the machine's logged reading (counterweight, bodyweight ×2) or your real effort (counterweight halved).",
+};
+function closeSettingInfo(): void {
+  document.getElementById("setInfoPopup")?.remove();
+  document.removeEventListener("click", settingInfoOutside, true);
+}
+function settingInfoOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("[data-setinfocls]")) { closeSettingInfo(); return; }
+  if (t.closest("#setInfoPopup") || t.closest("[data-setinfo]")) return;
+  closeSettingInfo();
+}
+function openSettingInfo(anchor: HTMLElement, key: string): void {
+  const existing = document.getElementById("setInfoPopup");
+  if (existing && existing.dataset.key === key) { closeSettingInfo(); return; }
+  closeSettingInfo();
+  const el = document.createElement("div");
+  el.id = "setInfoPopup"; el.className = "gdash-info-popup set-info-popup"; el.dataset.key = key;
+  el.innerHTML =
+    `<div class="gi-head"><span>Info</span><button class="gi-close" data-setinfocls aria-label="Close">✕</button></div>` +
+    `<div class="gi-row gi-desc">${escapeHtml(SETTING_INFO[key] ?? "")}</div>`;
+  document.body.appendChild(el);
+  clampMenuIntoView(el, anchor);
+  setTimeout(() => document.addEventListener("click", settingInfoOutside, true), 0);
+}
+/** A small ℹ button for a setting group — opens openSettingInfo(key). */
+function infoBtn(key: string): string {
+  return `<button type="button" class="wa-set-info" data-setinfo="${key}" aria-label="What's this?" title="What's this?">ℹ</button>`;
+}
+/** Render the active tab's bubble REEL into #waGraph (inside the visible #waGraphFull, so the
+ * existing #waExerciseSelector picker above it edits the current bubble via the waGraphSel
+ * projection). One bubble shows at a time (swipe reel, owner's pick); each draws a REAL chart
+ * from its own stored config — never a stub. */
+/** Build the graph tab strip into #gdashTabs, which now lives ABOVE the Graph card (like
+ * the history's #woTabs) — owner: "move the graph tabs to above the graph card just like
+ * the history section". Self-contained so the strip can refresh even when the card is
+ * COLLAPSED (renderGraphDashboard skips the chart work then). Tap a tab NAME to switch; tap
+ * its ⋯ button for the options menu (Duplicate / Rename / Add / Delete) — NO long-press
+ * (unreliable on device, PB-38). The tab being renamed turns into an input. */
+function renderGdashTabs(): void {
+  const tabsHost = document.getElementById("gdashTabs");
+  if (!tabsHost) return;
+  ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
+  // Don't rebuild the strip while a rename <input> is already live — a re-render (e.g. a
+  // deferred graph paint) would destroy the focused field mid-type ("rename won't let me type").
+  if (dashEditTab && tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit")) return;
+  tabsHost.innerHTML = graphDash.tabs
+    .map((t) => {
+      const on = t.id === graphDash.activeTabId;
+      if (on && dashEditTab === t.id) {
+        return `<input class="gdash-tab gdash-tabedit" data-dashtabname="${t.id}" value="${escapeHtml(t.name)}" aria-label="Tab name" />`;
+      }
+      return `<span class="gdash-tab-wrap${on ? " is-on" : ""}">` +
+        `<button type="button" class="gdash-tab${on ? " is-on" : ""}" data-dashtab="${t.id}" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</button>` +
+        `<button type="button" class="gdash-tab-more" data-tabmenuopen="${t.id}" aria-label="${escapeHtml(t.name)} options" title="Tab options — duplicate, rename, add, delete">⋯</button>` +
+      `</span>`;
+    })
+    .join("");
+  if (dashEditTab) {
+    const inp = tabsHost.querySelector<HTMLInputElement>(".gdash-tabedit");
+    inp?.focus(); inp?.select();
+  }
+}
+function renderGraphDashboard(): void {
+  const box = document.getElementById("waGraph");
+  if (!box) return;
+  syncTitleExListMenu(); // keep an open "N exercises" dropdown alive (refresh in place), so removing a lift from it doesn't close it (owner)
+  ensureDashUser(); // graphDash must match the current athlete (per-athlete dashboards)
+  const tab = activeTab(graphDash);
+  if (dashBubbleIdx >= tab.bubbles.length) dashBubbleIdx = 0;
+  let bubble = tab.bubbles[dashBubbleIdx]!;
+  // PB-37 sync — the bubble is the SSOT, mirrored to the shared selection (waGraphSel) the
+  // title toolbar + picker operate on. FIRST paint of a bubble (id changed) → LOAD its lifts
+  // into waGraphSel (seeding a brand-new empty bubble from the top lift so it shows something).
+  // SAME bubble again → the +/✕/= toolbar or picker just edited waGraphSel, so WRITE it back to
+  // the bubble (persist) — even to empty (the owner chose to clear it). This is what lets
+  // "change the exercise" stick; the old code re-mirrored the bubble over every edit.
+  if (dashLoadedBubbleId !== bubble.id) {
+    if (bubble.exercises.length === 0) {
+      const seed = graphCarouselLifts()[0]; // friendly first-run: don't open blank
+      if (seed) {
+        graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [seed] });
+        persistDash();
+        bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
+      }
+    }
+    const want = [...bubble.exercises];
+    const changed = JSON.stringify(waGraphSel) !== JSON.stringify(want);
+    waGraphSel = want;
+    dashLoadedBubbleId = bubble.id;
+    if (changed) renderSelector("graph"); // refresh the picker card to this bubble's lifts
+  } else if (JSON.stringify(waGraphSel) !== JSON.stringify(bubble.exercises)) {
+    graphDash = updateBubble(graphDash, tab.id, bubble.id, { exercises: [...waGraphSel] });
+    persistDash();
+    bubble = activeTab(graphDash).bubbles[dashBubbleIdx]!;
+  }
+  renderGdashTabs();
+  // Project the active bubble onto the shared graph state so the Options menu + buildBubbleInput
+  // read THIS bubble: metrics are per-bubble (waMetrics ← bubble.metrics); the other Options
+  // knobs (aggregation/decay/…) stay global/shared for now.
+  waMetrics.clear();
+  for (const m of bubble.metrics) waMetrics.add(m);
+  S.waRepsVsWeight = bubble.type === "rvw";
+  S.waPerBodyweight = bubble.perBodyweight;
+  // View bubbles: tap one to JUMP to that view (active one filled). Owner redesign — the bubbles
+  // ARE the navigation now (no ‹ › arrows, no separate ⧉/✕/＋ buttons): bigger tappable circles,
+  // then a final "＋" bubble that opens a small menu (duplicate / delete / add this view).
+  // Each view bubble is a tiny CODE NAME (owner): split in half — TOP a single letter for
+  // the view type (T = over time · R = reps×kg), BOTTOM one letter per exercise (first 3 if
+  // they don't fit), each letter coloured by that lift's dominant body part (muscleColor).
+  const dots = tab.bubbles
+    .map((b, i) => {
+      const typeLetter = b.type === "rvw" ? "R" : "T";
+      const exs = b.exercises;
+      const exLetters = exs
+        .slice(0, 3)
+        .map((n) => `<span class="gdash-bub-ex" style="color:${muscleColor(mgFor(n))}">${escapeHtml(displayName(n).trim().charAt(0).toUpperCase() || "?")}</span>`)
+        .join("");
+      const names = exs.map((n) => displayName(n)).join(", ");
+      const title = `View ${i + 1} · ${b.type === "rvw" ? "reps × kg" : "over time"}${names ? ` · ${names}` : " · empty"}`;
+      return `<button type="button" class="gdash-bub${i === dashBubbleIdx ? " is-on" : ""}" data-dashdot="${i}" aria-label="${escapeHtml(title)}" title="${escapeHtml(title)}">` +
+        `<span class="gdash-bub-type">${typeLetter}</span>` +
+        `<span class="gdash-bub-exs">${exLetters || "·"}</span>` +
+        `</button>`;
+    })
+    .join("");
+  // The FULL lift-selection title toolbar (owner: "no big title, no + / = / ✕ button") — the
+  // SAME one the old graph had: big title naming the lift(s) (each tap-to-remove), the + add /
+  // = match / ✕ remove-all tools, and the "Pick" drawer tab. Operates on waGraphSel, which the
+  // PB-37 sync above writes back to this bubble — so add/remove/change all persist per bubble.
+  const titleHtml = liftSelectionTitle(waGraphSel, "graph");
+  // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
+  // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
+  // per-bubble "type" pill owns that switch).
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true, dashType: bubble.type });
+  // "Compare" (next to Options, owner): overlay other athletes on this bubble's graph. The
+  // toggle reveals a sideways-scrolling athlete-pill row above the foot; hidden in locked
+  // views / with nobody to compare (rule 21). Same data-wacompare / data-waath wiring as the
+  // legacy full graph, now wired into the dashboard's buildBubbleInput (multi-athlete records).
+  const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
+  const compareBtn = canCompare
+    ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on this graph"}">Compare</button>`
+    : "";
+  const comparePills = waCompareOpen && canCompare ? graphAthletesPillsHtml() : "";
+  // PB-39: PRESERVE the chart stage element across re-renders of the SAME bubble. Rebuilding
+  // box.innerHTML would destroy #gdashStage (and its live chart instance) every render, so an
+  // incidental re-render re-mounted the chart and re-applied a stale saved view — snapping the
+  // user's pan/zoom back to the auto-fit. Instead: detach the existing stage, rebuild only the
+  // header/foot around a slot, then slot the SAME element back (→ analyticsGraph.update() keeps
+  // the live view). A real bubble SWITCH drops the old stage so a fresh mount restores the new
+  // bubble's saved view.
+  let keepStage = document.getElementById("gdashStage");
+  if (keepStage) keepStage.remove(); // detach (keeps the element + its chart instance alive)
+  if (dashStageBubbleId !== bubble.id) keepStage = null; // bubble switched → force a fresh mount
+  // PRESERVE the relocated Legend across the box.innerHTML rebuild. On a SAME-bubble re-render
+  // the engine reuses its live .svgc-legend node (it only rewrites the node's innerHTML, never
+  // recreates it), but that node was moved OUT of the stage into the overlay — which the rebuild
+  // below destroys. Holding a JS ref keeps the node alive so we can re-attach it (else the legend
+  // vanishes after the first re-render — owner: "the legend button is gone, can't see what I'm
+  // looking at").
+  const preservedLegend = box.querySelector<HTMLElement>(".svgc-legend");
+  // Stage + a top-right corner overlay holding the kg/×BW unit + ℹ info (owner: "move the fit
+  // and kg/bw btns to the right top corner of the graph"). The chart engine's own Legend + ⤢ Fit
+  // bar is RELOCATED into this overlay after the render (see below), like the carousel does. The
+  // graph TYPE pill moved into the Options menu, so the old .gdash-head row is gone entirely.
+  box.innerHTML =
+    `<div class="gdash-titlerow wa-seltitle-host">${titleHtml}</div>` +
+    `<div class="gdash-stagewrap">` +
+      `<div id="gdashStageSlot"></div>` +
+      `<div class="gdash-overlay">` +
+        `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+      `</div>` +
+    `</div>` +
+    comparePills +
+    `<div class="gdash-foot">` +
+      `<div class="gdash-bubbles">${dots}` +
+        // The trailing "＋" bubble: tap → menu (duplicate current · delete current · add new view).
+        `<button type="button" class="gdash-bub gdash-bub-add" data-dashbubmenu="1" aria-label="Add or manage views" title="Duplicate, delete or add a view">＋</button>` +
+      `</div>` +
+      compareBtn +
+      optionsFold +
+    `</div>`;
+  // Slot the (preserved or new) stage element into place.
+  const slot = document.getElementById("gdashStageSlot");
+  const stage = keepStage ?? (() => { const d = document.createElement("div"); d.id = "gdashStage"; d.className = "gdash-stage wa-graph-chart"; return d; })();
+  slot?.replaceWith(stage);
+  if (stage) {
+    if (bubble.exercises.length === 0) {
+      stage.innerHTML = `<p class="muted wa-placeholder">No lift picked — tap “⇆ Lifts” to choose what this bubble shows.</p>`;
+      dashStageBubbleId = null; // placeholder wiped any chart → next render must fresh-mount
+    } else {
+      renderAnalyticsGraph(stage, buildBubbleInput(bubble));
+      dashStageBubbleId = bubble.id;
+      // Relocate the chart engine's Legend + ⤢ Fit bar into the top-right corner overlay (beside
+      // the kg/×BW + ℹ buttons), so Fit sits ON the graph edge (owner request). The engine keeps a
+      // live ref to .svgc-legend (only rewrites its innerHTML on redraw) + binds its handlers to
+      // that node, so moving it is safe — same trick as the carousel's paintGraphSlide.
+      const overlay = box.querySelector<HTMLElement>(".gdash-overlay");
+      // Fresh mount → the engine just made the legend inside the stage; same-bubble update →
+      // reuse the preserved node (it lives nowhere in the DOM after the rebuild).
+      const legend = stage.querySelector<HTMLElement>(".svgc-legend") ?? preservedLegend;
+      if (overlay && legend) {
+        if (legend.parentElement && legend.parentElement !== overlay) legend.remove();
+        overlay.querySelector(".svgc-legend")?.remove(); // drop a previous render's relocated bar
+        overlay.insertBefore(legend, overlay.firstChild); // Legend + Fit first, then kg/×BW + ℹ
+      }
+    }
+  }
+}
+
+// ── Exercise-info Curve tab: same analytics engine + Options as the main graph ─────────────
+let exInfoGraphStageKey: string | null = null;
+let exInfoGraphRaf = 0;
+
+function exInfoGraphActive(): boolean {
+  return currentExInfo !== null && !els.exInfoPage.hidden && exInfoTab === "curve";
+}
+
+function exInfoWriteMetrics(name: string): void {
+  patchExInfoBubble(name, { metrics: [...waMetrics] });
+}
+
+function scheduleExInfoGraph(): void {
+  if (!exInfoGraphActive() || !currentExInfo) return;
+  if (exInfoGraphRaf) return;
+  exInfoGraphRaf = requestAnimationFrame(() => {
+    exInfoGraphRaf = 0;
+    renderExInfoGraph(currentExInfo!);
+  });
+}
+
+/** Graph Options / overlay controls inside the exercise-info Curve graph (same data-* as Analysis). */
+function handleExInfoGraphControl(t: HTMLElement): boolean {
+  const name = currentExInfo;
+  if (!name || !t.closest("[data-exinfograph]")) return false;
+  const met = t.closest<HTMLElement>(".wa-metric");
+  if (met?.dataset.wametric) {
+    const id = met.dataset.wametric;
+    const WEIGHT_EXCLUSIVE = ["e1rm", "weightRange"];
+    if (waMetrics.has(id)) { waMetrics.delete(id); met.classList.remove("is-on"); }
+    else {
+      waMetrics.add(id); met.classList.add("is-on");
+      if (WEIGHT_EXCLUSIVE.includes(id)) {
+        for (const other of WEIGHT_EXCLUSIVE) {
+          if (other !== id && waMetrics.delete(other)) {
+            met.closest(".wa-metric-chips")?.querySelector(`[data-wametric="${other}"]`)?.classList.remove("is-on");
+          }
+        }
+      }
+    }
+    exInfoWriteMetrics(name);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-dashtype]")) {
+    cycleExInfoBubbleType(name);
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-dashbw]")) {
+    const b = loadExInfoBubble(name);
+    patchExInfoBubble(name, { perBodyweight: !b.perBodyweight });
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wacompare]")) {
+    waCompareOpen = !waCompareOpen;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wasmooth]")) {
+    const steps = [0, 1, 2, 5, 10, 20, 50];
+    const i = steps.indexOf(waGraphConfig.smoothing);
+    waGraphConfig.smoothing = steps[(i + 1) % steps.length]!;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wastrwin]")) {
+    cycleStrengthWindow();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wadecaylevel]")) {
+    const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+    dpc.level = ((dpc.level % 4) + 1) as DecayLevel;
+    waGraphConfig.decayParams = dpc;
+    saveDecayParams();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wadecayofficial]")) {
+    makeDecayOfficial();
+    strengthByExCache = null;
+    rerenderSetsTables();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojdays]")) {
+    const steps = [30, 90, 180, 365, 730, 1825, 3650, 5475];
+    const i = steps.indexOf(waGraphConfig.predictionDays);
+    waGraphConfig.predictionDays = steps[(i + 1) % steps.length] ?? 90;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojbasis]")) {
+    const steps = ["records", "hard", "all"] as const;
+    const i = steps.indexOf(waGraphConfig.projectionBasis ?? "records");
+    waGraphConfig.projectionBasis = steps[(i + 1) % steps.length]!;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-waprojwinreset]")) {
+    projFitFrom = null; projFitTo = null;
+    scheduleExInfoGraph();
+    return true;
+  }
+  const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
+  if (cfgTog?.dataset.wacfgtoggle) {
+    const key = cfgTog.dataset.wacfgtoggle as "decay" | "potentialLog" | "potentialNativeLog";
+    waGraphConfig[key] = !waGraphConfig[key];
+    if (key === "potentialLog" && waGraphConfig.potentialLog) { waGraphConfig.potentialNativeLog = false; S.waPerBodyweight = false; }
+    if (key === "potentialNativeLog" && waGraphConfig.potentialNativeLog) { waGraphConfig.potentialLog = false; S.waPerBodyweight = false; }
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-warvw]")) {
+    patchExInfoBubble(name, { type: S.waRepsVsWeight ? "time" : "rvw" });
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-warvwfit]")) {
+    S.waRepsVsWeightFit = !S.waRepsVsWeightFit;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-rvwmode]")) {
+    rvwWindowMode = rvwWindowMode === "2w" ? "inc" : "2w";
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-rvwcycle]")) {
+    if (rvwWindowMode === "2w") rvw2wIdx = (rvw2wIdx + 1) % (rvw2wMaxIdx + 1);
+    else rvwIncIdx = (rvwIncIdx + 1) % RVW_INC_WINDOWS.length;
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-watime]")) {
+    setTimeCompact(!getTimeCompact());
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wahardonly]")) {
+    waHardOnly = !waHardOnly;
+    saveHardOnly();
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (t.closest<HTMLElement>("[data-wagmenuclose]")) {
+    const fold = t.closest<HTMLDetailsElement>(".wa-graph-fold");
+    if (fold) { fold.open = false; S.waGraphFoldOpen = false; }
+    return true;
+  }
+  return false;
+}
+
+function handleExInfoGraphConfigChange(target: HTMLElement): boolean {
+  const name = currentExInfo;
+  if (!name || !target.closest("[data-exinfograph]")) return false;
+  const cfg = target.closest<HTMLElement>(".wa-cfg");
+  if (cfg?.dataset.wacfg) {
+    const key = cfg.dataset.wacfg;
+    const el = cfg as HTMLInputElement | HTMLSelectElement;
+    if (key === "aggregation") waGraphConfig.aggregation = el.value as GraphConfig["aggregation"];
+    else if (key === "interval") waGraphConfig.interval = el.value as GraphConfig["interval"];
+    else if (key === "opacity") waGraphConfig.opacity = Math.min(1, Math.max(0.1, Number((el as HTMLInputElement).value) || 0.6));
+    else if (key === "rightHeadroom") waGraphConfig.rightHeadroom = Math.min(4, Math.max(0.25, Number((el as HTMLInputElement).value) || 1));
+    else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
+    else if (key === "spread") waGraphConfig.spread = Math.min(9.8, Math.max(0, Number((el as HTMLInputElement).value)));
+    else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
+    else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
+    else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
+    scheduleExInfoGraph();
+    return true;
+  }
+  if (cfg?.dataset.wadecay) {
+    const field = cfg.dataset.wadecay;
+    const raw = Number((cfg as HTMLInputElement).value);
+    if (Number.isFinite(raw)) {
+      const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+      const isPct = field === "floor" || field === "linearLossPerDay" || field === "maxGrowthFraction" || field === "calibrationThreshold";
+      let v = isPct ? raw / 100 : raw;
+      const clamp = (lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+      if (field === "graceDays") v = clamp(0, 365);
+      else if (field === "floor") v = clamp(0, 1);
+      else if (field === "linearLossPerDay") v = clamp(0, 1);
+      else if (field === "lossPerLog") v = clamp(0, 2);
+      else if (field === "stabilityDays") v = clamp(1, 1000);
+      else if (field === "stabilityGrowth") v = clamp(1, 5);
+      else if (field === "maxStability") v = clamp(1, 2000);
+      else if (field === "maxGrowthFraction") v = clamp(0, 2);
+      else if (field === "calibrationThreshold") v = clamp(0, 1);
+      else if (field === "phase1EndSets") v = Math.round(clamp(1, 100000));
+      else if (field === "phase2EndSets") v = Math.round(clamp(1, 100000));
+      else if (field === "phase1Pace" || field === "phase2Pace" || field === "phase3Pace") v = clamp(0, 1);
+      else if (field === "phase1RirUpper" || field === "phase1RirLower") v = clamp(0, 10);
+      (dpc as unknown as Record<string, number>)[field] = v;
+      waGraphConfig.decayParams = dpc;
+      saveDecayParams();
+    }
+    scheduleExInfoGraph();
+    return true;
+  }
+  return false;
+}
+
+/** Render the exercise-info Curve graph through renderAnalyticsGraph + the shared Options menu. */
+function renderExInfoGraph(name: string): void {
+  const host = els.exInfoBody.querySelector<HTMLElement>("[data-exinfograph]");
+  if (!host) return;
+  const bubble = loadExInfoBubble(name);
+  // Project this lift's stored bubble onto the shared graph globals the Options menu reads.
+  waMetrics.clear();
+  for (const m of bubble.metrics) waMetrics.add(m);
+  S.waRepsVsWeight = bubble.type === "rvw";
+  S.waPerBodyweight = bubble.perBodyweight;
+  if (bubble.type === "rvw") S.waRepsVsWeightFit = true;
+
+  const stageKey = `${name}::${bubble.type}::${bubble.perBodyweight}::${[...waMetrics].sort().join(",")}`;
+  let keepStage = host.querySelector<HTMLElement>("#exInfoGraphStage");
+  if (keepStage) keepStage.remove();
+  if (exInfoGraphStageKey !== stageKey) keepStage = null;
+
+  const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
+  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [name]), host, { skipRvw: true, dashType: bubble.type });
+  const compareBtn = canCompare
+    ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on this graph"}">Compare</button>`
+    : "";
+  const comparePills = waCompareOpen && canCompare ? graphAthletesPillsHtml() : "";
+
+  host.innerHTML =
+    `<div class="gdash-stagewrap exinfo-graph-stage">` +
+      `<div id="exInfoGraphStageSlot"></div>` +
+      `<div class="gdash-overlay exinfo-graph-overlay">` +
+        `<button type="button" class="wa-gov-btn${bubble.perBodyweight ? " is-on" : ""}" data-dashbw="1" title="Show kg metrics as multiples of bodyweight">${bubble.perBodyweight ? "×BW" : "kg"}</button>` +
+      `</div>` +
+    `</div>` +
+    comparePills +
+    `<div class="gdash-foot exinfo-graph-foot">${compareBtn}${optionsFold}</div>`;
+
+  const slot = host.querySelector("#exInfoGraphStageSlot");
+  const stage = keepStage ?? (() => {
+    const d = document.createElement("div");
+    d.id = "exInfoGraphStage";
+    d.className = "gdash-stage wa-graph-chart";
+    return d;
+  })();
+  slot?.replaceWith(stage);
+
+  const viewPersist = {
+    getSavedView: () => loadExInfoBubble(name).savedView,
+    setSavedView: (v: GraphBubble["savedView"]) => { patchExInfoBubble(name, { savedView: v ?? null }); },
+  };
+  renderAnalyticsGraph(stage, buildBubbleInput(bubble, viewPersist));
+  exInfoGraphStageKey = stageKey;
+
+  // Relocate ONLY the ⤢ Fit control into the top-right overlay (same as the main graph);
+  // drop the legend — the plot is self-explanatory on a single lift (owner).
+  const overlay = host.querySelector<HTMLElement>(".exinfo-graph-overlay");
+  const fitBtn = stage.querySelector<HTMLElement>(".svgc-center");
+  stage.querySelector<HTMLElement>(".svgc-legend")?.remove();
+  if (overlay && fitBtn) {
+    if (fitBtn.parentElement && fitBtn.parentElement !== overlay) fitBtn.remove();
+    overlay.querySelector(".svgc-center")?.remove();
+    overlay.appendChild(fitBtn);
+  }
 }
 
 function renderWaGraph(): void {
@@ -16700,11 +25201,33 @@ function renderWaGraph(): void {
   // multi-exercise / multi-athlete graph. All existing renderWaGraph() callers route here.
   // The section title reads a plain "Graph" in carousel mode (the carousel has its own
   // per-slide title); the multi-lift selection title shows only in the full view.
+  // NEW (CHART-160): the build-your-own dashboard replaces the fixed single-carousel + full
+  // multi views. It lives in #waGraphFull (kept visible) so the existing #waExerciseSelector
+  // picker edits the current bubble; #waGraph holds the bubble reel. The legacy mini/full code
+  // below stays DORMANT (reachable only if useGraphDashboard is flipped off — kept as a safety
+  // fallback per the "build alongside, don't delete the working path" lesson).
+  const useGraphDashboard = true;
+  if (useGraphDashboard) {
+    const summEl = document.getElementById("waGraphSummary");
+    if (summEl) { summEl.textContent = "Graph"; summEl.classList.remove("is-bigtitle"); }
+    const mini = document.getElementById("waGraphMini");
+    const full = document.getElementById("waGraphFull");
+    if (mini) mini.hidden = true;
+    if (full) full.hidden = false;
+    renderGdashTabs(); // tabs live ABOVE the card now — keep them fresh even when collapsed
+    const foldEl = document.getElementById("waGraphFold") as HTMLDetailsElement | null;
+    if (!foldEl?.open) return; // collapsed → skip the (hidden) chart work
+    renderGraphDashboard();
+    return;
+  }
   const summ = document.getElementById("waGraphSummary");
   if (summ) {
-    if (graphFullShown && waGraphSel.length) {
+    // Show the multi-lift title (with the + / ✕ / = toolbar + Pick tab) in the full view,
+    // OR whenever nothing is picked — so clearing all never strands you without a picker.
+    // Plain "Graph" only in carousel mode WITH a selection (the carousel has its own titles).
+    if (graphFullShown || !waGraphSel.length) {
       summ.innerHTML = `<span class="wa-graph-closed">Graph</span>${liftSelectionTitle(waGraphSel, "graph")}`;
-      summ.classList.add("is-bigtitle");
+      summ.classList.toggle("is-bigtitle", waGraphSel.length > 0);
     } else { summ.textContent = "Graph"; summ.classList.remove("is-bigtitle"); }
   }
   const miniEl = document.getElementById("waGraphMini");
@@ -16722,12 +25245,25 @@ function renderWaGraph(): void {
   // Work out the plotted exercises FIRST, so the metric chips can reflect what's
   // allowed for them (everything is blocked until reviewed in More info).
   waGraphConfig.formula = currentFormula(); // preserve the app-wide 1RM formula (TASK 33)
+  waGraphConfig.strengthWindow = currentStrengthWindow().ms;
+  // Reps-versus-weight scatter mode (owner): swaps the whole plot to weight(x)/reps(y).
+  waGraphConfig.repsVsWeight = S.waRepsVsWeight;
+  waGraphConfig.repsVsWeightFit = S.waRepsVsWeightFit;
   // Per-set RIR resolver so the scatter sizes each dot by effort (logged grade,
   // else predicted). Built per render — the strength map is shared across all sets.
   {
     const fm = waGraphConfig.formula;
     const sm = currentStrengthByUserExercise(fm);
-    waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm);
+    waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? (waGraphConfig.decayParams?.level === 4 ? assumedPhase1Rir(r.exerciseName) : predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm));
+    // Projection ceiling: the lift's world-record level (scaled to the athlete's
+    // bodyweight) for THIS group's exercise — what the forecast flattens toward when
+    // the user hasn't set an explicit Potential ceiling. Resolved per group's records.
+    waGraphConfig.ceilingOf = (rs) => {
+      const r = rs[0];
+      if (!r) return null;
+      const sex = athProfile(r.username)?.sex === "f" ? "f" : "m";
+      return worldRecordKg(r.exerciseName, sex, r.bodyweight ?? null);
+    };
   }
   const gAthletes = graphAthleteList();
   const multiAthlete = gAthletes.length > 1;
@@ -16789,7 +25325,7 @@ function renderWaGraph(): void {
   let preservedLegend: Element | null = null;
   if (!chartBox) {
     box.innerHTML =
-      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
+      `<div id="waGraphAthKey" class="wa-ath-key" hidden></div><div id="waGraphTabs"></div><div id="waGraphChart"></div><div id="waGraphOverlay" class="wa-graph-overlay"></div><div id="waGraphRvwPager"></div>${graphBarHtml}<div class="muted wa-placeholder" id="waGraphNote"></div>`;
     chartBox = box.querySelector<HTMLElement>("#waGraphChart");
   } else {
     // The legend node was relocated (into the chart overlay or the bar); the SVG
@@ -16813,14 +25349,34 @@ function renderWaGraph(): void {
     overlayEl = box.querySelector<HTMLElement>("#waGraphOverlay");
   }
   if (overlayEl) overlayEl.innerHTML = overlayHtml;
+  // Graph-type tabs sit ON TOP of the plot; rebuilt each render so their active state
+  // tracks the toggle even on the partial (bar-only) update path.
+  let tabsEl = box.querySelector<HTMLElement>("#waGraphTabs");
+  if (!tabsEl && chartBox) { chartBox.insertAdjacentHTML("beforebegin", `<div id="waGraphTabs"></div>`); tabsEl = box.querySelector<HTMLElement>("#waGraphTabs"); }
+  if (tabsEl) tabsEl.innerHTML = graphTypeTabsHtml();
+  // 2-week window pager (reps×weight only) — refreshed each render so its label tracks state.
+  const pagerEl = box.querySelector<HTMLElement>("#waGraphRvwPager");
+  if (pagerEl) pagerEl.innerHTML = ""; // rvw window now lives in the Options menu (toggles)
   // Past ~10 lines × several metrics the SVG redraw lags, so plot the first 10
   // and note the rest (graphExercises / graphExcluded computed above). Only the
   // ALLOWED metrics (drawMetricIds) are drawn — blocked ones never plot.
+  // Projection fit-window: when the forecast is on, two draggable lines bound which sets
+  // feed the fit. Default the lines to the plotted data's span; dragging re-fits to the
+  // window. Cleared (and the config bounds dropped) when the forecast is off.
+  // Projection fit-window: when the forecast is on, two draggable lines bound which sets
+  // feed the fit (shared with the carousel via projectionFitMarkers / onProjMarkerDrag).
+  const projMarkers = projectionFitMarkers(athleteRecs, drawMetricIds);
   const analyticsInput = {
     exercises: graphExercises,
-    records: athleteRecs,
+    records: S.waRepsVsWeight ? rvwWindowRecords(athleteRecs) : athleteRecs,
+    rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(athleteRecs, graphExercises) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
+    xMarkers: projMarkers,
+    onMarkerDrag: onProjMarkerDrag,
+    onPointHistory: (ex: string) => openExerciseInfo(ex), // popup "→ in history" link
+    rvwFitOf,
+    onRvwFitDrag,
     codeOf: (ex: string) => displayName(ex, "graph"), // legend follows the GRAPH area's name mode (fired after the render pass)
     perBodyweight: S.waPerBodyweight,
     bodyweight: athProfile(els.athlete.value)?.weight ?? null,
@@ -16890,7 +25446,10 @@ function renderWaGraph(): void {
       (n) => [...waMetrics].some((id) => !isMetricAllowed(graphPerms, n, id)),
     ) ?? graphExercises[0] ?? "";
     if (graphExercises.length === 0) {
-      noteEl.textContent = "No lifts picked — choose lifts above (or Select all) to plot.";
+      // Nothing picked: the pick prompt now lives IN the graph TITLE (the .wa-title-pickcta
+      // button, which fills the title so it can't collapse — owner request, supersedes the
+      // bottom-of-graph note of PB-20), so the bottom note stays empty here.
+      noteEl.textContent = "";
     } else if (waMetrics.size > 0 && drawMetricIds.length === 0) {
       noteEl.innerHTML = graphReviewPromptHtml(reviewTarget, graphExercises);
     } else {
@@ -16952,7 +25511,7 @@ function machineModeControl(name: string): string {
   const mode = machineModeFor(name);
   if (!machineModeEligible(name)) return "";
   const btn = (m: MachineMode, label: string, title: string) =>
-    `<button type="button" class="seg-btn${mode === m ? " is-active" : ""}" data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}">${label}</button>`;
+    segBtn(label, { active: mode === m, attrs: `data-machinemode="${m}" data-machine-ex="${escapeHtml(name)}" title="${escapeHtml(title)}"` });
   let note = "";
   if (mode === "gravity") {
     note = `<p class="muted wa-machine-note">Every set scaled to its cable-equivalent (×${GRAVITY_MULT}). The logged machine weight still shows in the set list.</p>`;
@@ -16969,11 +25528,12 @@ function machineModeControl(name: string): string {
   return (
     `<div class="wa-machine">` +
     `<div class="wa-machine-head"><span class="wa-ctl-lbl">Machine</span>` +
-    `<div class="seg-toggle" role="group" aria-label="Machine type">` +
-    btn("cable", "All cable", "Weights as logged (cable stack).") +
-    btn("gravity", "All gravity", `Gravity machine — every set ×${GRAVITY_MULT} for strength.`) +
-    btn("mixed", "Mixed", "Both machines logged together — auto-classify each set.") +
-    `</div></div>` + note + `</div>`
+    segToggle(
+      btn("cable", "All cable", "Weights as logged (cable stack).") +
+      btn("gravity", "All gravity", `Gravity machine — every set ×${GRAVITY_MULT} for strength.`) +
+      btn("mixed", "Mixed", "Both machines logged together — auto-classify each set."),
+      { tag: "div", attrs: `role="group" aria-label="Machine type"` }
+    ) + `</div>` + note + `</div>`
   );
 }
 
@@ -17064,7 +25624,13 @@ function commandList(): CmdSpec[] {
     { cmd: ".names", desc: "Cycle exercise labels: code → short → full (site-wide)", run: () => { const cur = effectiveNameMode(); setNameMode(cur === "code" ? "short" : cur === "short" ? "full" : "code"); applyNameModeChange(); goToAnalysis(); } },
     { cmd: ".dark", desc: "Toggle dark / light mode", run: () => els.themeBtn.click() },
     { cmd: ".today", desc: "Jump to today's workout in the history", run: () => { waSelected = []; goToAnalysis(); jumpToWorkoutDate(todayIso()); } },
-    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => { goToAnalysis(); for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true; } },
+    { cmd: ".calendar", desc: "Open the training-year calendar", run: () => {
+      goToAnalysis();
+      // The Calendar section is OFF by default now — reveal it via its toggle, then open the fold.
+      const s = SECTION_TOGGLES.find((x) => x.foldId === "waCalendarFold");
+      if (s) { sectionShown[s.key] = true; try { localStorage.setItem(s.key, "1"); } catch { /* ignore */ } applySectionToggle(s); }
+      for (let el = document.getElementById("waCalendarHost") as HTMLElement | null; el; el = el.parentElement) if (el instanceof HTMLDetailsElement) el.open = true;
+    } },
     { cmd: ".data", desc: "Open the Data page", run: () => switchTopTab("data") },
     { cmd: ".help", desc: "List every command (type . to browse)", run: () => { const i = document.getElementById("cmdInput") as HTMLInputElement | null; if (i) { i.value = "."; i.focus(); renderCmdPalette("."); } } },
   ];
@@ -17149,7 +25715,6 @@ const NAV_PAGES: { tab: string; label: string }[] = [
   { tab: "leaderboards", label: "Colosseum" },
   { tab: "groups", label: "Stats" },
   { tab: "team", label: "Group" },
-  { tab: "statsedit", label: "Athletes" },
   { tab: "data", label: "Data" },
   { tab: "test", label: "Formulas" },
   { tab: "guide", label: "Guide" },
@@ -17198,10 +25763,20 @@ function renderSearchPalette(value: string): void {
   }
   const matchNames = waChipListBase().map((e) => e.name);
   const n = matchNames.length;
-  // The single best match to the typed text (e.g. "Sq" → Squat) — names the "open in
-  // single view" suggestion and leads the carousel reel there.
-  const bestMatch = n ? rankMatchesByQuery(matchNames, q)[0]! : "";
+  // Ranked matches to the typed text (e.g. "Sq" → Squat first). The best one names the
+  // "open in single view" suggestion; the top dozen feed the horizontal AUTOCOMPLETE reel
+  // (owner: a scrollable suggestion strip that completes the exercise you're typing).
+  const ranked = n ? rankMatchesByQuery(matchNames, q) : [];
+  const bestMatch = ranked[0] ?? "";
   const bestLabel = bestMatch ? displayName(bestMatch) : "";
+  const suggNames = ranked.slice(0, 14);
+  const suggReel = suggNames.length
+    ? `<div class="cmd-suggreel" role="listbox" aria-label="Exercise suggestions">` +
+      suggNames
+        .map((nm) => `<button type="button" class="cmd-sugg" data-searchsugg="${escapeHtml(nm)}" role="option" title="${escapeHtml(displayName(nm))}">${escapeHtml(displayName(nm))}</button>`)
+        .join("") +
+      `</div>`
+    : "";
   // Page navigation: typing a page name (e.g. "index", "world", "formulas") offers to
   // SWITCH to it — shown first, so the bar doubles as a go-to-page jump, not just a
   // lift search. Matches the page's name (case-insensitive substring).
@@ -17228,9 +25803,21 @@ function renderSearchPalette(value: string): void {
     { act: "select", label: `➕ Select all ${n} matching`, desc: "Add them to the graph selection", on: false },
     { act: "clear", label: "✕ Clear search", desc: "", on: false },
   ];
-  if (cmdActiveIdx >= opts.length) cmdActiveIdx = 0;
+  // Fix (path a): when NO existing lift matches the typed text, the bar offers to
+  // CREATE that exercise directly — no hidden "create " prefix needed. (Before, typing a
+  // brand-new name like "nordic ham curls" offered nothing, so it seemed un-addable.)
+  const wantCreate = n === 0 && navOpts.length === 0 && q.length >= 2;
+  const finalOpts = wantCreate
+    ? [
+        { act: "createex", label: `➕ Create exercise “${q}”`, desc: "No lift matches — opens the inline add form to log its first set", on: false },
+        { act: "clear", label: "✕ Clear search", desc: "", on: false },
+      ]
+    : opts;
+  if (cmdActiveIdx >= finalOpts.length) cmdActiveIdx = 0;
   pal.hidden = false;
-  pal.innerHTML = opts
+  // The autocomplete reel sits ABOVE the action rows (only when real lifts match — it's
+  // hidden in the create/no-match branch where finalOpts replaces opts).
+  pal.innerHTML = (wantCreate ? "" : suggReel) + finalOpts
     .map(
       (o, i) =>
         `<button type="button" class="cmd-opt${i === cmdActiveIdx ? " is-active" : ""}${o.on ? " is-on" : ""}${"sub" in o && o.sub ? " cmd-opt-sub" : ""}" data-searchact="${o.act}" role="option">` +
@@ -17252,6 +25839,8 @@ function runSearchAction(act: string): void {
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
+    // Formulas is no longer a tab — it's a popup beside the Plan button.
+    if (tab === "test") { openFormulas(); return; }
     switchTopTab(tab === "analysis" ? analysisTabName() : tab);
     return;
   }
@@ -17267,9 +25856,12 @@ function runSearchAction(act: string): void {
     return;
   }
   if (act === "createex") {
-    // Parse the name from "create <Name>" and open the INLINE add-exercise form in the
-    // workouts view prefilled — the exercise is born when its first set is logged.
-    const name = parseCreateQuery(input?.value ?? "").name;
+    // Open the INLINE add-exercise form prefilled — the exercise is born when its first
+    // set is logged. Works whether the user typed "create <Name>" OR just a no-match
+    // name (the ➕ Create action the bar now offers when nothing matches).
+    const raw = input?.value ?? "";
+    const pc = parseCreateQuery(raw);
+    const name = pc.hit ? pc.name : raw.trim();
     hideCmdPalette();
     if (input) input.value = "";
     input?.blur();
@@ -17402,6 +25994,16 @@ function setupCommandBar(): void {
     // `cmdBar.contains(e.target)` check reads false and it wrongly hides the palette —
     // the recurring "clicking an option closes the menu" bug. Stop it here.
     e.stopPropagation();
+    // Autocomplete reel chip → complete the bar text with that exercise's name and
+    // re-render so the actions now target it (owner: finish what I'm typing).
+    const sugg = (e.target as HTMLElement).closest<HTMLElement>(".cmd-sugg");
+    if (sugg?.dataset.searchsugg) {
+      input.value = sugg.dataset.searchsugg;
+      cmdActiveIdx = 0;
+      renderPaletteFor(input.value);
+      input.focus();
+      return;
+    }
     const opt = (e.target as HTMLElement).closest<HTMLElement>(".cmd-opt");
     if (opt?.dataset.cmdmore) { input.value = "."; cmdActiveIdx = 0; renderCmdPalette("."); input.focus(); } // "did you mean…?" → all commands
     else if (opt?.dataset.cmd) runCommand(opt.dataset.cmd);
@@ -17544,7 +26146,14 @@ function setupWorkoutAnalysis(): void {
   const vv = window.visualViewport;
   if (vv) {
     const updateKbInset = () => {
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // PB-34: the keyboard only exists when a text field is FOCUSED. Without that gate,
+      // the Android URL bar showing/hiding during scroll (and overscroll-bounce offsetTop
+      // spikes) shrink vv.height and get misread as a keyboard — lifting the fixed command
+      // bar mid-scroll, sometimes far enough (>80px) to also drop the nav and "jump half a
+      // screen". So when nothing is being typed in, the inset is forced to 0.
+      const ae = document.activeElement as HTMLElement | null;
+      const typing = !!ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
+      const inset = typing ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
       document.documentElement.style.setProperty("--wa-kb-inset", `${Math.round(inset)}px`);
       // Keyboard open → hide the bottom nav so ONLY the search bar rides above the
       // keyboard (the nav otherwise floats up too). 80px guards against browser-
@@ -17553,6 +26162,10 @@ function setupWorkoutAnalysis(): void {
     };
     vv.addEventListener("resize", updateKbInset);
     vv.addEventListener("scroll", updateKbInset);
+    // Recompute the moment focus enters/leaves a field, so the bar settles back to the
+    // bottom on blur even if no viewport resize fires.
+    document.addEventListener("focusin", updateKbInset);
+    document.addEventListener("focusout", updateKbInset);
     updateKbInset();
   }
   // Identity-inclusion checkboxes + metadata-filter selects + Group By (change).
@@ -17572,8 +26185,10 @@ function setupWorkoutAnalysis(): void {
     const target = e.target as HTMLElement;
     const grp = target.closest<HTMLSelectElement>(".wa-groupby");
     if (grp) {
-      waGroupBy = (grp.value === "none" ? "none" : grp.value) as typeof waGroupBy;
-      saveWaGroupByForUser(); // remember this athlete's choice
+      const val = (grp.value === "none" ? "none" : grp.value) as WaGroupBy;
+      waGroupByScope[curSelScope] = val; // per-scope: changing the graph picker never moves history's
+      waGroupBy = val;
+      saveWaGroupByForUser(); // remember this athlete's per-scope choice
       deferRender(renderWorkoutAnalysis); // rebuild both selectors so they stay in sync
       return;
     }
@@ -17600,10 +26215,41 @@ function setupWorkoutAnalysis(): void {
       else if (key === "barGirth") waGraphConfig.barGirth = Math.min(4, Math.max(0.5, Number((el as HTMLInputElement).value) || 1));
       else if (key === "spread") waGraphConfig.spread = Math.min(9.8, Math.max(0, Number((el as HTMLInputElement).value)));
       else if (key === "volumeYShift") waGraphConfig.volumeYShift = Math.min(0.8, Math.max(-0.8, Number((el as HTMLInputElement).value) || 0));
-      else if (key === "prediction") waGraphConfig.prediction = (el as HTMLInputElement).checked;
       else if (key === "decay") waGraphConfig.decay = (el as HTMLInputElement).checked;
       else if (key === "potentialCeiling") { const v = Number((el as HTMLInputElement).value); waGraphConfig.potentialCeiling = v > 0 ? v : undefined; }
       scheduleWaGraph();
+      return;
+    }
+    // Strength-decay model variables (owner): one number field per param. Percent fields
+    // (floor / loss-per-day / growth cap / calibration) are entered ×100; all are clamped
+    // to a sane range so a typo can't break the curve. Live-redraws the graph.
+    if (cfg?.dataset.wadecay) {
+      const field = cfg.dataset.wadecay;
+      const raw = Number((cfg as HTMLInputElement).value);
+      if (Number.isFinite(raw)) {
+        const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+        const isPct = field === "floor" || field === "linearLossPerDay" || field === "maxGrowthFraction" || field === "calibrationThreshold";
+        let v = isPct ? raw / 100 : raw;
+        const clamp = (lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+        if (field === "graceDays") v = clamp(0, 365);
+        else if (field === "floor") v = clamp(0, 1);
+        else if (field === "linearLossPerDay") v = clamp(0, 1);
+        else if (field === "lossPerLog") v = clamp(0, 2);
+        else if (field === "stabilityDays") v = clamp(1, 1000);
+        else if (field === "stabilityGrowth") v = clamp(1, 5);
+        else if (field === "maxStability") v = clamp(1, 2000);
+        else if (field === "maxGrowthFraction") v = clamp(0, 2);
+        else if (field === "calibrationThreshold") v = clamp(0, 1);
+        else if (field === "phase1EndSets") v = Math.round(clamp(1, 100000));
+        else if (field === "phase2EndSets") v = Math.round(clamp(1, 100000));
+        else if (field === "phase1Pace" || field === "phase2Pace" || field === "phase3Pace") v = clamp(0, 1);
+        else if (field === "phase1RirUpper" || field === "phase1RirLower") v = clamp(0, 10);
+        (dpc as unknown as Record<string, number>)[field] = v;
+        waGraphConfig.decayParams = dpc;
+        saveDecayParams();
+        scheduleWaGraph();
+      }
+      return;
     }
   });
   // PB-5: tapping a lift NAME in the graph OR Calendar/history fold title removes it
@@ -17655,6 +26301,14 @@ function setupWorkoutAnalysis(): void {
     if (tPick?.dataset.titlepicker) {
       e.preventDefault(); e.stopPropagation();
       openPickDrawer(tPick.dataset.titlepicker as SelScope);
+      return;
+    }
+    // "N exercises ▾" title button → floating dropdown of every picked lift (each a
+    // tap-to-act chip). Capture-handled so it doesn't toggle the fold it sits in.
+    const tList = t.closest<HTMLElement>("[data-titlelist]");
+    if (tList?.dataset.titlelist) {
+      e.preventDefault(); e.stopPropagation();
+      openTitleExListMenu(tList, tList.dataset.titlelist as SelScope);
       return;
     }
     // The big ✕ at the end of a selection title = Deselect all (capture: it lives in the
@@ -17854,6 +26508,7 @@ function setupWorkoutAnalysis(): void {
           }
         }
       }
+      dashWriteMetrics(); // metrics are per-bubble — persist this bubble's selection
       scheduleWaGraph();
       return;
     }
@@ -17865,11 +26520,127 @@ function setupWorkoutAnalysis(): void {
       scheduleWaGraph();
       return;
     }
-    // ── Graph "min" carousel interactions ──────────────────────────────────────
+    // Strength-line window: cycle the period the line's "best top set" is taken over (owner).
+    if (t.closest<HTMLElement>("[data-wastrwin]")) {
+      cycleStrengthWindow();
+      scheduleWaGraph();
+      return;
+    }
+    // Decay-model complexity: cycle Linear (1) → Log (2) → Full (3) → Phases (4) → Linear.
+    // The new level shows its own variable set in the Decay model group; redraws live.
+    if (t.closest<HTMLElement>("[data-wadecaylevel]")) {
+      const dpc: DecayParams = { ...(waGraphConfig.decayParams ?? DEFAULT_DECAY_PARAMS) };
+      dpc.level = ((dpc.level % 4) + 1) as DecayLevel;
+      waGraphConfig.decayParams = dpc;
+      saveDecayParams();
+      scheduleWaGraph();
+      return;
+    }
+    // "Make official": promote the live decay curve to the canonical strength model, then
+    // refresh the sets tables so every set's predicted RIR is judged against it.
+    if (t.closest<HTMLElement>("[data-wadecayofficial]")) {
+      makeDecayOfficial();
+      strengthByExCache = null; // drop the memoised per-day strength so pRIR recomputes
+      rerenderSetsTables();
+      scheduleWaGraph();
+      return;
+    }
+    // Projection horizon — how far ahead the forecast projects. Goes out to 15 YEARS so
+    // the ceiling-approach curve has room to visibly flatten toward the ceiling (owner:
+    // a 1-year window is too short to see it bend). 1·3·6·12 mo, then 2·5·10·15 yr.
+    if (t.closest<HTMLElement>("[data-waprojdays]")) {
+      const steps = [30, 90, 180, 365, 730, 1825, 3650, 5475];
+      const i = steps.indexOf(waGraphConfig.predictionDays);
+      waGraphConfig.predictionDays = steps[(i + 1) % steps.length] ?? 90;
+      scheduleWaGraph();
+      return;
+    }
+    // Projection basis — which logged sets the curve is fitted to (records → hard → all).
+    if (t.closest<HTMLElement>("[data-waprojbasis]")) {
+      const steps = ["records", "hard", "all"] as const;
+      const i = steps.indexOf(waGraphConfig.projectionBasis ?? "records");
+      waGraphConfig.projectionBasis = steps[(i + 1) % steps.length]!;
+      scheduleWaGraph();
+      return;
+    }
+    // Reset the projection fit-window back to all data (clears the dragged lines).
+    if (t.closest<HTMLElement>("[data-waprojwinreset]")) {
+      projFitFrom = null; projFitTo = null;
+      scheduleWaGraph();
+      return;
+    }
+    // ── Custom graph DASHBOARD interactions (CHART-160) ─────────────────────────
+    // ⋯ button on a tab → toggle its options menu (explicit tap, no long-press — PB-38).
+    // NOTE: the tab MENU ITEMS (Duplicate/Rename/…) are handled at DOCUMENT level (see
+    // setupDashHandlers), because the menu is appended to <body> — OUTSIDE this `panel`
+    // listener's subtree, so a panel-scoped handler could never see those clicks (PB-38 ROOT).
+    const tabMenuOpen = t.closest<HTMLElement>("[data-tabmenuopen]");
+    if (tabMenuOpen?.dataset.tabmenuopen) {
+      dbg(`⋯ tap (panel) → ${document.getElementById("dashTabMenu") ? "close" : "open"}`);
+      if (document.getElementById("dashTabMenu")) closeDashTabMenu();
+      else openDashTabMenu(tabMenuOpen, tabMenuOpen.dataset.tabmenuopen);
+      return;
+    }
+    // Switch to a tab (resets the reel to its first bubble).
+    const dashTab = t.closest<HTMLElement>("[data-dashtab]");
+    if (dashTab?.dataset.dashtab) {
+      dbg(`tab SWITCH → ${dashTab.dataset.dashtab.slice(0, 8)}`);
+      dashEditTab = null;
+      graphDash = setActiveTab(graphDash, dashTab.dataset.dashtab); dashBubbleIdx = 0; persistDash();
+      refreshDash(); return;
+    }
+    // Jump to a view via its bubble.
+    const dashDot = t.closest<HTMLElement>("[data-dashdot]");
+    if (dashDot?.dataset.dashdot != null) { dashBubbleIdx = Number(dashDot.dataset.dashdot) || 0; refreshDash(); return; }
+    // The trailing "＋" bubble → open the view menu (add / duplicate / delete). The menu lives in
+    // <body> so its ACTIONS are handled at document level (PB-38 root fix), like the tab menu.
+    const bubMenuOpen = t.closest<HTMLElement>("[data-dashbubmenu]");
+    if (bubMenuOpen) {
+      if (document.getElementById("dashBubbleMenu")) closeDashBubbleMenu();
+      else openDashBubbleMenu(bubMenuOpen);
+      return;
+    }
+    // Per-bubble: cycle graph type (Over time ⇄ Reps × kg) — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashtype]")) {
+      const tab = activeTab(graphDash);
+      graphDash = cycleBubbleType(graphDash, tab.id, currentBubble().id); persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: cycle view (Single ⇄ Multi) — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashview]")) {
+      const tab = activeTab(graphDash);
+      graphDash = cycleBubbleView(graphDash, tab.id, currentBubble().id); persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: ×BW toggle — independent, persisted.
+    if (t.closest<HTMLElement>("[data-dashbw]")) {
+      const tab = activeTab(graphDash);
+      graphDash = updateBubble(graphDash, tab.id, currentBubble().id, { perBodyweight: !currentBubble().perBodyweight });
+      persistDash(); refreshDash(); return;
+    }
+    // Per-bubble: pick which lift(s) this bubble shows (the picker writes back via the
+    // waGraphSel projection in renderGraphDashboard).
+    if (t.closest<HTMLElement>("[data-dashpick]")) {
+      waGraphSel = [...currentBubble().exercises];
+      renderSelector("graph");
+      openPickDrawer("graph");
+      return;
+    }
+    // ── Graph "min" carousel interactions (LEGACY — dormant while the dashboard is on) ──
     // "Multi ▾" → expand the single-lift carousel into the full multi-exercise graph.
     if (t.closest<HTMLElement>("[data-gmmore]")) { graphFullShown = true; renderWaGraph(); return; }
+    // "Compare" (carousel) → open the Multi graph with the athlete-compare row on.
+    if (t.closest<HTMLElement>("[data-gmcompare]")) { graphFullShown = true; waCompareOpen = true; renderWaGraph(); return; }
     // "Single ▴" → flip the full multi graph back to the single-lift carousel.
     if (t.closest<HTMLElement>("[data-gmsingle]")) { graphFullShown = false; renderWaGraph(); return; }
+    // Single-view ⇆ SWITCH → open the picker drawer to choose a different lift (clears any
+    // search-set single-view override so the new pick shows in the reel).
+    if (t.closest<HTMLElement>("[data-gmswitch]")) { graphCarOverride = null; graphFullShown = true; renderWaGraph(); openPickDrawer("graph"); return; }
+    // Single-view "=" → match the TOP history lift (only one): show it via the single-view
+    // override, WITHOUT touching the multi-graph selection.
+    if (t.closest<HTMLElement>("[data-gmmatch]")) {
+      const top = waSelected[0];
+      if (top) { graphCarOverride = [top]; graphCarIdx = 0; renderGraphMini(); }
+      return;
+    }
     // Prev / next lift in the carousel (manual rotation — no auto-rotate).
     const gmNav = t.closest<HTMLElement>("[data-gmnav]");
     if (gmNav?.dataset.gmnav) { stepGraphSlide(Number(gmNav.dataset.gmnav)); return; }
@@ -17907,6 +26678,13 @@ function setupWorkoutAnalysis(): void {
       deferRender(() => { renderWaGraph(); renderWorkoutCalendar(); });
       return;
     }
+    // "Reps versus weight" scatter mode + its best-fit line.
+    const rvwTab = t.closest<HTMLElement>("[data-warvwset]");
+    if (rvwTab) { S.waRepsVsWeight = rvwTab.dataset.warvwset === "rvw"; scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-rvwmode]")) { rvwWindowMode = rvwWindowMode === "inc" ? "2w" : "inc"; scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-rvwcycle]")) { cycleRvwWindow(); scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-warvw]")) { S.waRepsVsWeight = !S.waRepsVsWeight; scheduleWaGraph(); return; }
+    if (t.closest<HTMLElement>("[data-warvwfit]")) { S.waRepsVsWeightFit = !S.waRepsVsWeightFit; scheduleWaGraph(); return; }
     // "Per bodyweight (×BW)" lens (pill). Auto-Fit after the rescale so the data fills
     // the view without a manual ⤢ — the rAF runs AFTER scheduleWaGraph's render (same
     // frame, registered later), when the chart's own re-fit button (.svgc-center) exists.
@@ -17917,9 +26695,16 @@ function setupWorkoutAnalysis(): void {
       return;
     }
     // Prediction / Decay line modifiers (pills) — flip the config flag, redraw.
+    // ✕ Close the graph Options menu.
+    const gmClose = t.closest<HTMLElement>("[data-wagmenuclose]");
+    if (gmClose) {
+      const fold = gmClose.closest<HTMLDetailsElement>(".wa-graph-fold");
+      if (fold) { fold.open = false; S.waGraphFoldOpen = false; }
+      return;
+    }
     const cfgTog = t.closest<HTMLElement>("[data-wacfgtoggle]");
     if (cfgTog?.dataset.wacfgtoggle) {
-      const key = cfgTog.dataset.wacfgtoggle as "prediction" | "decay" | "potentialLog" | "potentialNativeLog";
+      const key = cfgTog.dataset.wacfgtoggle as "decay" | "potentialLog" | "potentialNativeLog";
       waGraphConfig[key] = !waGraphConfig[key];
       // The two potential-log views are alternatives (axis-scale vs data-transform) and
       // both are kg-based, so turning one on turns the other AND ×BW off.
@@ -17947,6 +26732,59 @@ function setupWorkoutAnalysis(): void {
         renderWorkoutAnalysis();
       }
     }
+  });
+  // Inline tab-rename input (dashboard): Enter/blur commits the name, Esc cancels.
+  document.addEventListener("keydown", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-dashtabname]");
+    if (!inp) return;
+    if (e.key === "Enter") { e.preventDefault(); inp.blur(); }
+    else if (e.key === "Escape") { e.preventDefault(); dashEditTab = null; renderGraphDashboard(); }
+  });
+  document.addEventListener("focusout", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>("[data-dashtabname]");
+    if (!inp?.dataset.dashtabname) return;
+    graphDash = renameTab(graphDash, inp.dataset.dashtabname, inp.value.trim() || "Tab");
+    dashEditTab = null; persistDash(); refreshDash();
+  });
+  // PB-38 ROOT FIX (#super-persistent): the tab options menu (#dashTabMenu) is appended to
+  // <body>, OUTSIDE the `panel`-scoped click handler — so its Duplicate/Rename/Add/Delete
+  // clicks NEVER reached that handler and did nothing, through every prior attempt. Handle the
+  // menu ACTIONS here at DOCUMENT level (which always sees them), and close-on-outside too.
+  document.addEventListener("click", (e) => {
+    const tgt = e.target as Element | null;
+    const item = tgt?.closest<HTMLElement>("[data-tabmenu]");
+    if (item?.dataset.tabmenu) {
+      const act = item.dataset.tabmenu, tid = item.dataset.tab;
+      dbg(`menu ACTION ${act}${tid ? " " + tid.slice(0, 6) : ""} (doc) ✓`);
+      closeDashTabMenu();
+      if (act === "add") { graphDash = addTab(graphDash); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "duplicate" && tid) { graphDash = duplicateTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      else if (act === "rename" && tid) { graphDash = setActiveTab(graphDash, tid); dashBubbleIdx = 0; dashEditTab = tid; persistDash(); renderGraphDashboard(); }
+      else if (act === "delete" && tid) { graphDash = removeTab(graphDash, tid); dashEditTab = null; dashBubbleIdx = 0; persistDash(); refreshDash(); }
+      return;
+    }
+    if (document.getElementById("dashTabMenu") && !tgt?.closest("#dashTabMenu, [data-tabmenuopen]")) { dbg("menu close (outside)"); closeDashTabMenu(); }
+    // The "＋" view-bubble menu (same PB-38 reasoning) — add / duplicate / delete the current view.
+    const bubItem = tgt?.closest<HTMLElement>("[data-bubmenu]");
+    if (bubItem?.dataset.bubmenu) {
+      const act = bubItem.dataset.bubmenu;
+      const tab = activeTab(graphDash);
+      dbg(`bub menu ACTION ${act} (doc) ✓`);
+      closeDashBubbleMenu();
+      if (act === "add") {
+        graphDash = addBubble(graphDash, tab.id, {});
+        dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      } else if (act === "duplicate") {
+        graphDash = duplicateBubble(graphDash, tab.id, currentBubble().id);
+        dashBubbleIdx = Math.min(dashBubbleIdx + 1, activeTab(graphDash).bubbles.length - 1);
+      } else if (act === "delete") {
+        graphDash = removeBubble(graphDash, tab.id, currentBubble().id);
+        if (dashBubbleIdx >= activeTab(graphDash).bubbles.length) dashBubbleIdx = activeTab(graphDash).bubbles.length - 1;
+      }
+      persistDash(); refreshDash();
+      return;
+    }
+    if (document.getElementById("dashBubbleMenu") && !tgt?.closest("#dashBubbleMenu, [data-dashbubmenu]")) { dbg("bub menu close (outside)"); closeDashBubbleMenu(); }
   });
 }
 
@@ -18088,10 +26926,21 @@ function createUserExerciseDef(): void {
  * right exercises already selected.
  */
 function openWorkoutAnalysis(opts: { exercises?: string[] } = {}): void {
-  if (opts.exercises) {
-    const ex = opts.exercises.filter((n) => n.length > 0);
-    waSelected = ex;
-    waGraphSel = capGraphSel([...ex]); // an explicit "show this lift" focuses BOTH selectors (graph caps at 20)
+  const ex = (opts.exercises ?? []).filter((n) => n.length > 0);
+  if (ex.length) {
+    // Owner: a jump-to-exercise must NOT override the carefully-set custom tabs/bubbles.
+    // Route it into a dedicated TEMPORARY history tab + graph bubble (session-only, stripped
+    // on save → reset on refresh). Load the athlete's dashboards FIRST so the temp rides on
+    // top (and ensureHistory/Dash early-returns for this athlete during the render below).
+    const name = `↪ ${ex.length === 1 ? displayName(ex[0]!) : `${ex.length} lifts`}`;
+    ensureHistoryTabApplied();
+    historyDash = setTempHistoryTab(historyDash, ex, name);
+    applyHistoryTabConfig(activeHistoryTab(historyDash).config); // → waSelected = ex
+    ensureDashUser();
+    graphDash = setTempGraphTab(graphDash, ex, name);
+    dashBubbleIdx = 0;
+    dashLoadedBubbleId = null; // force the temp bubble's lifts to load into waGraphSel
+    waGraphSel = capGraphSel([...ex]); // graph caps at 20
   }
   switchTopTab(analysisTabName()); // full or simplified per the detail flag (no drift)
 }
@@ -18144,19 +26993,257 @@ function switchTopTab(name: string) {
   document.body.classList.toggle("on-s-anl", name === "s-analysis");
   // Chart.js needs a resize nudge if it was first drawn while hidden.
   if (name === "leaderboards") renderLeaderboard(); // re-render at the real width
-  if (name === "test") renderCoachRx();
   if (name === "changelog") { renderChangelog(); expandLatestChangelog(); }
   if (name === "s-analysis") renderSAnalysis();
   if (name === "groups") renderGroupsView();
   if (name === "team") renderTeamView();
-  if (name === "statsedit") renderStatsEdit();
   if (name === "records") renderRecords();
+  if (name === "handstands") renderHandstands();
   if (name === "coach") renderCoachPage();
   if (name === "analysis") renderWorkoutAnalysis();
   // Leaving the analysis view → return the relocated panel(s) to their athlete
   // tabs so the old Workouts / Single-exercise pages keep working.
   if (name !== "analysis") { restoreAnalysisPanels(); document.body.classList.remove("wa-graph-full"); closePickDrawer(); }
   updateBottomNav();
+}
+
+// ===== HANDSTAND CALCULATOR PAGE (owner: a standalone page turning the handstand tag model
+// into a LIVE calculator) ============================================================
+// Pick a handstand lift + its tags (support / lean / ROM / band …) and a bodyweight + reps,
+// and see EVERY tag's multiplier and the resulting effective load + 1RM update live. Reuses
+// the SAME pure model the graphs/history use (scalarFromVec / famLevels / leanFactorFor /
+// bandAssistKg / coeffFor / estimate1RM) so the numbers can never drift from the rest of the
+// app — one source of truth, no parallel maths (rule: SSOT).
+const HS_EXERCISES = ["Handstand Push Up", "Handstand wall touch", "Handstand hold", "Handstand walk", "Handstand"];
+type HsCalc = { ex: string; bw: number | null; added: number; reps: number; vec: Record<string, string> };
+let hsCalc: HsCalc | null = null;
+
+/** The dims (in display order) that actually apply to the family + current support pick —
+ * ladder grip/height only on a ladder, shoulder-gap only back-to-wall (mirrors scalarFromVec). */
+function hsRelevantDims(fam: string, vec: Record<string, string>): string[] {
+  return famDimOrder(fam).filter((dim) => {
+    if ((dim === "ladderGrip" || dim === "ladderH") && vec.support !== "ladder") return false;
+    if (dim === "shoulderDist" && vec.support !== "back_to_wall") return false;
+    return true;
+  });
+}
+/** A fresh tag vector for a family = each dimension at its (owner-pinned) default level. */
+function hsDefaultVec(fam: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const dim of famDimOrder(fam)) out[dim] = famDefaultLevel(fam, dim);
+  return out;
+}
+/** A (dim, level)'s effect: a MULTIPLIER, or a kg subtraction (band). */
+function hsLevelEffect(fam: string, dim: string, level: string, vec: Record<string, string>): { mult?: number; kg?: number } {
+  if (dim === "band") return { kg: bandAssistKg(fam, level) };
+  if (dim === "lean") return { mult: leanFactorFor(fam, vec.support ?? "free", level) };
+  const levels = famLevels(fam, dim);
+  if (dimUsesCmCurve(levels)) {
+    const ncm = parseCmLevel(level) !== undefined ? undefined : getNamedUnitCm(fam, dim, level);
+    return { mult: cmCurveFactorForLevel(fam, dim, level, ncm) };
+  }
+  return { mult: levels[level] ?? 1 };
+}
+const hsR1 = (n: number): number => Math.round(n * 10) / 10;
+const hsR3 = (n: number): number => Math.round(n * 1000) / 1000;
+/** The cm value of a spectrum level key ("+25cm" → 25, "-10cm" → -10, "0cm" → 0), or null. */
+function hsCmOf(level: string): number | null {
+  const m = /^([+-]?\d+(?:\.\d+)?)cm$/.exec(level.trim());
+  return m ? parseFloat(m[1]!) : null;
+}
+/** A dim is a SPECTRUM (continuous cm scale) — too many points for a chip row, so it gets a
+ * curve diagram instead of a table (owner: ROM is a 0→N cm spectrum). ≥5 cm-valued levels. */
+function hsIsSpectrum(fam: string, dim: string): boolean {
+  return dimUsesCmCurve(cmCurveBaseLevels(fam, dim));
+}
+/** SVG preview of a curve dim's parametric cm→× formula. */
+function cmCurveSpectrumSvg(fam: string, dim: string, vec: Record<string, string>): string {
+  const formula = cmCurveFormula(fam, dim);
+  const rows = cmCurveFormulaSamples(cmCurveBaseLevels(fam, dim), formula);
+  if (rows.length < 2) return "";
+  const curCm = parseCmLevel(vec[dim] ?? "");
+  const curF = curCm !== undefined
+    ? cmCurveFactorAt(fam, dim, curCm)
+    : (() => {
+        const ncm = getNamedUnitCm(fam, dim, vec[dim] ?? "");
+        return ncm !== undefined ? cmCurveFactorAt(fam, dim, ncm) : undefined;
+      })();
+  const pts = rows.map(({ cm, factor }) => ({
+    cm,
+    f: factor,
+    sel: curCm !== undefined && Math.abs(curCm - cm) < 0.01,
+  }));
+  if (curCm !== undefined && curF !== undefined && !pts.some((p) => p.sel)) {
+    pts.push({ cm: curCm, f: curF, sel: true });
+    pts.sort((a, b) => a.cm - b.cm);
+  }
+  const cms = pts.map((p) => p.cm);
+  const fs = pts.map((p) => p.f);
+  const minCm = Math.min(...cms), maxCm = Math.max(...cms);
+  const minF = Math.min(...fs, 1), maxF = Math.max(...fs, 1);
+  const W = 320, H = 140, padL = 30, padR = 12, padT = 14, padB = 24;
+  const xAt = (cm: number) => padL + ((cm - minCm) / (maxCm - minCm || 1)) * (W - padL - padR);
+  const yAt = (f: number) => padT + ((maxF - f) / (maxF - minF || 1)) * (H - padT - padB);
+  const poly = pts.map((p) => `${xAt(p.cm).toFixed(1)},${yAt(p.f).toFixed(1)}`).join(" ");
+  const dots = pts.map((p) => `<circle cx="${xAt(p.cm).toFixed(1)}" cy="${yAt(p.f).toFixed(1)}" r="${p.sel ? 4.5 : 2.3}" class="${p.sel ? "hs-dot-sel" : "hs-dot"}" />`).join("");
+  const oneY = yAt(1).toFixed(1);
+  const sel = pts.find((p) => p.sel);
+  const selTxt = sel ? `<text x="${xAt(sel.cm).toFixed(1)}" y="${(yAt(sel.f) - 8).toFixed(1)}" class="hs-svg-sel" text-anchor="middle">${sel.cm}cm · ×${hsR3(sel.f)}</text>` : "";
+  return `<svg class="hs-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(dimLabel(dim, fam))} multiplier across cm">` +
+    `<line x1="${padL}" y1="${oneY}" x2="${W - padR}" y2="${oneY}" class="hs-svg-ref" />` +
+    `<text x="${W - padR}" y="${(parseFloat(oneY) - 3).toFixed(1)}" class="hs-svg-ax" text-anchor="end">×1.0</text>` +
+    `<polyline points="${poly}" class="hs-svg-line" />${dots}${selTxt}` +
+    `<text x="${padL}" y="${H - 7}" class="hs-svg-ax">${minCm}cm</text>` +
+    `<text x="${W - padR}" y="${H - 7}" class="hs-svg-ax" text-anchor="end">${maxCm}cm</text>` +
+    `<text x="2" y="${padT + 3}" class="hs-svg-ax">×${hsR3(maxF)}</text>` +
+    `<text x="2" y="${H - padB}" class="hs-svg-ax">×${hsR3(minF)}</text>` +
+  `</svg>`;
+}
+/** A small inline SVG curve of a spectrum dim's MULTIPLIER as a function of cm — the defined
+ * levels are the data points, joined into the piecewise function the difficulty maths uses;
+ * the currently-picked level is marked. (Lean's factor is support-specific, so it reads the
+ * current support.) */
+function hsSpectrumSvg(fam: string, dim: string, vec: Record<string, string>): string {
+  if (dimUsesCmCurve(cmCurveBaseLevels(fam, dim))) return cmCurveSpectrumSvg(fam, dim, vec);
+  const pts = Object.keys(famLevels(fam, dim))
+    .map((k) => ({ cm: hsCmOf(k), f: hsLevelEffect(fam, dim, k, vec).mult ?? 1, sel: (vec[dim] ?? "") === k }))
+    .filter((p): p is { cm: number; f: number; sel: boolean } => p.cm != null)
+    .sort((a, b) => a.cm - b.cm);
+  if (pts.length < 2) return "";
+  const cms = pts.map((p) => p.cm);
+  const fs = pts.map((p) => p.f);
+  const minCm = Math.min(...cms), maxCm = Math.max(...cms);
+  const minF = Math.min(...fs, 1), maxF = Math.max(...fs, 1);
+  const W = 320, H = 140, padL = 30, padR = 12, padT = 14, padB = 24;
+  const xAt = (cm: number) => padL + ((cm - minCm) / (maxCm - minCm || 1)) * (W - padL - padR);
+  const yAt = (f: number) => padT + ((maxF - f) / (maxF - minF || 1)) * (H - padT - padB);
+  const poly = pts.map((p) => `${xAt(p.cm).toFixed(1)},${yAt(p.f).toFixed(1)}`).join(" ");
+  const dots = pts.map((p) => `<circle cx="${xAt(p.cm).toFixed(1)}" cy="${yAt(p.f).toFixed(1)}" r="${p.sel ? 4.5 : 2.3}" class="${p.sel ? "hs-dot-sel" : "hs-dot"}" />`).join("");
+  const oneY = yAt(1).toFixed(1);
+  const sel = pts.find((p) => p.sel);
+  const selTxt = sel ? `<text x="${xAt(sel.cm).toFixed(1)}" y="${(yAt(sel.f) - 8).toFixed(1)}" class="hs-svg-sel" text-anchor="middle">${sel.cm}cm · ×${hsR3(sel.f)}</text>` : "";
+  return `<svg class="hs-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeHtml(dimLabel(dim, fam))} multiplier across cm">` +
+    `<line x1="${padL}" y1="${oneY}" x2="${W - padR}" y2="${oneY}" class="hs-svg-ref" />` +
+    `<text x="${W - padR}" y="${(parseFloat(oneY) - 3).toFixed(1)}" class="hs-svg-ax" text-anchor="end">×1.0</text>` +
+    `<polyline points="${poly}" class="hs-svg-line" />${dots}${selTxt}` +
+    `<text x="${padL}" y="${H - 7}" class="hs-svg-ax">${minCm}cm</text>` +
+    `<text x="${W - padR}" y="${H - 7}" class="hs-svg-ax" text-anchor="end">${maxCm}cm</text>` +
+    `<text x="2" y="${padT + 3}" class="hs-svg-ax">×${hsR3(maxF)}</text>` +
+    `<text x="2" y="${H - padB}" class="hs-svg-ax">×${hsR3(minF)}</text>` +
+  `</svg>`;
+}
+
+function renderHandstands(): void {
+  const body = document.getElementById("handstandsBody");
+  if (!body) return;
+  if (!hsCalc || !HS_EXERCISES.includes(hsCalc.ex)) {
+    const ex = HS_EXERCISES[0]!;
+    hsCalc = { ex, bw: athProfile(els.athlete.value)?.weight ?? null, added: 0, reps: 1, vec: hsDefaultVec(familyOf(ex) ?? "HSPU") };
+  }
+  const c = hsCalc;
+  const fam = familyOf(c.ex) ?? "HSPU";
+  const exOpts = HS_EXERCISES.map((n) => `<option value="${escapeHtml(n)}"${n === c.ex ? " selected" : ""}>${escapeHtml(displayName(n))}</option>`).join("");
+  // Spectrum dims (ROM, lean) are picked with a compact select here (too many cm steps for a
+  // chip row); discrete dims are the tap-to-set chip tables in the reference below.
+  const dimControls = hsRelevantDims(fam, c.vec).filter((d) => hsIsSpectrum(fam, d)).map((dim) => {
+    const cur = c.vec[dim] ?? famDefaultLevel(fam, dim);
+    const opts = Object.keys(famLevels(fam, dim)).map((lv) => `<option value="${escapeHtml(lv)}"${lv === cur ? " selected" : ""}>${escapeHtml(afLevelText(dim, lv, fam))}</option>`).join("");
+    return `<label class="hs-field"><span class="hs-field-lbl">${escapeHtml(dimLabel(dim, fam))}</span><select class="hs-dim" data-hsdim="${escapeHtml(dim)}">${opts}</select></label>`;
+  }).join("");
+  body.innerHTML =
+    `<div class="hs-controls">` +
+      `<label class="hs-field hs-field-wide"><span class="hs-field-lbl">exercise</span><select class="hs-ex">${exOpts}</select></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">bodyweight (kg)</span><input class="hs-num" type="number" step="0.5" inputmode="decimal" data-hsnum="bw" value="${c.bw ?? ""}" placeholder="kg" /></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">added (kg)</span><input class="hs-num" type="number" step="0.5" inputmode="decimal" data-hsnum="added" value="${c.added}" /></label>` +
+      `<label class="hs-field"><span class="hs-field-lbl">reps</span><input class="hs-num" type="number" step="1" min="1" inputmode="numeric" data-hsnum="reps" value="${c.reps}" /></label>` +
+      dimControls +
+    `</div>` +
+    `<div class="hs-out"></div>`;
+  enhanceSelectTree(body);
+  hsRenderOut();
+}
+
+/** Recompute + redraw the results + the full tag reference (keeps the number inputs' focus —
+ * they live in the un-rebuilt .hs-controls). The reference shows EVERY variation of every tag
+ * and its effect: discrete tags as tap-to-set chip rows, spectrum tags (ROM/lean) as cm→×
+ * curve diagrams. */
+function hsRenderOut(): void {
+  const c = hsCalc;
+  if (!c) return;
+  const out = document.querySelector<HTMLElement>("#handstandsBody .hs-out");
+  if (!out) return;
+  const fam = familyOf(c.ex) ?? "HSPU";
+  const coeff = coeffFor(c.ex);
+  const bw = c.bw ?? 0;
+  const bwLoad = bw * coeff;
+  const mult = scalarFromVec(fam, c.vec);
+  const bandKg = bandAssistKg(fam, c.vec.band ?? "none");
+  const baseLoad = bwLoad + c.added;
+  const scaledLoad = baseLoad * mult - bandKg;
+  const formula = currentFormula();
+  const effE1RM = scaledLoad > 0 ? estimate1RM(scaledLoad, c.reps, formula) : null;
+  const addedE1RM = effE1RM != null ? effE1RM - bwLoad : null;
+  // FULL reference — every variation of every relevant tag and its effect.
+  const refCards = hsRelevantDims(fam, c.vec).map((dim) => {
+    const lbl = escapeHtml(dimLabel(dim, fam));
+    if (hsIsSpectrum(fam, dim)) {
+      const curF = hsLevelEffect(fam, dim, c.vec[dim] ?? "", c.vec).mult ?? 1;
+      return `<div class="hs-ref-card hs-ref-card--wide"><div class="hs-ref-dim">${lbl}<span class="hs-ref-cur">${escapeHtml(afLevelText(dim, c.vec[dim] ?? "", fam))} · ×${hsR3(curF)}</span></div>${hsSpectrumSvg(fam, dim, c.vec)}</div>`;
+    }
+    const chips = Object.keys(famLevels(fam, dim)).map((k) => {
+      const eff = hsLevelEffect(fam, dim, k, c.vec);
+      const val = eff.kg !== undefined ? (eff.kg ? `−${hsR1(eff.kg)}kg` : "0kg") : `×${hsR3(eff.mult ?? 1)}`;
+      const on = (c.vec[dim] ?? "") === k;
+      return `<button type="button" class="hs-ref-chip${on ? " is-on" : ""}" data-hsdim="${escapeHtml(dim)}" data-hslvl="${escapeHtml(k)}"><span class="hs-ref-lvl">${escapeHtml(afLevelText(dim, k, fam))}</span><span class="hs-ref-val">${val}</span></button>`;
+    }).join("");
+    return `<div class="hs-ref-card"><div class="hs-ref-dim">${lbl}</div><div class="hs-ref-chips">${chips}</div></div>`;
+  }).join("");
+  out.innerHTML =
+    `<div class="hs-steps">` +
+      `<div class="hs-step"><span>bodyweight share</span><span>${hsR1(bw)} × ${coeff} = <b>${hsR1(bwLoad)} kg</b></span></div>` +
+      `<div class="hs-step"><span>+ added weight</span><span><b>${hsR1(baseLoad)} kg</b></span></div>` +
+      `<div class="hs-step"><span>× tags ×${hsR3(mult)}${bandKg ? ` − band ${hsR1(bandKg)} kg` : ""}</span><span><b>${hsR1(scaledLoad)} kg</b> effective</span></div>` +
+    `</div>` +
+    `<div class="hs-results">` +
+      `<div class="hs-res"><span class="hs-res-lbl">effective 1RM</span><span class="hs-res-num">${effE1RM != null ? hsR1(effE1RM) + " kg" : "—"}</span></div>` +
+      `<div class="hs-res hs-res-main"><span class="hs-res-lbl">added-weight 1RM</span><span class="hs-res-num">${addedE1RM != null ? hsR1(addedE1RM) + " kg" : "—"}</span></div>` +
+    `</div>` +
+    `<div class="hs-ref"><div class="hs-ref-head">how each tag affects difficulty — tap a value to set it</div>${refCards}</div>`;
+}
+
+function setupHandstands(): void {
+  const body = document.getElementById("handstandsBody");
+  if (!body) return;
+  body.addEventListener("change", (e) => {
+    const t = e.target as HTMLElement;
+    if (!hsCalc) return;
+    if (t.matches(".hs-ex")) {
+      hsCalc.ex = (t as HTMLSelectElement).value;
+      hsCalc.vec = hsDefaultVec(familyOf(hsCalc.ex) ?? "HSPU");
+      renderHandstands(); // family changed → rebuild the spectrum selects
+      return;
+    }
+    if (t.matches(".hs-dim")) { // a spectrum select (ROM / lean)
+      hsCalc.vec[(t as HTMLElement).dataset.hsdim!] = (t as HTMLSelectElement).value;
+      hsRenderOut();
+    }
+  });
+  body.addEventListener("click", (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>(".hs-ref-chip");
+    if (!chip || !hsCalc) return;
+    hsCalc.vec[chip.dataset.hsdim!] = chip.dataset.hslvl!;
+    hsRenderOut(); // recompute + redraw (support change also re-derives which tags are relevant)
+  });
+  body.addEventListener("input", (e) => {
+    const t = e.target as HTMLElement;
+    if (!hsCalc || !t.matches(".hs-num")) return;
+    const k = (t as HTMLElement).dataset.hsnum as "bw" | "added" | "reps";
+    const v = parseFloat((t as HTMLInputElement).value);
+    if (k === "bw") hsCalc.bw = Number.isFinite(v) ? v : null;
+    else if (k === "added") hsCalc.added = Number.isFinite(v) ? v : 0;
+    else if (k === "reps") hsCalc.reps = Number.isFinite(v) && v >= 1 ? Math.round(v) : 1;
+    hsRenderOut();
+  });
 }
 
 function setupTabs() {
@@ -18229,8 +27316,67 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     if (c !== "dd-native" && c !== "dd-wide" && c !== "subtle-select" && c !== "plain-select") dd.classList.add(c);
   sel.insertAdjacentElement("afterend", dd);
 
-  const optHtml = (o: HTMLOptionElement) =>
-    `<button type="button" class="xdd-opt${o.value === sel.value ? " is-active" : ""}" data-val="${escapeHtml(o.value)}" role="option">${escapeHtml(o.textContent ?? "")}</button>`;
+  // TAG EDITOR (owner: "when I press a tag, show what it is + add it or set default, and
+  // let me edit each tag's name and multiplier"). A variation-pill select (.wo-af-dimpill
+  // carrying data-ex + data-dim of a family) gets a RICHER menu: each level is a row with
+  // its name + hint, a ★ set-default toggle, and a ✎ that reveals inline name + ×mult
+  // edits. Everything else stays the plain pick-list. `vtagEditLevel` keeps one row open
+  // for editing across the re-syncs the edits trigger.
+  const vtagFam = (): string | null => (sel.dataset.ex ? familyOf(sel.dataset.ex) : null);
+  const vtagDim = sel.dataset.dim ?? "";
+  const isVtag = (): boolean => sel.classList.contains("wo-af-dimpill") && !!vtagDim && !!vtagFam();
+  let vtagEditLevel: string | null = null;
+
+  // Minimalist line icons for the tag editor (owner: no emoji eyes / pencil — a stylish,
+  // minimal scheme). 1em, inherit colour, stroke-based so they read as clean glyphs.
+  const vtagIco = (kind: "show" | "hide" | "star" | "starOn" | "edit"): string => {
+    const svg = (inner: string, fill = "none") =>
+      `<svg class="vtag-ico" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
+    switch (kind) {
+      case "show": return svg(`<path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/>`);
+      case "hide": return svg(`<path d="M2 12s3.6-6.5 10-6.5c1.7 0 3.2.3 4.5.9M22 12s-3.6 6.5-10 6.5c-1.7 0-3.2-.3-4.5-.9"/><path d="M4 4l16 16"/>`);
+      case "star": return svg(`<path d="M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.2 18.3l.9-5.1L4.3 9.5l5.2-.8z"/>`);
+      case "starOn": return svg(`<path d="M12 4l2.3 4.7 5.2.8-3.8 3.6.9 5.1L12 15.8 7.2 18.3l.9-5.1L4.3 9.5l5.2-.8z"/>`, "currentColor");
+      case "edit": return svg(`<path d="M14.5 6.5l3 3M4 20l1-4L16 5a1.5 1.5 0 0 1 3 3L8 19z"/>`);
+    }
+  };
+
+  const vtagOptHtml = (o: HTMLOptionElement): string => {
+    const fam = vtagFam()!;
+    const lvl = o.value;
+    const name = afLevelText(vtagDim, lvl, fam);
+    const isDefault = famDefaultLevel(fam, vtagDim) === lvl;
+    const gray = isGray(fam, vtagDim, lvl); // hidden from history / picker when at this level
+    const factor = vtagDim === "band" ? undefined : famLevels(fam, vtagDim)[lvl]; // band is a kg knob, not a ×
+    const hint = afLevelHint(vtagDim, lvl);
+    const editing = vtagEditLevel === lvl;
+    const editRow = editing
+      ? `<div class="vtag-edit">` +
+        `<label class="vtag-efld">name <input class="vtag-name" type="text" value="${escapeHtml(name)}" data-lvl="${escapeHtml(lvl)}" aria-label="Tag name" /></label>` +
+        (factor !== undefined ? `<label class="vtag-efld">× <input class="vtag-mult" type="number" step="0.01" min="0" value="${factor}" data-lvl="${escapeHtml(lvl)}" aria-label="Multiplier" /></label>` : "") +
+        `</div>`
+      : "";
+    return (
+      `<div class="xdd-opt vtag-opt${lvl === sel.value ? " is-active" : ""}${isDefault ? " is-default" : ""}${gray ? " is-gray" : ""}" role="option">` +
+      `<button type="button" class="vtag-pick" data-val="${escapeHtml(lvl)}">${escapeHtml(name)}` +
+      (factor !== undefined ? ` <span class="vtag-mult-lbl">×${factor}</span>` : "") +
+      (hint ? ` <span class="xdd-opt-hint">${escapeHtml(hint)}</span>` : "") +
+      `</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-gray${gray ? "" : " is-on"}" data-vtag-gray="${escapeHtml(lvl)}" aria-pressed="${!gray}" title="${gray ? "Hidden from your history — only shows here in the editor. Tap to SHOW it as a tag." : "Shown as a tag in your history. Tap to HIDE it (keep it editor-only)."}">${gray ? vtagIco("hide") : vtagIco("show")}</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-default${isDefault ? " is-on" : ""}" data-vtag-default="${escapeHtml(lvl)}" aria-pressed="${isDefault}" title="${isDefault ? "This is the DEFAULT for this exercise (pre-selected on new sets)." : "Make this the default for this exercise (pre-selected on new sets)."}">${isDefault ? vtagIco("starOn") : vtagIco("star")}</button>` +
+      `<button type="button" class="vtag-iconbtn vtag-editbtn${editing ? " is-on" : ""}" data-vtag-edit="${escapeHtml(lvl)}" title="Rename this tag or change its ×difficulty multiplier">${vtagIco("edit")}</button>` +
+      editRow +
+      `</div>`
+    );
+  };
+
+  const optHtml = (o: HTMLOptionElement) => {
+    if (isVtag()) return vtagOptHtml(o);
+    // A `data-hint` on the option renders as small-gray explanation text beside the
+    // label in the MENU only (the trigger stays label-only so it reads like a tag).
+    const hint = o.dataset.hint ? ` <span class="xdd-opt-hint">${escapeHtml(o.dataset.hint)}</span>` : "";
+    return `<button type="button" class="xdd-opt${o.value === sel.value ? " is-active" : ""}" data-val="${escapeHtml(o.value)}" role="option">${escapeHtml(o.textContent ?? "")}${hint}</button>`;
+  };
 
   const sync = () => {
     let menu = "";
@@ -18243,9 +27389,21 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
       }
     }
     const wasOpen = dd.classList.contains("open");
+    // A long list gets a sticky SEARCH box that filters the options as you type — owner
+    // request (the combine/compare "Add exercise…" picker, and any 8+ option dropdown).
+    const search = sel.querySelectorAll("option").length > 8
+      ? `<input type="text" class="xdd-search" placeholder="Search…" aria-label="Search options" autocomplete="off" />`
+      : "";
+    // For the tag editor, a header naming WHAT this tag controls + a one-line legend for the
+    // three per-row icons (owner: "more text describing what each tag does; the icons are unclear").
+    const vtagHead = isVtag()
+      ? `<div class="vtag-legend"><div class="vtag-legend-dim">${escapeHtml(dimLabel(vtagDim, vtagFam()))}</div>` +
+        `<div class="vtag-legend-sub">Pick how this set was done. The ×number is its difficulty vs the plain lift.</div>` +
+        `<div class="vtag-legend-row"><span>${vtagIco("show")} show in history</span><span>${vtagIco("star")} default</span><span>${vtagIco("edit")} rename / ×</span></div></div>`
+      : "";
     dd.innerHTML =
       `<button type="button" class="xdd-btn">${escapeHtml(sel.selectedOptions[0]?.textContent ?? "")}<span class="xdd-caret">▾</span></button>` +
-      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${menu}</div>`;
+      `<div class="xdd-menu"${wasOpen ? "" : " hidden"} role="listbox">${search}${vtagHead}${menu}</div>`;
   };
   sync();
 
@@ -18255,38 +27413,135 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
     menu?.setAttribute("hidden", "");
     // Undo any fixed-popup placement so the default absolute CSS resumes next open.
     if (menu) { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
+    // Restore the clipping ancestors' mask/overflow once our popup is gone (see open handler).
+    for (const a of [".addm-line-vars", ".addm-passive-pills", ".addm-card"])
+      dd.closest<HTMLElement>(a)?.classList.remove("dd-open-within");
+  };
+  // Type-to-filter for the long-list search box (built in sync()): hide options whose
+  // text doesn't contain the query, and any optgroup header left with no visible option.
+  const filterOpts = (q: string) => {
+    const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+    if (!menu) return;
+    const needle = q.trim().toLowerCase();
+    menu.querySelectorAll<HTMLElement>(".xdd-opt").forEach((o) => {
+      o.hidden = needle !== "" && !(o.textContent ?? "").toLowerCase().includes(needle);
+    });
+    menu.querySelectorAll<HTMLElement>(".xdd-group").forEach((g) => {
+      let vis = false;
+      for (let n = g.nextElementSibling; n && !n.classList.contains("xdd-group"); n = n.nextElementSibling) {
+        if (n.classList.contains("xdd-opt") && !(n as HTMLElement).hidden) { vis = true; break; }
+      }
+      g.hidden = needle !== "" && !vis;
+    });
   };
   dd.addEventListener("click", (e) => {
     const t = e.target as HTMLElement;
+    if (t.closest(".xdd-search")) return; // tapping the search field never selects/closes
     if (t.closest(".xdd-btn")) {
       const menu = dd.querySelector<HTMLElement>(".xdd-menu")!;
       const opening = menu.hasAttribute("hidden");
       menu.toggleAttribute("hidden", !opening);
       dd.classList.toggle("open", opening);
-      // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow:
-      // the add-set pickers (squashed in a clipping scroll-row) and the login user
-      // picker (low on a centred card → its long list ran off the bottom of the screen).
-      const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("login-input");
+      // PB-55: an opened dim dropdown was clipped to a sliver. The on-screen diagnostic (b.2.9.304)
+      // proved the menu IS position:fixed at full height but `.addm-card` (overflow: hidden auto)
+      // is its CLIPPER — and the tag row's fade `mask` clips too. A fixed popup is NOT immune to an
+      // ancestor's overflow/mask here, so while OUR dropdown is open we drop the clip on every
+      // clipping ancestor (the scroll-row's mask + the modal card's overflow); close() restores them.
+      for (const a of [".addm-line-vars", ".addm-passive-pills", ".addm-card"])
+        dd.closest<HTMLElement>(a)?.classList.toggle("dd-open-within", opening);
+      // Opening starts from a clean, unfiltered list (the menu HTML persists between opens).
+      if (opening) { const srch = menu.querySelector<HTMLInputElement>(".xdd-search"); if (srch) { srch.value = ""; filterOpts(""); } }
+      // Pop as a viewport-clamped FIXED popup when the menu would otherwise overflow: the add-set
+      // pickers (any dim/lean PILL in the clipping scroll-row → wo-af-dim / wo-af-dimpill) and the
+      // login user picker (low on a centred card → its long list ran off the bottom of the screen).
+      const fixedPopup = dd.classList.contains("wo-af-dim") || dd.classList.contains("wo-af-dimpill") || dd.classList.contains("login-input");
       if (opening && fixedPopup) placeXddFixed(t.closest(".xdd-btn") as HTMLElement, menu);
       else { menu.style.position = ""; menu.style.left = ""; menu.style.top = ""; menu.style.right = ""; menu.style.minWidth = ""; }
       return;
     }
-    const opt = t.closest<HTMLElement>(".xdd-opt");
+    // Tag editor: keep the menu OPEN (re-place if it's a fixed popup) after a tweak.
+    const resyncOpen = () => {
+      sync();
+      const menu = dd.querySelector<HTMLElement>(".xdd-menu");
+      const btn = dd.querySelector<HTMLElement>(".xdd-btn");
+      if (menu && btn && !menu.hasAttribute("hidden") && (dd.classList.contains("wo-af-dim") || dd.classList.contains("login-input")))
+        placeXddFixed(btn, menu);
+    };
+    if (t.closest(".vtag-edit")) return; // a tap inside the name/× edit row never picks or closes
+    const vd = t.closest<HTMLElement>(".vtag-default");
+    if (vd?.dataset.vtagDefault !== undefined) {
+      const fam = vtagFam();
+      if (fam) { setFamDefaultLevel(fam, vtagDim, vd.dataset.vtagDefault); resyncOpen(); }
+      return;
+    }
+    const vg = t.closest<HTMLElement>(".vtag-gray");
+    if (vg?.dataset.vtagGray !== undefined) {
+      const fam = vtagFam();
+      if (fam) { setFamGray(fam, vtagDim, vg.dataset.vtagGray, !isGray(fam, vtagDim, vg.dataset.vtagGray)); resyncOpen(); }
+      return;
+    }
+    const ve = t.closest<HTMLElement>(".vtag-editbtn");
+    if (ve?.dataset.vtagEdit !== undefined) {
+      vtagEditLevel = vtagEditLevel === ve.dataset.vtagEdit ? null : ve.dataset.vtagEdit;
+      resyncOpen();
+      dd.querySelector<HTMLInputElement>(".vtag-edit .vtag-name")?.focus();
+      return;
+    }
+    const opt = t.closest<HTMLElement>("[data-val]"); // the pick button (or a plain .xdd-opt)
     if (opt?.dataset.val !== undefined) {
       if (sel.value !== opt.dataset.val) {
         sel.value = opt.dataset.val;
         sel.dispatchEvent(new Event("change", { bubbles: true }));
       }
+      vtagEditLevel = null;
       close();
       sync();
     }
   });
+  // Tag editor: save the inline name / multiplier edits on blur/Enter (the input's
+  // `change`), then re-render the row in place. Multipliers reuse setFamFactor; names
+  // setFamLabel. Both also refresh the source <option> so the trigger pill updates.
+  dd.addEventListener("change", (e) => {
+    const fam = vtagFam();
+    if (!fam) return;
+    const t = e.target as HTMLElement;
+    const nm = t.closest<HTMLInputElement>(".vtag-name");
+    if (nm?.dataset.lvl) {
+      setFamLabel(fam, vtagDim, nm.dataset.lvl, nm.value);
+      for (const o of Array.from(sel.options)) if (o.value === nm.dataset.lvl) o.textContent = afLevelText(vtagDim, nm.dataset.lvl, fam);
+      sync();
+      return;
+    }
+    const ml = t.closest<HTMLInputElement>(".vtag-mult");
+    if (ml?.dataset.lvl) {
+      const v = parseFloat(ml.value);
+      if (Number.isFinite(v)) { setFamFactor(fam, vtagDim, ml.dataset.lvl, v); sync(); }
+      return;
+    }
+  });
   document.addEventListener("click", (e) => {
-    if (!dd.contains(e.target as Node)) close();
+    if (!dd.contains(e.target as Node)) { vtagEditLevel = null; close(); }
+  });
+  // Search box: filter as you type; Enter picks the first match, Esc closes.
+  dd.addEventListener("input", (e) => {
+    const inp = (e.target as HTMLElement).closest<HTMLInputElement>(".xdd-search");
+    if (inp) filterOpts(inp.value);
+  });
+  dd.addEventListener("keydown", (e) => {
+    if (!(e.target as HTMLElement).closest(".xdd-search")) return;
+    const ke = e as KeyboardEvent;
+    if (ke.key === "Enter") { e.preventDefault(); dd.querySelector<HTMLElement>(".xdd-menu .xdd-opt:not([hidden])")?.click(); }
+    else if (ke.key === "Escape") { e.preventDefault(); close(); }
   });
   // Repopulating the select (new <option>s) or a code-driven change re-syncs.
   new MutationObserver(() => sync()).observe(sel, { childList: true, subtree: true });
-  sel.addEventListener("change", sync);
+  sel.addEventListener("change", () => {
+    sync();
+    if (vtagDim === "support" && addModalEl) {
+      const form = addModalEl.querySelector<HTMLElement>(".wo-addform");
+      if (form) syncFloorHeightVtags(form);
+    }
+  });
 }
 
 
@@ -18295,6 +27550,7 @@ function enhanceSelect(sel: HTMLSelectElement, opts: { wide?: boolean } = {}) {
  * a list row jumping to Exercises). Does NOT switch the top tab — callers that
  * need the Athlete panel visible should switchTopTab("athlete") first. */
 function showSubtab(name: string) {
+  clearWorkoutSortFreeze(); // changing pages is a "sparse" moment → re-sort the history fresh
   for (const n of ["workouts", "exercises"]) {
     const panel = document.getElementById(`sub-${n}`);
     if (panel) panel.hidden = n !== name;
@@ -18321,7 +27577,7 @@ function updateBottomNav() {
 const PAGE_NAMES: Record<string, string> = {
   analysis: "Analysis", "s-analysis": "S-Analysis", leaderboards: "Colosseum",
   athlete: "Athlete", bwparts: "Index", groups: "Stats", team: "Group",
-  data: "Data", test: "Formulas", statsedit: "Athletes",
+  data: "Data", statsedit: "Athletes",
   guide: "Guide", changelog: "Version history",
 };
 function updateBrand() {
@@ -18370,7 +27626,109 @@ function setupBottomNav() {
   });
 }
 
+// ───────────────────────── Grade recent updates (owner) ─────────────────────────
+// A constant floating button → a panel of the last 5 versions, each gradeable on the owner's
+// 6-level quality scale (bug → perfect). Grades are device-local and also show as a chip in
+// the version history (renderNode). Floating menu per rule 32 (position:fixed + clamp).
+const VERSION_GRADES: { id: string; label: string; tone: "bad" | "mid" | "good" }[] = [
+  { id: "bug", label: "bug", tone: "bad" },
+  { id: "verybuggy", label: "very buggy", tone: "bad" },
+  { id: "notwanted", label: "not what i wanted", tone: "bad" },
+  { id: "ok", label: "ok", tone: "mid" },
+  { id: "smart", label: "smart", tone: "good" },
+  { id: "perfect", label: "perfect", tone: "good" },
+];
+const VERSION_GRADE_KEY = "colosseum.versionGrades.v1";
+const versionGrades: Record<string, string> = loadJsonObject<Record<string, string>>(VERSION_GRADE_KEY) ?? {};
+function gradeOf(version: string): string { return versionGrades[version] ?? ""; }
+function gradeMeta(id: string): { label: string; tone: string } | undefined { return VERSION_GRADES.find((x) => x.id === id); }
+function setVersionGrade(version: string, id: string): void {
+  if (versionGrades[version] === id) delete versionGrades[version]; else versionGrades[version] = id; // tap the same grade again = clear
+  saveJson(VERSION_GRADE_KEY, versionGrades);
+}
+// How many updates the popup shows; grows by GRADE_PAGE on "Show more" (owner: "i might
+// want to see more than 5"). Reset to one page each time the panel is opened fresh.
+const GRADE_PAGE = 5;
+let gradeShown = GRADE_PAGE;
+function gradePanelHtml(): string {
+  // Owner: no grading — each update is an EXPANDABLE row: the 2–5w shortTitle in the
+  // summary, and on expand the 5–15w title + full note + details, mirroring the
+  // Settings → Version history leaf (reuses its cl-* body classes). Paginated: a
+  // "Show more" button at the bottom reveals GRADE_PAGE more at a time.
+  const all = RELEASES.filter((r) => !r.soon);
+  const visible = all.slice(0, gradeShown);
+  const rows = visible.map((r) => {
+    const patch = r.version.split(".").pop() ?? r.version;
+    const code = r.code ? ` <span class="cl-code">${escapeHtml(r.code)}</span>` : "";
+    const med = r.shortTitle && r.title ? `<p class="cl-meddesc">${escapeHtml(r.title)}</p>` : "";
+    const note = r.note ? `<p class="cl-bodynote">${escapeHtml(r.note)}</p>` : "";
+    const details = r.details?.length
+      ? `<ul class="cl-details">${r.details.map((d) => `<li>${escapeHtml(d)}</li>`).join("")}</ul>`
+      : "";
+    return (
+      `<details class="grade-row"><summary class="grade-row-head">` +
+      `<span class="grade-caret" aria-hidden="true">▸</span><b>v.${escapeHtml(patch)}</b> ` +
+      `<span class="muted">${escapeHtml(r.shortTitle ?? r.title)}</span>${code}</summary>` +
+      `<div class="cl-body grade-body">${med}${note}${details}</div></details>`
+    );
+  }).join("");
+  const remaining = all.length - visible.length;
+  const more = remaining > 0
+    ? `<button type="button" class="grade-more" data-grademore>Show ${Math.min(GRADE_PAGE, remaining)} more <span class="muted">(${remaining} left)</span></button>`
+    : "";
+  return `<div class="grade-head"><span>Recent updates <span class="muted">(${visible.length}${remaining > 0 ? `/${all.length}` : ""})</span></span><button type="button" class="grade-close" data-gradeclose aria-label="Close">✕</button></div>${rows}${more}`;
+}
+function gradeOutside(e: MouseEvent): void {
+  const t = e.target as HTMLElement;
+  if (t.closest("#gradePanel") || t.closest("#gradeBtn")) return;
+  closeGradePanel();
+}
+function closeGradePanel(): void {
+  document.getElementById("gradePanel")?.remove();
+  document.removeEventListener("click", gradeOutside, true);
+}
+function renderGradePanel(): void {
+  let panel = document.getElementById("gradePanel");
+  if (!panel) {
+    panel = document.createElement("div"); panel.id = "gradePanel"; panel.className = "grade-panel";
+    document.body.appendChild(panel);
+    setTimeout(() => document.addEventListener("click", gradeOutside, true), 0);
+  }
+  panel.innerHTML = gradePanelHtml();
+  const btn = document.getElementById("gradeBtn");
+  if (btn) clampMenuIntoView(panel, btn);
+}
+function setupGradeButton(): void {
+  const btn = document.getElementById("gradeBtn");
+  if (!btn) return;
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (document.getElementById("gradePanel")) closeGradePanel();
+    else { gradeShown = GRADE_PAGE; renderGradePanel(); } // fresh open starts at one page
+  });
+  document.addEventListener("click", (e) => {
+    const t = e.target as HTMLElement;
+    if (t.closest("[data-gradeclose]")) { closeGradePanel(); return; }
+    if (t.closest("[data-grademore]")) { gradeShown += GRADE_PAGE; renderGradePanel(); return; } // reveal 5 more
+    const opt = t.closest<HTMLElement>("[data-grade]");
+    if (opt?.dataset.grade) {
+      const i = opt.dataset.grade.lastIndexOf("|");
+      setVersionGrade(opt.dataset.grade.slice(0, i), opt.dataset.grade.slice(i + 1));
+      renderGradePanel();
+    }
+  });
+}
+
 void init();
+setupGradeButton();
+// Per-setting ℹ buttons in the graph Options menu — capture phase + preventDefault so a tap
+// opens the info popup WITHOUT toggling the <details> group the ℹ sits in.
+document.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>("[data-setinfo]");
+  if (!btn?.dataset.setinfo) return;
+  e.preventDefault(); e.stopPropagation();
+  openSettingInfo(btn, btn.dataset.setinfo);
+}, true);
 // Fetch other users' manual sets from Supabase after the app loads.
 // Silent no-op if Supabase is unreachable or RLS blocks access.
-setTimeout(async () => { await loadManualFromSupabase(); void syncManualToSupabase(); }, 1500);
+setTimeout(async () => { await loadManualFromSupabase(); await syncManualToSupabase(); await pullMergeKv(); }, 1500);

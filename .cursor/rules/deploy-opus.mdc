@@ -1,0 +1,31 @@
+---
+description: Always merge finished work into opus-4.8 and push — the live site only updates from opus
+alwaysApply: true
+---
+
+# Always merge to `opus-4.8`
+
+`opus-4.8` is the **only** branch the owner sees (GitHub Pages). Feature branches and open PRs do **not** update the live site.
+
+## Done = merged on opus + pushed
+
+1. Finish the change (tests + typecheck green, version bump if shipping).
+2. Commit + push your working branch (e.g. `cursor/*-2e40`) if you used one.
+3. **Merge into `opus-4.8`** — cherry-pick, fast-forward, or merge commit; pick the cleanest path.
+4. **Push `origin opus-4.8`** — triggers the Pages deploy workflow.
+5. Confirm deploy green (`gh run list --branch opus-4.8`).
+
+**Never stop at "PR opened" or "feature branch pushed".** That is not done for this project.
+
+## Release trinity (when shipping)
+
+All three together: prepend `src/changelog.ts`, update `<span class="version">` in `index.html`, patch bump only.
+
+## Do not
+
+- Leave verified work stranded on a side branch.
+- Ask the owner to deploy unless merge is genuinely blocked.
+
+## Owner says "deploy" / "merge to opus" / "push to opus"
+
+Merge to `opus-4.8`, push, wait for deploy — no extra confirmation needed.

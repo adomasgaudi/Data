@@ -25,6 +25,9 @@ export const S: {
   waCogOpen: boolean;
   waGraphFoldOpen: boolean;
   waPerBodyweight: boolean;
+  /** Graph "Reps versus weight" scatter mode + its per-exercise best-fit line. */
+  waRepsVsWeight: boolean;
+  waRepsVsWeightFit: boolean;
   // Workouts heatmap (year analysis) state.
   heatYear: number;
   heatScope: "ribbon" | "single" | "all";
@@ -45,14 +48,19 @@ export const S: {
   workoutShowMode: "exercises" | "groups";
   showAddSets: boolean;
   showVariants: boolean;
+  showAllScale: boolean;
+  machineReal: boolean;
   showAloneTags: boolean;
   showRestDays: boolean;
+  restCompact: boolean;
 } = {
   waCompareView: "trend",
   waChipsFoldOpen: false,
   waCogOpen: false,
   waGraphFoldOpen: false,
   waPerBodyweight: false,
+  waRepsVsWeight: false,
+  waRepsVsWeightFit: true,
   heatYear: 2026,
   heatScope: "ribbon",
   heatFilters: [],
@@ -70,6 +78,9 @@ export const S: {
   // initialised from localStorage in main.ts after import.
   showAddSets: false,
   showVariants: false,
+  showAllScale: false, // collapsed-line ×N mode: false = variation (hide ×N a chip implies), true = show every ×N
+  machineReal: false, // assisted-machine weight: false = logged dial (m-20), true = real halved effort (-10)
   showAloneTags: false,
   showRestDays: true, // rest-day slivers shown by default (the gaps between sessions read as the timeline)
+  restCompact: false, // when showRestDays is on, shrink the slivers to a 3px hairline (the Rest button's 3rd state)
 };

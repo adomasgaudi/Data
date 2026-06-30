@@ -68,3 +68,29 @@ export async function upsertSets(rows: Omit<DbSet, "imported_at">[]) {
     .upsert(rows, { onConflict: "user_id,date,exercise_name,set_number" });
   if (error) throw error;
 }
+
+// ── Shared key→value mirror (the `kv` table — CLAUDE.md rule 41) ──────────────
+// Each row is one shared localStorage `colosseum.*` key. The value is stored as
+// the RAW localStorage string (wrapped in jsonb) so it round-trips EXACTLY —
+// no parse/serialize ambiguity for scalar vs JSON-blob values.
+
+/** Fetch the whole shared kv table as a {key: rawLocalStorageString} map. */
+export async function fetchKv(): Promise<Record<string, string>> {
+  const { data, error } = await supabase.from("kv").select("key,value");
+  if (error) throw error;
+  const out: Record<string, string> = {};
+  for (const row of (data ?? []) as { key: string; value: unknown }[]) {
+    out[row.key] = typeof row.value === "string" ? row.value : JSON.stringify(row.value);
+  }
+  return out;
+}
+
+/** Upsert shared keys (raw localStorage strings) into the kv table. */
+export async function upsertKv(rows: { key: string; value: string }[]): Promise<void> {
+  if (!rows.length) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("kv")
+    .upsert(rows.map((r) => ({ key: r.key, value: r.value, updated_at: now })), { onConflict: "key" });
+  if (error) throw error;
+}

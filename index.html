@@ -8,12 +8,23 @@
     <!-- Apply the saved theme before first paint so there's no light-mode flash. -->
     <script>
       try { if (localStorage.getItem("colosseum.theme") === "dark") document.documentElement.setAttribute("data-theme", "dark"); } catch (e) {}
-      try { if (localStorage.getItem("colosseum.signedIn") !== "1") document.getElementById("loginGate").hidden = false; } catch (e) {}
+      // Login gate (DATA-24): the gate is VISIBLE by default; reveal the app only once
+      // signed in by flagging <html> here in <head> (documentElement exists; #loginGate
+      // does NOT yet — the old getElementById ran too early and silently failed, so the
+      // gate never showed and every visitor saw the admin app). No app flash either way.
+      try { if (localStorage.getItem("colosseum.signedIn") === "1") document.documentElement.classList.add("signed-in"); } catch (e) {}
     </script>
   </head>
   <body>
 
-    <div id="loginGate" class="login-gate" hidden>
+    <!-- Background-sync "new data / new version" bar: shown when a quiet sync finds
+         fresher data, so the view never rebuilds/reloads under you. Tap to apply. -->
+    <button id="refreshBar" class="refresh-bar" type="button" hidden aria-live="polite">
+      <span class="refresh-bar-txt">New data available</span>
+      <span class="refresh-bar-act">Tap to refresh ⟳</span>
+    </button>
+
+    <div id="loginGate" class="login-gate">
       <div class="login-card">
         <div class="login-logo" aria-hidden="true">
           <svg viewBox="0 0 80 58" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -41,7 +52,6 @@
           <input id="loginPass" class="login-input" type="password" placeholder="Password" autocomplete="current-password" />
           <p id="loginErr" class="login-err" hidden></p>
           <button id="loginSendBtn" type="button" class="login-btn login-btn--admin">Log in</button>
-          <button id="loginGuestBtn" type="button" class="login-spectate">spectate</button>
         </div>
       </div>
     </div>
@@ -51,8 +61,12 @@
         <div class="title-row">
           <h1 id="brandTitle" class="brand-title" role="button" tabindex="0" title="Back to Colosseum">Colosseum</h1>
           <span id="viewRoleLabel" class="view-role-label" hidden>spectator</span>
+          <!-- Current athlete, pinned in the sticky top bar so you always know whose data
+               you're viewing even after the chip row scrolls away (owner). -->
+          <span id="topAthlete" class="top-athlete" hidden></span>
         </div>
-        <div class="title-ver"><span class="version">b.2.8.328</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+        <div class="title-ver"><span class="version">b.2.9.351</span> <span id="modelTag" class="model-tag" hidden></span> <span id="effortSummary" class="effort-inline"></span> <span id="ghSync" class="gh-sync" hidden>GitHub</span> <span id="syncStatus" class="gh-sync" hidden></span></div>
+
       </div>
       <div class="topbar-right">
         <div id="viewSwitch" class="view-switch"></div>
@@ -83,12 +97,27 @@
                here only as a hidden, in-sync mirror (no longer shown in the menu). -->
           <select id="viewAsSelect" hidden></select>
           <div class="settings-row">
+            <button type="button" id="e1rmStemsBtn" class="settings-link" aria-pressed="true" title="Thin vertical lines from the weight used up to each 1RM bubble on the graph.">│ 1RM stems</button>
+          </div>
+          <div class="settings-row">
             <button type="button" id="themeBtn" class="settings-link" aria-pressed="false">🌙 Dark mode</button>
             <button type="button" id="authBtn" class="settings-link">Log out</button>
+          </div>
+          <!-- Make your profile PUBLIC so every user can spectate it (read-only). Hidden
+               for a logged-out spectator (no own profile). -->
+          <div class="settings-row">
+            <button type="button" id="publicProfileToggle" class="settings-link" aria-pressed="false" hidden title="When ON, your profile is public — every user can spectate it (read-only). When OFF, only you (and admins) see it.">🌐 Public profile</button>
           </div>
           <div class="settings-row">
             <button type="button" id="syncUpBtn" class="settings-link">⬆ Upload sets</button>
             <button type="button" id="syncDownBtn" class="settings-link">⬇ Download sets</button>
+          </div>
+          <!-- Green on-screen debug console toggle — admin-only dev tool, hidden by
+               default. Switches localStorage colosseum.dbg on/off (see dbgVisible). -->
+          <div class="settings-row admin-only">
+            <button type="button" id="dbgToggleBtn" class="settings-link" aria-pressed="false">🐞 Debug console</button>
+            <button type="button" id="boxInspectBtn" class="settings-link" aria-pressed="false" title="Our own fast box viewer: outlines EVERY element so all boxes show. The page stays fully usable — normal taps work as normal. LONG-PRESS any element to measure it — margin (orange) · border (yellow) · padding (green) · content (blue) + a label with size & px values. Toggle off to clear. Admin-only.">📦 Boxes</button>
+            <button type="button" id="inspectToggleBtn" class="settings-link" aria-pressed="false" title="On-screen CSS / element inspector (eruda). Opens on the ELEMENTS panel: tap the ⊙ pointer (top-left of that panel), tap any element, then scroll down to its box model — margin · border · padding · size — and the Computed list (search 'outline' etc). Admin-only; loaded on demand.">🔍 Inspect (CSS)</button>
           </div>
         </div>
       </div>
@@ -98,7 +127,6 @@
       <button class="tab" data-tab="leaderboards" role="tab">Colosseum</button>
       <button class="tab is-active" data-tab="athlete" role="tab">Athlete</button>
       <button class="tab" data-tab="bwparts" role="tab">Index</button>
-      <button class="tab" data-tab="test" role="tab">Test</button>
       <button class="tab" data-tab="data" role="tab">Data</button>
       <button class="tab" data-tab="coach" role="tab">Coach</button>
     </nav>
@@ -226,15 +254,18 @@
                   </select>
                   <button type="button" id="workoutsPageBtn" class="wo-dj-btn" data-sub="per page" title="Per page (20 ↔ 50)">50</button>
                   <button type="button" id="workoutRmCycle" class="wo-dj-btn" data-sub="rep max" title="Golden number = each lift's estimated X-rep max (the X-RM), computed from its 1RM. Tap to cycle 1→2→3→5→8→10→12 RM.">1RM</button>
+                  <button type="button" id="prioSortToggle" class="wo-dj-btn" data-sub="priority" aria-pressed="true" title="Sort each day's exercises — tap to cycle: Prio (plan priority, non-priority lifts last) → Recent (most recently done first) → Volume (most weight×reps first) → Logged (the order you logged them).">Prio</button>
                   <button type="button" id="restToggle" class="wo-dj-btn" data-sub="rest days" aria-pressed="false" title="Show rest days">Rest</button>
                   <button type="button" id="addSetsToggle" class="wo-dj-btn" data-sub="add set" aria-pressed="false" title="Show + set buttons">Sets+</button>
-                  <button type="button" id="variantToggle" class="wo-dj-btn" data-sub="edit variant" aria-pressed="false" title="Show a variant button on each set — tap it to quickly edit that set's variant (machine cable/gravity, incline/level, note variation), without opening the full editor">Var</button>
+                  <button type="button" id="variantToggle" class="wo-dj-btn" data-sub="outline" aria-pressed="false" title="Outline the sets that have a variant (machine cable/gravity, incline/level, note variation) so they stand out. Tapping any set opens its action menu — duplicate, change variant, or add a suggested set.">Var</button>
+                  <button type="button" id="scaleModeToggle" class="wo-dj-btn" data-sub="mult" aria-pressed="false" title="Collapsed set line: off = variation mode (the chip shows the variation; the ×multiplier is hidden when a chip already implies it, but custom ones still show); on = show every ×multiplier on every scaled set.">×N</button>
+                  <button type="button" id="machineRealToggle" class="wo-dj-btn" data-sub="machine" aria-pressed="false" hidden title="Assisted-machine weight: off = the LOGGED dial value (shown as an outlined m-20, which over-reads ~2×); on = the REAL halved effort (e.g. -10).">real</button>
                   <button type="button" id="aloneFilter" class="wo-dj-btn" data-sub="alone" data-state="both" title="Alone filter: all ↔ only-alone ↔ not-alone">All</button>
                   <button type="button" id="aloneTagToggle" class="wo-dj-btn" data-sub="day tags" aria-pressed="false" title="Show/hide the “alone” day tags">Tags</button>
+                  <button type="button" id="woShowAllToggle" class="wo-hidden-toggle" aria-pressed="false" hidden title="Lifts hidden by the Index app-wide filter — tap to show them in this list">Hidden</button>
+                  <div id="woDjDesc" class="wo-dj-desc">Tap a setting to see what it does.</div>
                 </div>
             </details>
-            <button type="button" id="planWorkoutBtn" class="wo-plan-btn" title="Your training plan — what to train today by tier, antagonist supersets, warm-ups and watch-outs, plus up to 10 manual focus lifts with a level and weekly target">📋 Priorities</button>
-            <button type="button" id="woShowAllToggle" class="wo-hidden-toggle" aria-pressed="false" hidden title="Lifts hidden by the Index app-wide filter — tap to show them in this list">Hidden</button>
             </div>
             <!-- CUT-2: "Sets over time" chart warehoused (warehouse/2026-06-07-cut2-workout-sets-chart).
                  Empty #workoutSets kept as the calendar's relocation anchor (setAnalysisCalendar). -->
@@ -364,7 +395,12 @@
         </details>
       </div>
 
-      <div id="tab-test" class="tab-panel" hidden>
+      <div id="formulasPage" class="overlay-page" hidden>
+        <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Formulas</h2>
+          <button type="button" id="formulasClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
         <section class="panel">
           <h2>Formulas — see the maths</h2>
           <div class="calc-picker">
@@ -373,7 +409,6 @@
             </label>
             <label>Bodyweight (kg)<input id="calcBw" type="number" value="80" step="1" /></label>
           </div>
-          <p id="testPickHint" class="muted" style="margin: 0 0 1rem; font-size: 0.8rem"></p>
           <div class="calc-inputs">
             <label>Exercise
               <select id="testExercise"></select>
@@ -382,6 +417,35 @@
             <label>Reps<input id="calcReps" type="number" value="5" min="1" /></label>
             <label>BW part (coeff)<input id="calcCoeff" type="number" value="0" step="0.05" min="0" max="2" /></label>
           </div>
+          <!-- The first inputs ARE a 1RM calculation, so the answer + the warm-up ramp
+               to your set live right here (the old separate Coach panel is merged in). -->
+          <div id="calcOrm" class="calc-orm"></div>
+          <div class="calc-warmup">
+            <div class="calc-warmup-head">
+              <h3 class="calc-warmup-h">Warm-up to your set</h3>
+              <button type="button" id="warmupPlanBtn" class="calc-wu-plan" data-warmupplan title="Warm-up plan — tap to choose a type (table + explanation)">Standard</button>
+              <label class="calc-plates">Plates
+                <select id="rxInc">
+                  <option value="0.5">0.5</option>
+                  <option value="0.75">0.75</option>
+                  <option value="1">1</option>
+                  <option value="1.25">1.25</option>
+                  <option value="2">2</option>
+                  <option value="2.5" selected>2.5</option>
+                  <option value="3">3</option>
+                  <option value="5">5</option>
+                  <option value="7">7</option>
+                </select>
+              </label>
+            </div>
+            <div id="rxOut" class="calc-out"></div>
+          </div>
+          <!-- The single top set can be a fluke, so an expandable list of the athlete's
+               TOP 10 sets by estimated 1RM — tap one to load it into the calculator. -->
+          <details class="merge-fold calc-fold" id="calcTopSetsFold">
+            <summary class="merge-fold-sum calc-fold-sum">Top 10 sets by 1RM</summary>
+            <div id="calcTopSets" class="calc-topsets"></div>
+          </details>
           <!-- The per-formula comparison tabs + the step-by-step breakdown are the deep
                dive, so they're folded away by default to keep the page short. -->
           <details class="merge-fold calc-fold">
@@ -393,6 +457,9 @@
             </div>
             <div id="calcOut" class="calc-out"></div>
           </details>
+        </section>
+        <section class="panel">
+          <h2>1RM curve</h2>
           <div id="calcCurveChart"></div>
           <p class="muted" id="calcCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
           <p class="calc-links">
@@ -401,8 +468,8 @@
             </a>
           </p>
           <!-- App-wide 1RM formula (set-once app-wide setting — sets the formula the whole
-               app uses for leaderboards, PRs and the history). Kept at the BOTTOM since it's
-               rarely changed; same #formula id, so its wiring + .xdd dropdown are unchanged. -->
+               app uses for leaderboards, PRs and the history). Kept low since it's rarely
+               changed; same #formula id, so its wiring + .xdd dropdown are unchanged. -->
           <label class="formula-field formula-field--foot">App-wide 1RM formula
             <select id="formula">
               <option value="epley">Epley</option>
@@ -411,46 +478,14 @@
             </select>
           </label>
         </section>
-        <section class="panel rx-panel">
-          <h2>Coach — working weight &amp; warm-up</h2>
-          <p class="muted" style="margin: 0 0 0.75rem; font-size: 0.8rem">
-            From a client's 1RM: the hard-set load and a full warm-up ramp up to it.
-          </p>
-          <button type="button" id="rxModeBtn" class="rx-mode" data-mode="repsRIR">Target: reps + RIR</button>
-          <div class="calc-inputs">
-            <label>1RM (kg)<input id="rxOrm" type="number" value="100" step="2.5" min="1" /></label>
-            <label id="rxRepsField">Reps<input id="rxReps" type="number" value="5" min="1" /></label>
-            <label id="rxRirField">RIR<input id="rxRir" type="number" value="2" min="0" /></label>
-            <label id="rxPctField" hidden>% of 1RM<input id="rxPct" type="number" value="80" step="1" min="1" max="100" /></label>
-            <label>Formula
-              <select id="rxFormula">
-                <option value="epley" selected>Epley</option>
-                <option value="brzycki">Brzycki</option>
-                <option value="nuzzo">Nuzzo (bench)</option>
-              </select>
-            </label>
-            <label>Plates (kg)
-              <select id="rxInc">
-                <option value="1.25">1.25</option>
-                <option value="2.5" selected>2.5</option>
-                <option value="5">5</option>
-              </select>
-            </label>
-          </div>
-          <div id="rxOut" class="calc-out"></div>
-        </section>
         <section class="panel">
           <h2>Strength fade — use it or lose it</h2>
-          <p class="muted" style="margin: 0 0 1rem">
-            How a lift's estimated 1RM fades when you stop training it (the “Current strength”
-            setting). Full strength for two weeks, then about 10% gone a month later, slowing down
-            after that and never dropping below half. Drag to pan · wheel to zoom.
-          </p>
           <div id="decayCurveChart"></div>
           <p class="muted" id="decayCurveNote" style="margin: 0.25rem 0 0; font-size: 0.8rem"></p>
         </section>
         <section class="panel">
-          <h2>How the numbers work</h2>
+          <details class="merge-fold calc-fold">
+          <summary class="merge-fold-sum calc-fold-sum">How the numbers work</summary>
           <div class="calc-explain">
             <p><strong>1. Effective load.</strong> For lifts that move your body (pull-ups, squats…),
               the load is <code>coeff × bodyweight + added weight</code>. <code>coeff</code> 0 = bar only
@@ -467,8 +502,33 @@
             <p><strong>5. Volume:</strong> <code>weight × reps</code> — total load moved in the set.</p>
             <p><strong>6. Per bodyweight</strong> (the relative leaderboard): <code>1RM ÷ bodyweight</code>,
               shown as ×BW, so people of different sizes compare fairly.</p>
+            <p><strong>7. Strength fade — the dashed "Strength Decay" line.</strong> Between sessions a lift's
+              strength sags on a "use it or lose it" curve; each session re-proves it and restarts the clock.
+              That's why the dashed line dips during gaps and jumps back up on training days. You can DIAL this
+              model in the graph Options → <em>Decay model</em>: pick a complexity level (Linear → Log → Full →
+              <strong>Phases</strong>) and adjust every variable below, live on your data. <em>Phases</em> splits your
+              history into beginner → intermediate → advanced by hard-set count, each accepting gains at its own
+              pace (fast → slow), capped only by the world record. The defaults (the Full model) are described next.</p>
+            <p><strong>7a. Grace, then a log decline.</strong> The first <code>14</code> days after a session keep
+              <code>100%</code> (no fade). After that the fraction still held is
+              <code>retention = 1 − k · ln(1 + (days − 14) / S)</code>, where <code>k = 0.1 / ln2 ≈ 0.144</code> and
+              <code>S</code> is the lift's durability in days. <code>k</code> is tuned so you've lost exactly
+              <code>10%</code> one month after the grace ends (at the base <code>S = 30</code>). It never drops below
+              <code>50%</code> of the peak — a muscle-memory floor.</p>
+            <p><strong>7b. Durability S grows with training.</strong> <code>S</code> starts at <code>30</code> days and is
+              multiplied by <code>1.8</code> each session (capped at <code>90</code>). A bigger <code>S</code> = a flatter,
+              slower fade — so the more often you've trained a lift, the shallower its dips become.</p>
+            <p><strong>7c. How each session re-proves strength.</strong> The line steps to the session's estimated 1RM,
+              with three guards: <em>(a) RIR confidence</em> — a noisy high-RIR set is blended with the current level
+              (<code>confidence = max(0.2, 1 − RIR/10)</code>; a near-failure set is trusted fully); <em>(b) capped growth</em>
+              — one session can't raise the level beyond <code>8%</code> above your all-time peak (bigger jumps accrue over
+              sessions, not all at once); <em>(c) gap calibration</em> — if a set after a long layoff is still
+              <code>≥ 88%</code> of the previous level, the gap was clearly "maintained", so <code>S</code> is raised to that
+              gap's length. The current strength = <code>max(decayed level, the (capped, blended) new set)</code>.</p>
           </div>
+          </details>
         </section>
+        </div>
       </div>
 
       <div id="tab-bwparts" class="tab-panel" hidden>
@@ -904,7 +964,7 @@
       </div>
 
       <div id=”tab-data” class=”tab-panel” hidden>
-        <section class="panel">
+        <section class=”panel”>
           <h2>Data — raw vs processed</h2>
           <p class="muted" id="dataIntro" style="margin: 0 0 1rem">
             See exactly what the dashboard reads and derives. <strong>Original</strong> is the CSV as
@@ -928,6 +988,19 @@
           </div>
           <div id="dataTableWrap" class="data-table-wrap"></div>
           <div id="dataPager" class="pager"></div>
+        </section>
+      </div>
+
+      <div id="tab-slsync" class="tab-panel" hidden>
+        <section id="slSyncCard" class="panel sl-sync-card">
+          <h2>StrengthLevel sync</h2>
+          <p class="muted" style="margin:0 0 1.2rem">
+            Pull the latest workouts from StrengthLevel into the dashboard. The button opens the
+            <strong>fetch-data</strong> GitHub Action — tap <strong>Run workflow</strong> there to start it.
+            It only updates the reference data and <strong>never touches</strong> the sets you or
+            other users have added in the app.
+          </p>
+          <a id="slActionLink" class="pill sl-action-link" href="https://github.com/adomasgaudi/Data/actions/workflows/fetch-data.yml" target="_blank" rel="noopener">Open GitHub Action ↗</a>
         </section>
       </div>
 
@@ -964,19 +1037,22 @@
         </section>
       </div>
 
-      <div id="tab-statsedit" class="tab-panel" hidden>
+      <div id="statseditPage" class="overlay-page" hidden>
+        <div class="overlay-inner">
+        <div class="overlay-head">
+          <h2>Athletes</h2>
+          <button type="button" id="statseditClose" class="overlay-close" aria-label="Close">✕</button>
+        </div>
         <section class="panel">
-          <div class="groups-head">
-            <h2>Athletes</h2>
-            <p class="muted" style="margin: 0.25rem 0 0">
-              Edit a person's weight, height, age, sex and body-fat. Body fat is a
-              range (95% / 50% confidence band + average), so every value built from it
-              (nFFMI) carries an error margin. Saved on this device; the StrengthLevel
-              data is never touched.
-            </p>
-          </div>
+          <p class="muted" style="margin: 0 0 0.5rem">
+            Edit a person's weight, height, age, sex and body-fat. Body fat is a
+            range (95% / 50% confidence band + average), so every value built from it
+            (nFFMI) carries an error margin. Saved on this device; the StrengthLevel
+            data is never touched.
+          </p>
           <div id="statsEditBody" class="statsedit-body"></div>
         </section>
+        </div>
       </div>
 
       <div id="tab-coach" class="tab-panel" hidden>
@@ -1044,6 +1120,23 @@
         </section>
       </div>
 
+      <!-- HANDSTAND calculator: a standalone page (owner) that turns the handstand tag
+           model into a live calculator — pick a handstand lift + its tags (support, lean,
+           ROM, band …) and bodyweight/reps, and see every tag's multiplier and the
+           resulting effective load + 1RM update live. Populated by renderHandstands(). -->
+      <div id="tab-handstands" class="tab-panel" hidden>
+        <section class="panel">
+          <div class="groups-head">
+            <h2>Handstand calculator</h2>
+            <p class="muted" style="margin: 0.25rem 0 0">
+              Pick a handstand exercise and its tags — see how each tag scales the load
+              and what effective weight &amp; 1RM it works out to.
+            </p>
+          </div>
+          <div id="handstandsBody" class="hs-calc"></div>
+        </section>
+      </div>
+
 
       <!-- Unified Analysis view: the single home for every exercise view. Each
            wa-section below is populated live by renderWorkoutAnalysis() —
@@ -1064,7 +1157,10 @@
         <div id="waSelectedRow" class="wa-selected-row">
           <button type="button" id="statsToggleBtn" class="wa-topact-btn" aria-pressed="false" title="Show the Stats section">Stats</button>
           <button type="button" id="graphToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the Graph section">Graph</button>
+          <button type="button" id="planToggleBtn" class="wa-topact-btn wa-soon is-on" aria-pressed="true" title="Hide the Plan section">Plan<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.0</span></button>
           <button type="button" id="histToggleBtn" class="wa-topact-btn is-on" aria-pressed="true" title="Hide the History section">History</button>
+          <button type="button" id="histHorizToggleBtn" class="wa-topact-btn wa-soon" aria-pressed="false" title="Show the Horizontal history section">Horizontal<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.1</span></button>
+          <button type="button" id="calToggleBtn" class="wa-topact-btn wa-soon" aria-pressed="false" title="Show the Calendar section">Calendar<span class="wa-soon-tag"><span class="wa-soon-word">soon</span> v.3.2</span></button>
         </div>
         <!-- The legacy "Stats & training mix" (#athleteDetails) is relocated here,
              just under the athlete picker and above the Analysis card. -->
@@ -1074,6 +1170,11 @@
                (inside the fold), so the picker travels with the chart it drives.
                wa-fold-titled keeps the header in-flow when open (the floating
                top-right caret would otherwise sit over the selector's buttons). -->
+          <!-- User-managed graph tabs (like the history's #woTabs): each tab is a fully
+               separate, customizable graph view. Sits ABOVE the Graph card (owner: "move
+               the graph tabs to above the graph card just like the history section");
+               filled dynamically by renderGdashTabs(). -->
+          <div id="gdashTabs" class="gdash-tabs wa-graph-tabs" role="tablist" aria-label="Graph views"></div>
           <details class="wa-fold wa-fold-titled wa-card-fold" id="waGraphFold" open>
             <summary class="wa-fold-sum" id="waGraphSummary">Graph</summary>
             <!-- MIN view: a manually-swiped carousel of SINGLE-exercise, single-athlete
@@ -1085,10 +1186,31 @@
               <div id="waGraph" class="wa-section"></div>
             </div>
           </details>
+          <!-- PLAN section: its own collapsible card (like Graph / History), toggled by the
+               "Plan" tab above. ADMIN-ONLY — hidden for locked user/spectator views via
+               body.admin-only-hidden (rule 21). The manual focus-lifts planner #planBody
+               lives here now (moved out of the old overlay); all its handlers are delegated
+               on #planBody so relocating the node keeps them working. -->
+          <details class="wa-fold wa-fold-titled admin-only" id="waPlanFold" open>
+            <summary class="wa-fold-sum" id="waPlanSummary">Plan</summary>
+            <div class="plan-planner">
+              <h3 class="live-h plan-planner-hd">Focus lifts</h3>
+              <div id="planBody"></div>
+            </div>
+            <!-- Formulas now lives INSIDE the Plan card (owner: "move the formulas into the plan
+                 section, hidden in user view") — so it's admin-only along with the Plan. -->
+            <div class="wa-inter-gap">
+              <button type="button" id="formulasBtn" class="wo-plan-btn" title="Formulas — the 1RM calculator, the Coach working-weight & warm-up tool, the strength-fade curve and how every number is worked out">🧮 Formulas</button>
+            </div>
+          </details>
           <!-- CALENDAR + HISTORY: one JOINT collapsible. The calendar leads (collapsed
                by default); the history/calendar lift selector (drives both) sits BELOW
                it; the calendar and the history are each their OWN nested fold so they
                collapse independently inside the joint one. -->
+          <!-- User-managed history tabs (like the graph's): each tab is a fully separate,
+               customizable history view (its own exercises + grouping + options). Sits
+               ABOVE the history title; filled dynamically from the history dashboard. -->
+          <div id="woTabs" class="gdash-tabs wo-tabs" role="tablist" aria-label="History views"></div>
           <details class="wa-fold wa-fold-titled" id="waHistFold" open>
             <summary class="wa-fold-sum" id="waCalHistSummary">Workouts</summary>
             <div id="waExerciseSelectorHist" class="wa-section wa-selector-sticky"></div>
@@ -1111,7 +1233,7 @@
                period buckets (days / weeks / months) but laid out as columns you
                scroll SIDEWAYS through time, instead of stacked vertically. New, may
                break; restore point recorded in docs/restore-points.md. -->
-          <details class="wa-fold wa-fold-titled" id="waHistHorizFold">
+          <details class="wa-fold wa-fold-titled" id="waHistHorizFold" hidden>
             <summary class="wa-fold-sum">Horizontal history <span class="muted hh-exp">experimental</span></summary>
             <div id="waHistHoriz" class="wa-section"></div>
           </details>
@@ -1119,7 +1241,7 @@
                mode so it never disappears; with exercises selected it highlights only
                those lifts' squares. Returned to #workoutsPanel on leave. Sits below the
                history (it's still being built — tagged "developing"). Collapsed by default. -->
-          <details class="wa-fold wa-fold-titled" id="waCalendarFold">
+          <details class="wa-fold wa-fold-titled" id="waCalendarFold" hidden>
             <summary class="wa-fold-sum">Training calendar <span class="muted hh-exp">developing</span></summary>
             <div id="waCalendarHost" class="wa-section"></div>
           </details>
@@ -1151,6 +1273,8 @@
     <!-- Persistent command / search bar, pinned just above the bottom nav and
          always visible. Plain text searches the Analysis exercise selector;
          typing "." opens a command palette of shortcuts. -->
+    <!-- Constant floating button: grade the last 5 updates (owner) -->
+    <button type="button" id="gradeBtn" class="grade-fab" title="Grade recent updates" aria-label="Grade recent updates">★</button>
     <div id="cmdBar" class="cmd-bar">
       <div id="cmdPalette" class="cmd-palette" role="listbox" hidden></div>
       <input id="cmdInput" class="cmd-input" type="search" autocomplete="off" spellcheck="false"
@@ -1170,6 +1294,7 @@
           <div class="other-section-lbl">Clients</div>
           <div class="other-row">
             <button class="other-item" data-nav="analysis" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> <span id="otherAnalysisLabel">Analysis</span></button>
+            <button class="other-item" data-tab="bwparts" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="0.7" fill="currentColor" stroke="none"/></svg> Index</button>
           </div>
           <div class="other-row">
             <button class="other-item" data-tab="leaderboards" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V10"/><path d="M9 21V10"/><path d="M15 21V10"/><path d="M19 21V10"/><path d="M3 10l9-6 9 6"/></svg> Colosseum</button>
@@ -1177,6 +1302,7 @@
           </div>
           <div class="other-row">
             <button class="other-item" data-tab="records" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M5 4H3v2a3 3 0 0 0 3 3"/><path d="M19 4h2v2a3 3 0 0 1-3 3"/><path d="M12 13v4"/><path d="M8.5 21h7l-1-4h-5l-1 4z"/></svg> World records</button>
+            <button class="other-item" data-tab="handstands" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="4.5" r="2"/><path d="M12 6.5v6"/><path d="M12 12.5l-4 5"/><path d="M12 12.5l4 5"/><path d="M8 9.5l8 0"/></svg> Handstands</button>
             <button class="other-item" data-tab="guide" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg> Guide</button>
           </div>
           <div class="other-row">
@@ -1187,15 +1313,13 @@
           <div class="other-section-lbl">Coach</div>
           <div class="other-row">
             <button class="other-item" data-tab="team" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="3.5"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.5a4 4 0 0 1 0 7"/></svg> Group view</button>
-            <button class="other-item" data-tab="bwparts" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="0.7" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="0.7" fill="currentColor" stroke="none"/></svg> Index</button>
           </div>
           <div class="other-row">
-            <button class="other-item" data-tab="statsedit" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg> Athletes</button>
             <button class="other-item" data-tab="data" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="7.5" ry="3"/><path d="M4.5 5v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V5"/><path d="M4.5 11v6c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3v-6"/></svg> Data</button>
+            <button class="other-item" data-tab="slsync" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg> StrengthLevel sync</button>
           </div>
           <div class="other-row">
             <!-- Data health is an OVERLAY page (data-open opens it via openHealth()). Moved here from Settings. -->
-            <button class="other-item" data-tab="test" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2"/><path d="M8 6.5h8"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01M8.5 14.5h.01M12 14.5h.01M15.5 14.5h.01M8.5 18h.01M12 18h.01M15.5 18h.01"/></svg> Formulas</button>
             <button class="other-item" data-open="health" role="menuitem"><svg class="other-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2 6 3-12 2 9 1.5-3H21"/></svg> Data health <span id="healthBadge" class="muted"></span></button>
           </div>
           <div class="other-row">
@@ -1242,23 +1366,6 @@
           <button type="button" id="clearCacheBtn" class="settings-link">🧹 Clear cache (keep my data)</button>
         </div>
         <p class="settings-hint">Resets the throwaway stuff — settings, filters, who you're signed in as. Your hand-logged sets, body stats, renames and overrides are never touched.</p>
-      </div>
-    </div>
-
-    <div id="planPage" class="overlay-page plan-modal" hidden>
-      <div class="overlay-inner">
-        <div class="overlay-head">
-          <h2>Priorities</h2>
-          <button type="button" id="planClose" class="overlay-close" aria-label="Close">✕</button>
-        </div>
-        <!-- The manual focus-lifts planner — at the top (owner request). -->
-        <div class="plan-planner">
-          <h3 class="live-h plan-planner-hd">Focus lifts</h3>
-          <div id="planBody"></div>
-        </div>
-        <!-- The Live training plan (Goals & cautions, Train today, supersets, warm-ups,
-             watch-outs) — relocated here from the old standalone Live tab. -->
-        <div id="liveBody" class="live-body"></div>
       </div>
     </div>
 

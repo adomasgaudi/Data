@@ -26,6 +26,7 @@ import {
   addedWeight1RM,
   scaleToGroup,
   withSyntheticGroups,
+  filterCardLiftRecords,
   buildActiveExerciseSet,
   nearDuplicateExercises,
   canonicalizeExerciseNames,
@@ -33,7 +34,7 @@ import {
   athleteSummary,
   decayedStrengthSeries,
 } from "./aggregate";
-import { epley1RM, strengthRetention } from "./metrics";
+import { epley1RM, strengthRetention, DEFAULT_DECAY_PARAMS } from "./metrics";
 
 /** Minimal record factory for readable fixtures. */
 function rec(p: Partial<SetRecord>): SetRecord {
@@ -67,6 +68,16 @@ describe("addedWeight1RM", () => {
     // origWeight undefined ⇒ bodyweightLoad 0 ⇒ same as estimate1RM.
     const r = rec({ weight: 100, reps: 5 });
     expect(addedWeight1RM(r, "epley")).toBeCloseTo(epley1RM(100, 5)!, 6);
+  });
+
+  it("computes a machine-base set's 1RM on the full total load (base folded in)", () => {
+    // Leg Extension dialed at 30 kg × 10 with a 20 kg machine base → effective load 50,
+    // origWeight 50 (the TOTAL is what counts), so the 1RM is the full epley1RM(50, 10) —
+    // higher than the dialed-only 30. The "20+30" breakdown is display-only; calcs use 50.
+    const machine = rec({ weight: 50, origWeight: 50, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")).toBeCloseTo(epley1RM(50, 10)!, 6);
+    const dialedOnly = rec({ weight: 30, reps: 10 });
+    expect(addedWeight1RM(machine, "epley")!).toBeGreaterThan(addedWeight1RM(dialedOnly, "epley")!);
   });
 
   it("peels the bodyweight share back off for a bodyweight lift", () => {
@@ -176,6 +187,14 @@ describe("sameExerciseKey", () => {
     expect(sameExerciseKey("Low wall climb 1")).not.toBe(sameExerciseKey("Low wall climb 2"));
     expect(sameExerciseKey("Stairs 4")).toBe(sameExerciseKey("Stairs")); // explicit alias
   });
+
+  it("folds the abbreviated Lever spellings into the full names (loose: casing / trailing dot)", () => {
+    expect(sameExerciseKey("Lever Sup.")).toBe(sameExerciseKey("Lever Supination"));
+    expect(sameExerciseKey("lever sup")).toBe(sameExerciseKey("Lever Supination"));
+    expect(sameExerciseKey("Lever Pro.")).toBe(sameExerciseKey("Lever Pronation"));
+    // a different lever lift must NOT get swept in
+    expect(sameExerciseKey("Lever Abduction")).not.toBe(sameExerciseKey("Lever Supination"));
+  });
 });
 
 describe("canonicalizeExerciseNames", () => {
@@ -211,22 +230,32 @@ describe("canonicalizeExerciseNames", () => {
     expect(records.find((r) => r.originalExerciseName === "Stairs 4")).toBeTruthy();
   });
 
-  it("folds owner-confirmed Chin Ups → Pull Ups (and its spellings)", () => {
+  it("renames the abbreviated Lever spelling to the full name even when it's more logged", () => {
+    const recs = [
+      rec({ exerciseName: "Lever Sup." }),
+      rec({ exerciseName: "Lever Sup." }),
+      rec({ exerciseName: "Lever Supination" }), // fewer sets, but the full name must win
+    ];
+    const { records } = canonicalizeExerciseNames(recs);
+    expect(records.every((r) => r.exerciseName === "Lever Supination")).toBe(true);
+    expect(records.find((r) => r.originalExerciseName === "Lever Sup.")).toBeTruthy();
+  });
+
+  it("keeps Chin Ups SEPARATE from Pull Ups (owner reversed: standalone + only combined via the Pull/Chin group)", () => {
     const recs = [
       ...Array.from({ length: 5 }, () => rec({ exerciseName: "Pull Ups" })),
       rec({ exerciseName: "Chin Ups" }),
-      rec({ exerciseName: "Chin up" }),
-      rec({ exerciseName: "Chin ups" }),
+      rec({ exerciseName: "Chin ups" }), // a casing variant of chin — folds to ONE chin, NOT into Pull Ups
       rec({ exerciseName: "One Arm Pull Ups" }), // a DIFFERENT lift — must stay separate
     ];
     const { records, merges } = canonicalizeExerciseNames(recs);
-    // Pull Ups is most-logged, so every chin variant folds into it.
-    expect(records.filter((r) => r.exerciseName === "Pull Ups")).toHaveLength(8);
-    // The distinct one-arm variant is untouched.
-    expect(records.some((r) => r.exerciseName === "One Arm Pull Ups" && !r.originalExerciseName)).toBe(true);
+    // Chin no longer folds into Pull Ups — Pull Ups keeps only its own 5.
+    expect(records.filter((r) => r.exerciseName === "Pull Ups")).toHaveLength(5);
+    // Chin Ups stays its own exercise.
+    expect(records.some((r) => /chin/i.test(r.exerciseName))).toBe(true);
+    // No Pull Ups merge pulled chin in.
     const m = merges.find((x) => x.canonical === "Pull Ups");
-    expect(m?.variants).toEqual(expect.arrayContaining(["Chin Ups", "Chin up", "Chin ups"]));
-    expect(m?.variants).not.toContain("One Arm Pull Ups");
+    expect(m?.variants ?? []).not.toContain("Chin Ups");
   });
 
   it("keeps Smith Machine Squat separate from Squat (combined only in the group)", () => {
@@ -279,6 +308,51 @@ describe("scaleToGroup", () => {
     );
     expect(scaled!.exerciseName).toBe("DL pattern");
     expect(scaled!.originalExerciseName).toBe("Romanian Deadlift");
+  });
+});
+
+describe("filterCardLiftRecords", () => {
+  const user = "ada";
+  const squat = rec({ username: user, exerciseName: "Squat", weight: 100, reps: 5 });
+  const smith = rec({ username: user, exerciseName: "Smith Machine Squat", weight: 90, reps: 5 });
+  const sqPattern = rec({
+    username: user,
+    exerciseName: "Squat pattern",
+    originalExerciseName: "Romanian Deadlift",
+    weight: 120,
+    reps: 8,
+    syntheticGroupId: "compare.squat-pattern",
+  });
+  const chinVariant = rec({
+    username: user,
+    exerciseName: "Pull Ups",
+    originalExerciseName: "Chin Ups",
+    weight: 0,
+    reps: 10,
+  });
+  const otherUser = rec({ username: "bob", exerciseName: "Squat", weight: 80, reps: 5 });
+  const records = [squat, smith, sqPattern, chinVariant, otherUser];
+
+  it("without a group lens plots only the lift itself (not pattern synthetics)", () => {
+    const got = filterCardLiftRecords(records, user, "Squat", ["Squat"], false);
+    expect(got.map((r) => r.exerciseName)).toEqual(["Squat"]);
+  });
+
+  it("with a merged lens plots the derived group name", () => {
+    const got = filterCardLiftRecords(records, user, "Squat", ["Squat pattern"], true);
+    expect(got.map((r) => r.exerciseName)).toEqual(["Squat pattern"]);
+  });
+
+  it("with a separated lens plots each member at raw load", () => {
+    const plot = ["Squat", "Smith Machine Squat", "Front Squat"];
+    const got = filterCardLiftRecords(records, user, "Squat", plot, true);
+    expect(got.map((r) => r.exerciseName).sort()).toEqual(["Smith Machine Squat", "Squat"]);
+  });
+
+  it("keeps spelling-merge variants via originalExerciseName when no group lens", () => {
+    const got = filterCardLiftRecords(records, user, "Chin Ups", ["Chin Ups"], false);
+    expect(got).toHaveLength(1);
+    expect(got[0]!.originalExerciseName).toBe("Chin Ups");
   });
 });
 
@@ -667,6 +741,39 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
   const base = Date.parse("2024-01-01");
   const at = (d: number) => base + d * DAY;
 
+  it("EFF-1: fades the EFFECTIVE load, then peels the bodyweight share for the added display", () => {
+    // A 120 kg EFFECTIVE peak with a 20 kg bodyweight share → 100 kg added shown on day 0.
+    const onEffective = decayedStrengthSeries([{ x: at(0), y: 120 }], at(200), 4, DEFAULT_DECAY_PARAMS, null, 20);
+    expect(onEffective[0]!.y).toBeCloseTo(100, 6); // displayed peak = added weight
+    // Fading the effective 120 then peeling 20 ends LOWER than naively fading the added 100,
+    // i.e. the bodyweight share is correctly inside the fade (rule 58), not outside it.
+    const onAdded = decayedStrengthSeries([{ x: at(0), y: 100 }], at(200));
+    expect(onEffective.at(-1)!.y).toBeLessThan(onAdded.at(-1)!.y);
+  });
+
+  it("CAP-1: same-day sets move the line once (per session), not once per set", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 4 as const, phase1Pace: 0.5, phase1EndSets: 100 };
+    // day 0: one 100 set (anchor). day 1: three rising sets — only the day's BEST (400) counts,
+    // and the pace is applied ONCE: 100 + 0.5·(400−100) = 250 (not the 312.5 of per-set compounding).
+    const pts = [
+      { x: at(0), y: 100, rir: 0 },
+      { x: at(1), y: 200, rir: 0 }, { x: at(1), y: 300, rir: 0 }, { x: at(1), y: 400, rir: 0 },
+    ];
+    expect(decayedStrengthSeries(pts, at(1), 4, p).at(-1)!.y).toBeCloseTo(250, 0);
+  });
+
+  it("level 4 (phases) damps each upward jump by its phase pace, capped only by the WR", () => {
+    // Four sessions one day apart (inside the grace, so no fade between), rising e1RM.
+    // phase 1 (pace 1) accepts the jump fully, phase 2 (0.5) half, phase 3 (0.25) a quarter.
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 4 as const, phase1EndSets: 2, phase2EndSets: 3, phase1Pace: 1, phase2Pace: 0.5, phase3Pace: 0.25 };
+    const pts = [0, 1, 2, 3].map((k) => ({ x: at(k), y: [100, 200, 400, 800][k]!, rir: 0 }));
+    const last = decayedStrengthSeries(pts, at(4), 4, p).at(-1)!.y;
+    expect(last).toBeCloseTo(425, 0); // 100 →200 (×1) →300 (×0.5) →425 (×0.25)
+    expect(last).toBeLessThan(800); // damped vs a full jump to the latest e1RM
+    const capped = decayedStrengthSeries(pts, at(4), 4, p, 350).at(-1)!.y; // WR ceiling 350
+    expect(capped).toBeCloseTo(350, 1);
+  });
+
   it("sags during a layoff: a lone peak fades below itself by the end", () => {
     // One 100 kg peak on day 0, no training since; 'today' is day 200.
     const line = decayedStrengthSeries([{ x: at(0), y: 100 }], at(200));
@@ -743,6 +850,78 @@ describe("decayedStrengthSeries (the chart 'Current strength' line)", () => {
   it("is empty for no points", () => {
     expect(decayedStrengthSeries([], at(10))).toEqual([]);
   });
+
+  // Adaptive mechanisms (A / B / C) — added with the RIR-confidence / rate-limit / calibration update
+
+  it("A) a high-RIR set contributes less to the level than a near-failure set of the same weight", () => {
+    // Both scenarios: peak 100 on day 0, gap to day 100, then a set showing e1rm=95.
+    // RIR 0 (failure) → full credit; RIR 8 (very easy) → blended with decayed level.
+    const lineHard = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 95, rir: 0 }], at(100), 4);
+    const lineEasy = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 95, rir: 8 }], at(100), 4);
+    const hardLevel = lineHard[lineHard.length - 1]!.y;
+    const easyLevel = lineEasy[lineEasy.length - 1]!.y;
+    // Hard set is trusted fully → level rises to the full 95.
+    // Easy set is blended with decayed level (which is lower) → level is lower.
+    expect(hardLevel).toBeGreaterThan(easyLevel);
+  });
+
+  it("A) without RIR info, the series matches a RIR-0 set of the same value (full confidence)", () => {
+    // A set with no RIR behaves identically to a RIR-0 set (fully trusted).
+    const noRir = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 90 }], at(150), 4);
+    const rir0 = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(100), y: 90, rir: 0 }], at(150), 4);
+    expect(noRir).toEqual(rir0);
+  });
+
+  it("B) a single-session jump beyond 8% above the all-time peak is rate-limited", () => {
+    // Peak 100 on day 0; after a long layoff, user shows an e1rm of 130 (30% jump).
+    // Rate-limiting caps this at 108 (8% above 100), not 130.
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(90), y: 130, rir: 0 }], at(90), 4);
+    const levelAfter = line[line.length - 1]!.y;
+    expect(levelAfter).toBeLessThanOrEqual(100 * 1.08 + 0.1); // capped near 108
+    expect(levelAfter).toBeGreaterThan(100); // but still higher than the old peak
+  });
+
+  it("B) a set WITHIN the all-time peak is NOT rate-limited", () => {
+    // Peak 100; after a layoff user shows 95 — no rate-limiting needed.
+    const line = decayedStrengthSeries([{ x: at(0), y: 100 }, { x: at(90), y: 95, rir: 0 }], at(90), 4);
+    const levelAfter = line[line.length - 1]!.y;
+    expect(levelAfter).toBeCloseTo(95, 1); // no cap — recovery to previous level is fine
+  });
+
+  it("C) a strength level maintained through a long gap calibrates stability upward → slower future decay", () => {
+    // User peaked 100 on day 0, then maintained 96+ for 80 days (one set on day 80 shows 96 at RIR 2).
+    // Stability should be updated to ≥ 80 days → future decay is slower than the base 30-day model.
+    const withLongGap = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    // Compare to a user with the same history but at a much shorter gap (no calibration triggered).
+    const withShortGap = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(10), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    const longEnd = withLongGap[withLongGap.length - 1]!.y;
+    const shortEnd = withShortGap[withShortGap.length - 1]!.y;
+    // After the same total time, the user with the calibrated long gap retains more strength.
+    expect(longEnd).toBeGreaterThan(shortEnd);
+  });
+
+  it("C) a high-RIR set (> 4) does NOT trigger stability calibration even if strength appears maintained", () => {
+    // RIR 8 is unreliable evidence; its observed ratio should not update stability.
+    const withHighRir = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 8 }],
+      at(200), 4,
+    );
+    // Compare to a near-failure set (RIR 2) that does calibrate.
+    const withLowRir = decayedStrengthSeries(
+      [{ x: at(0), y: 100 }, { x: at(80), y: 96, rir: 2 }],
+      at(200), 4,
+    );
+    const highRirEnd = withHighRir[withHighRir.length - 1]!.y;
+    const lowRirEnd = withLowRir[withLowRir.length - 1]!.y;
+    // Low-RIR triggers calibration → stability boosted → slower future decay → higher end value.
+    expect(lowRirEnd).toBeGreaterThanOrEqual(highRirEnd);
+  });
 });
 
 describe("originals stay selectable when variants/groups exist (TASK 11)", () => {
@@ -776,6 +955,22 @@ describe("originals stay selectable when variants/groups exist (TASK 11)", () =>
     expect(names).toContain("Pull Ups");
     expect(names).toContain("Assisted Pull Up");
     expect(names).toContain("Gravity Machine Pull Up");
+  });
+
+  it("EXTRA_EXERCISES catalog lifts are selectable even with zero logged sets (PB-25)", () => {
+    // "Knee Raise" is in EXTRA_EXERCISES but appears in no record here.
+    expect(distinctExercises(base)).not.toContain("Knee Raise"); // record-derived: invisible
+    expect(selectableExercises(base)).toContain("Knee Raise"); // catalog union: selectable
+    // Appended last (0 sets = least-used), never displacing a logged lift.
+    const names = selectableExercises(base);
+    expect(names[0]).toBe("Pull Ups"); // most-logged still leads
+    expect(names.indexOf("Knee Raise")).toBeGreaterThan(names.indexOf("Pull Ups"));
+  });
+
+  it("a catalog lift that gets logged is not duplicated (dedupe)", () => {
+    const logged = [...base, rec({ username: "ada", exerciseName: "Knee Raise" })];
+    const names = selectableExercises(logged);
+    expect(names.filter((n) => n === "Knee Raise")).toHaveLength(1);
   });
 });
 

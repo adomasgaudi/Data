@@ -10,8 +10,10 @@ import {
   MAX_1RM_REPS,
   daysBetweenIso,
   strengthRetention,
-  grownStability,
-  STRENGTH_DECAY,
+  rirConfidence,
+  retentionWith,
+  DEFAULT_DECAY_PARAMS,
+  type DecayParams,
   type OneRepMaxFormula,
 } from "./metrics";
 import { isIsometric } from "./profile";
@@ -129,6 +131,29 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
 }
 
 /**
+ * Catalog of exercises the owner wants to TRACK that may not be in the logged
+ * data yet (StrengthLevel only knows what's been logged on it). Without this, a
+ * brand-new exercise can never appear — the whole list is record-derived, so a
+ * zero-set lift is invisible in the index AND the add-exercise picker. These
+ * names are UNIONED into {@link selectableExercises} (appended last = 0 sets =
+ * least-used), never subtracting a logged name. Once a set is logged against one,
+ * it becomes a normal data-derived exercise and this entry is just a no-op dedupe.
+ * Add a name here when the owner says "create exercise X". (PB-25.)
+ */
+export const EXTRA_EXERCISES: readonly string[] = [
+  "Knee Raise", "L Sit", "Cross-Legged Squats",
+  // Lever — an adjustable one-sided loaded handle held like a sword/axe (the weight sits
+  // toward one end on a movable plate, you grip the other), for forearm/wrist leverage. Four
+  // movements across the two rotational axes the owner trains (NOT wrist flexion/extension):
+  // forearm rotation (pronation/supination) + wrist deviation (abduction = radial, adduction = ulnar).
+  "Lever Pronation", "Lever Supination", "Lever Abduction", "Lever Adduction",
+  // Experimentation — a built-in EXPERIMENTAL scratchpad (owner): log a lot of sets/notes while
+  // exploring a new movement, without precision. Always experimental, so it never feeds any
+  // metric/graph (see isExperimental in main.ts). Kept last so it sorts to the bottom.
+  "Experimentation",
+];
+
+/**
  * The exercise names a picker/selector should offer for a set of records.
  *
  * TASK 11 invariant — creating a dissolved / combined / comparison variant must
@@ -136,14 +161,18 @@ export function distinctExercises(records: readonly SetRecord[]): string[] {
  * offered, alongside any variant or synthetic group name present in `records`;
  * relationship membership (parent/child, group inclusion) never subtracts a name.
  * So an original (e.g. "Pull Ups") and its variants ("Assisted Pull Up", "Gravity
- * Machine Pull Up") are always selectable together. Most-logged first.
+ * Machine Pull Up") are always selectable together. Most-logged first, then the
+ * EXTRA_EXERCISES catalog (intended-but-unlogged lifts) appended at the end.
  *
  * It delegates to distinctExercises: the guarantee is that nothing here filters by
  * identity/relationship. Pass logged records for originals+variants, or
  * computedRecords() to also include synthetic group names.
  */
 export function selectableExercises(records: readonly SetRecord[]): string[] {
-  return distinctExercises(records);
+  const fromData = distinctExercises(records);
+  const seen = new Set(fromData);
+  const extra = EXTRA_EXERCISES.filter((e) => !seen.has(e));
+  return extra.length ? [...fromData, ...extra] : fromData;
 }
 export interface FreqTier {
   tier: string;
@@ -650,6 +679,26 @@ export function scaleToGroup(
   return out;
 }
 
+/** Exercise-info / card graph: which logged sets belong on this lift's curve & stats.
+ *  Uses the same plot-name list as the Analysis graph lens (merged group name, separated
+ *  members, or the lift itself). Spelling-merge variants (originalExerciseName) are kept
+ *  only when no group lens is active — avoids silently mixing Squat-pattern synthetics. */
+export function filterCardLiftRecords(
+  records: readonly SetRecord[],
+  username: string,
+  cardName: string,
+  plotExerciseNames: readonly string[],
+  groupLensActive: boolean,
+): SetRecord[] {
+  const plot = new Set(plotExerciseNames);
+  return records.filter((r) => {
+    if (r.username !== username) return false;
+    if (plot.has(r.exerciseName)) return true;
+    if (!groupLensActive && r.originalExerciseName === cardName) return true;
+    return false;
+  });
+}
+
 /** A combinable/comparable group as the synthetic generator needs it. */
 export interface SyntheticGroupDef {
   /** Registry tag id, stamped onto each synthetic record (e.g. "compare.dl-pattern"). */
@@ -715,39 +764,117 @@ export interface BestSet {
  *   • a set can only lift the level (max with its own e1rm), never lower it.
  * Extended to `todayMs` so the present-day fade shows even when the last set is old.
  *
- * `points` are {x: ms-timestamp, y: e1rm} in any order; within each gap it's
- * sampled every `stepDays` for a smooth sag. Pure so it can be unit-tested.
+ * Three adaptive mechanisms (beyond the basic model):
+ *   A) RIR confidence: a set's e1RM is blended with the current level weighted by
+ *      how near-failure it was — high-RIR sets are noisier estimates and contribute
+ *      less to sudden level jumps.
+ *   B) Rate-limited growth: a single session cannot raise the level beyond 8% above
+ *      the all-time peak — a larger jump is treated as correction of prior underperformance,
+ *      not a true new maximum, so it accrues gradually across sessions instead.
+ *   C) Observed-interval stability calibration: if an incoming set demonstrates the
+ *      level was maintained through a gap longer than the current stability estimate,
+ *      stability is updated to that gap — a lift held for 6 months is more durable than
+ *      one trained 3× could predict from session count alone.
+ *
+ * `points` are {x: ms-timestamp, y: e1rm, rir?: reps-in-reserve} in any order;
+ * within each gap it's sampled every `stepDays` for a smooth sag. Pure so it can be unit-tested.
  */
 export function decayedStrengthSeries(
-  points: readonly { x: number; y: number }[],
+  points: readonly { x: number; y: number; rir?: number }[],
   todayMs: number,
   stepDays = 4,
+  params: DecayParams = DEFAULT_DECAY_PARAMS,
+  wrCeiling: number | null = null,
+  displayOffset = 0,
 ): { x: number; y: number }[] {
   if (points.length === 0) return [];
-  const sorted = points.slice().sort((a, b) => a.x - b.x);
   const step = stepDays * MS_PER_DAY;
   const dayOf = (x: number) => Math.round(x / MS_PER_DAY); // group same-day sets into one session
+  // CAP-1: collapse same-day sets into ONE session (the day's BEST e1RM) so the line moves per
+  // SESSION, not per set — strength grows per week/session, not per rep (owner: "3 sets in a day
+  // ≠ 60% growth"). Each session keeps its set COUNT (to advance the hard-set phase boundaries)
+  // and the day's hardest (lowest-RIR) effort for the confidence blend.
+  const ordered = points.slice().sort((a, b) => a.x - b.x);
+  const sorted: { x: number; y: number; rir?: number; nSets: number }[] = [];
+  for (const p of ordered) {
+    const cur = sorted[sorted.length - 1];
+    if (cur && dayOf(cur.x) === dayOf(p.x)) {
+      cur.nSets++;
+      if (p.y > cur.y) { cur.x = p.x; cur.y = p.y; } // the day's best e1RM proves the level
+      if (p.rir != null && (cur.rir == null || p.rir < cur.rir)) cur.rir = p.rir; // hardest effort that day
+    } else {
+      sorted.push({ x: p.x, y: p.y, nSets: 1, ...(p.rir != null ? { rir: p.rir } : {}) });
+    }
+  }
   const out: { x: number; y: number }[] = [];
-  const push = (x: number, y: number) => out.push({ x, y: Math.round(y * 10) / 10 });
+  // EFF-1 (rule 58/49): the model runs in EFFECTIVE load; `displayOffset` is the bodyweight
+  // share peeled back on OUTPUT so the plotted value is the ADDED weight. 0 for bar lifts.
+  const push = (x: number, y: number) => out.push({ x, y: Math.round((y - displayOffset) * 10) / 10 });
+  // The per-session guards (RIR blend, growth cap, stability growth + calibration) are the
+  // FULL model only — levels 1 (linear) & 2 (log) just sag on the retention curve and step
+  // straight to each set's e1RM, so the simpler curves read exactly as their formula says.
+  const full = params.level === 3;
+  // PHASES (L4): three phases by hard-set COUNT (beginner → intermediate → advanced); each
+  // accepts only its `pace` fraction of an upward jump per session (beginner fast, advanced
+  // slow), the rest accrues. No cap on gains EXCEPT the world record. Phase 1 trusts the RIR.
+  const phased = params.level === 4;
+  const paceForIndex = (n: number): number =>
+    n < params.phase1EndSets ? params.phase1Pace : n < params.phase2EndSets ? params.phase2Pace : params.phase3Pace;
+  const capWr = (v: number): number => (wrCeiling != null && wrCeiling > 0 ? Math.min(v, wrCeiling) : v);
 
   let anchorX = sorted[0]!.x; // the last training day — where the decay clock restarts
   let level = sorted[0]!.y; // strength carried from that day
-  let stability: number = STRENGTH_DECAY.baseStability; // durability; grows with each session
-  let prevDay = dayOf(anchorX);
+  let allTimePeak = level; // highest level ever reached — used for rate-limiting (B)
+  let stability: number = params.stabilityDays; // durability; grows with each session (L3)
+  let setsSoFar = sorted[0]!.nSets; // cumulative hard SETS before the next session (phase index)
   // Strength at time x given the current anchor + stability (grace from the anchor).
-  const decayedAt = (x: number) => level * strengthRetention((x - anchorX) / MS_PER_DAY, stability);
+  const decayedAt = (x: number) => level * retentionWith((x - anchorX) / MS_PER_DAY, stability, params);
   push(anchorX, level);
+
+  const { maxGrowthFraction, calibrationThreshold, maxStability } = params;
 
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i]!;
-    for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag in the gap
-    level = Math.max(decayedAt(s.x), s.y); // decay over the gap, then the set re-proves strength
-    anchorX = s.x; // training resets the grace clock
-    const day = dayOf(s.x);
-    if (day !== prevDay) {
-      stability = grownStability(stability); // a new session makes future decay weaker
-      prevDay = day;
+    const prevLevel = level; // level at the START of this gap (before decay)
+    const gapDays = (s.x - anchorX) / MS_PER_DAY;
+
+    for (let u = anchorX + step; u < s.x; u += step) push(u, decayedAt(u)); // smooth sag
+
+    // A) RIR confidence (L3 + L4 phase 1): blend the session's best e1RM with the current
+    //    decayed level. Near-failure sets (low RIR) are trusted fully; high-RIR sets are
+    //    noisy e1RM extrapolations and contribute less to sudden jumps.
+    const conf = full || phased ? rirConfidence(s.rir) : 1;
+    const effectiveE1rm = conf * s.y + (1 - conf) * decayedAt(s.x);
+
+    if (phased) {
+      // Accept only this phase's PACE of the upward jump (the rest accrues over sessions),
+      // capped only by the world record. Phase = cumulative hard SETS so far (CAP-2: the
+      // decaying cap IS the per-phase pace — beginner fast, advanced slow).
+      const base = decayedAt(s.x);
+      const pace = paceForIndex(setsSoFar);
+      level = capWr(base + pace * Math.max(0, effectiveE1rm - base));
+    } else {
+      // B) Rate-limited growth (L3): cap upward jumps to 8% above the all-time peak.
+      const cappedE1rm = full ? Math.min(effectiveE1rm, allTimePeak * (1 + maxGrowthFraction)) : effectiveE1rm;
+      level = Math.max(decayedAt(s.x), cappedE1rm); // decay over the gap, set re-proves strength
     }
+    allTimePeak = Math.max(allTimePeak, level);
+    anchorX = s.x; // training resets the grace clock
+    setsSoFar += s.nSets;
+
+    if (full) {
+      stability = Math.min(maxStability, stability * params.stabilityGrowth); // each session makes future decay weaker (L3)
+    }
+
+    // C) Observed-interval stability calibration (L3): if the incoming set shows the
+    //    lift was maintained through a gap longer than our stability estimate, update
+    //    stability upward. Only use near-failure sets (RIR ≤ 4 or unknown) as
+    //    reliable evidence of the true strength level.
+    const isReliableEvidence = s.rir == null || !Number.isFinite(s.rir) || s.rir <= 4;
+    if (full && isReliableEvidence && s.y / prevLevel >= calibrationThreshold && gapDays > stability) {
+      stability = Math.min(maxStability, gapDays);
+    }
+
     push(anchorX, level);
   }
   // Tail: sag from the last training day to today.
@@ -880,17 +1007,38 @@ export function nearDuplicateExercises(records: readonly SetRecord[]): { names: 
  * AI-NOTE: do not add merges here without explicit owner sign-off — silent
  * exercise merges inflate/confuse the leaderboards. Confirmed so far:
  *   - Stairs 4 → Stairs (source app renames on settings change)
- *   - Chin Ups → Pull Ups (owner-confirmed same lift; 2026-06-01)
+ *   - Lever Sup. → Lever Supination, Lever Pro. → Lever Pronation (2026-06-19,
+ *     owner): the source app's abbreviated spellings; fold into the full names
+ *     that carry the exercise metadata. Matched LOOSELY (casing / trailing dot).
+ *   - Chin Ups: was folded → Pull Ups (2026-06-01); owner REVERSED it (2026-06-19) —
+ *     keep Chin Ups a SEPARATE exercise, combined with Pull Ups only via the
+ *     "Pull/Chin" combinable group (combine.pull-mix), like Smith Squat ↔ Squat.
  * NOTE: Smith Machine Squat is intentionally NOT aliased to Squat — the owner
  * wants them kept separate; they're combined only in the "Squat pattern"
  * scaling group (see EXERCISE_GROUPS), not folded at the data level.
+ *
+ * The RIGHT side is authoritative: it becomes the display name even when the
+ * abbreviated spelling is the more-logged one (canonicalizeExerciseNames forces
+ * it), so the merged exercise always keeps the full, metadata-bearing name.
  */
 const EXERCISE_NAME_ALIASES: Record<string, string> = {
   "Stairs 4": "Stairs",
-  "Chin Ups": "Pull Ups",
-  "Chin up": "Pull Ups",
-  "Chin ups": "Pull Ups",
+  "Lever Sup.": "Lever Supination",
+  "Lever Pro.": "Lever Pronation",
 };
+
+/**
+ * Loose lookup of the alias table so the logged spelling's casing or a trailing
+ * dot don't matter ("Lever Sup." == "Lever Sup" == "lever sup."). Returns the
+ * fold-into target, or undefined when the name isn't an alias.
+ */
+const looseAliasKey = (s: string): string => s.trim().toLowerCase().replace(/[.\s]+$/, "");
+const ALIAS_BY_LOOSE_KEY = new Map<string, string>(
+  Object.entries(EXERCISE_NAME_ALIASES).map(([raw, target]) => [looseAliasKey(raw), target]),
+);
+function aliasTarget(name: string): string | undefined {
+  return ALIAS_BY_LOOSE_KEY.get(looseAliasKey(name));
+}
 
 /**
  * Conservative "same exercise, just spelled differently" key. Folds together
@@ -900,7 +1048,7 @@ const EXERCISE_NAME_ALIASES: Record<string, string> = {
  * table above.
  */
 export function sameExerciseKey(name: string): string {
-  const aliased = EXERCISE_NAME_ALIASES[name.trim()] ?? name;
+  const aliased = aliasTarget(name) ?? name;
   return aliased
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ") // punctuation/dashes → space
@@ -945,7 +1093,10 @@ export function canonicalizeExerciseNames(records: readonly SetRecord[]): {
   for (const byName of clusters.values()) {
     // Most-logged spelling wins; ties broken alphabetically for determinism.
     const sorted = [...byName.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1));
-    const display = sorted[0]![0];
+    // An explicit alias TARGET overrides the most-logged heuristic, so a merged
+    // lift always keeps its full, metadata-bearing name even when an abbreviated
+    // spelling has more logged sets (e.g. "Lever Sup." → "Lever Supination").
+    const display = sorted.map(([n]) => aliasTarget(n)).find((t): t is string => !!t) ?? sorted[0]![0];
     for (const [name] of sorted) canonical.set(name, display);
     if (sorted.length > 1)
       merges.push({

@@ -4,6 +4,15 @@
 at the end of a turn (the `scripts/show-cost.py` Stop hook + CLAUDE.md rule 34). The
 numbers are easy to get catastrophically wrong, so here is the one true method.
 
+## Method version — **this is `cost-v.2`** (commits tag the figure `cost-v.2`)
+
+The current estimate method is **v.2**: real cost = OUTPUT tokens (from the transcript
+`usage` objects) measured against a per-model 5h-window anchor, € via the flat-plan
+formula below. Commit bodies tag their cost figure **`cost-v.2`** so a future, better
+method (v.3+) can re-price old updates and we'll know which estimate produced which
+number. When the method changes, bump this label and note what changed.
+(History: v.1 = the early API-list-price guess, retired as ~100× too high.)
+
 ## The core truth
 
 The plan is a **flat-fee subscription** (currently €180/mo, the Max "4x/20x" tier),
@@ -77,3 +86,65 @@ All in `scripts/show-cost.py`: `MONTHLY_SUBSCRIPTION_EUR` (€180), `WEEKLY_WIND
 Bump `MONTHLY_SUBSCRIPTION_EUR` if the plan changes. The version-history per-update €
 cost (`PROJECT_COST_EUR` / `COST_PER_SP_EUR` in `src/changelog.ts`) uses the same
 "real, not list price" philosophy — amortised spend spread across story points.
+
+## Version-history cost: recency multiplier (cost-v.2 refinement)
+
+The version-history € per update is distributed across story points, **model-weighted**
+(an Opus version costs ~5× a Haiku one of equal SP) and now **recency-weighted**: the
+most-recent `RECENT_SP_WINDOW` SP (default **100**, walking the log newest-first) are
+valued at `RECENCY_EFFORT_MULT`× (default **2**) — the owner's call that recent work has
+been "slower and harder" than its raw SP grade suggests. The grand total stays pinned to
+`PROJECT_COST_EUR`, so this only shifts the per-version € **share** toward recent work
+(a recent update reads ~2× the € it otherwise would; older work proportionally less). The
+SP grades themselves are unchanged. Constants `RECENCY_EFFORT_MULT` / `RECENT_SP_WINDOW`
+live in `src/changelog.ts`; widen the window or drop the multiplier to 1 to retire it.
+
+## Real-usage calibration log (ground truth from the Claude app)
+
+The **weekly** limit is the reliable cross-day signal — the 5h window resets through the
+day, so 5h % is NOT comparable between snapshots; only weekly accumulates. Readings the
+owner has reported (all on the Max plan, weekly resets Wed 02:59):
+
+| when (2026-06) | session 5h | weekly (all models) |
+|----------------|-----------|----------------------|
+| 14th 00:32     | 10%       | **11%**              |
+| 14th 12:24     | 35%       | **23%**              |
+
+So weekly moved **~+12pp in ~12h** of heavy multi-session work. Sanity check vs the
+anchor: one transcript turn shows ~0.01–0.1% weekly here, and a full session ~0.3% — far
+below the observed +12pp, because the weekly cap aggregates ALL sessions/branches running
+in parallel (often several at once), not just one transcript. The per-turn figures are
+the right ORDER of magnitude but the script can only see ONE transcript, so it
+**under-reports the true weekly burn** when many sessions run together — read the app's
+weekly bar for the real total. To re-measure the Opus anchor cleanly, run ONE isolated
+session and read the weekly delta it alone caused. Anchor left at 5.2M output/5h pending
+such a clean single-session measurement (don't fabricate a "measured" number).
+
+## Token EFFICIENCY — how to spend the least, and when to flag the owner
+
+Cost-reporting (above) is about *measuring* the burn. This section is about *reducing* it,
+and is enforced by **HARD RULE 57** (the token-efficiency watchdog) plus the SessionStart /
+UserPromptSubmit watchdog reminders in `.claude/settings.json`.
+
+**The real lever is OUTPUT tokens, not the conversation length.** Cache-reads (the big
+reloaded system prompt + `CLAUDE.md`) barely touch the limits, so a long chat is NOT the
+main cost — what *you write* is. Concretely:
+
+- **Right model for the work.** Default per rule 36 is Haiku → Sonnet → (Opus only when
+  asked). If the owner says a cheaper model "ends up costing more" (more re-work than it
+  saves) or that a model switch "won't stick", DON'T fight it — note it and move on.
+- **New chat ≠ re-reading the whole repo.** A fresh session loads only the cached
+  `CLAUDE.md`; source is read **on demand** (a grep + a ~100-line read), never all ~21k
+  lines of `main.ts`. So a new chat is *cheap* for UNRELATED work, and only loses the small
+  "re-ramp" of the regions already warm in the current chat. Continuing the same chat wins
+  only when the next task reuses what's already loaded.
+- **Batch + trim.** Group related edits into ONE commit (fewer build/test/push round-trips)
+  and keep changelog notes tight — long notes are pure output cost every commit.
+- **Co-work churn is real cost.** Each rebase collision = re-resolving giant changelog
+  conflicts. Push small and often, but expect the re-derive (rule 8) tax.
+
+**When to POP a question (rule 57).** The owner CANNOT see token waste, so staying silent
+while burning is complicity. Raise an `AskUserQuestion` (with concrete cheaper options) when
+you notice: an expensive model on trivial work · a very long chat · repeated re-work/churn ·
+a big unverifiable batch. Lead the ask with a one-line plain recap (rule 53) and a
+recommended option first.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stop hook: token cost report."""
-import json, sys
+import json, sys, re, math
 from pathlib import Path
 
 PRICING = {
@@ -166,24 +166,103 @@ model_short = ("Opus" if "opus" in _ms else "Haiku" if "haiku" in _ms else
                "Sonnet" if "sonnet" in _ms else "Fable" if "fable" in _ms else model)
 anchor_note = "measured" if "opus" in _ms else "ESTIMATE — re-measure on this model"
 
+turn_W = turn_5h / WEEKLY_WINDOWS   # % of the WEEKLY cap this turn used
+sess_W = sess_5h / WEEKLY_WINDOWS
+
+def sig2(x):
+    """Format to 2 significant figures (for the % columns — owner wants more precision)."""
+    if not x:
+        return "0"
+    d = max(0, 1 - int(math.floor(math.log10(abs(x)))))
+    return f"{x:.{d}f}"
+
+def model_label(mid):
+    """claude-opus-4-8 -> Opus-4.8 (the deploy-branch / model name the owner reads)."""
+    parts = mid.replace("claude-", "").split("-")
+    if not parts:
+        return mid
+    fam = parts[0].capitalize()
+    nums = [p for p in parts[1:3] if p.isdigit()]
+    return f"{fam}-{'.'.join(nums)}" if nums else fam
+
+def current_version():
+    """index.html's on-screen version -> (codename, full "b.M.m.p", patch) — mirrors
+       src/versionName.ts; the name tables are duplicated here, so if the owner adds a
+       MINOR update both."""
+    ESPADA = ["Glotonería", "Fornicarás", "Brujería", "Pantera", "Santa Teresa",
+              "Murciélago", "Tiburón", "Arrogante", "Los Lobos", "Suigetsu"]
+    CAPTAIN = ["Sōgyo no Kotowari", "Ashisogi Jizō", "Nozarashi", "Hyōrinmaru", "Tachikaze",
+               "Katen Kyōkotsu", "Tenken", "Senbonzakura", "Sakanade", "Minazuki",
+               "Kinshara", "Suzumebachi", "Ryūjin Jakka"]
+    try:
+        html = (Path(__file__).resolve().parent.parent / "index.html").read_text(encoding="utf-8")
+        m = re.search(r'class="version">b\.(\d+)\.(\d+)\.(\d+)', html)
+        if not m:
+            return ("", "", "")
+        major, minor, patch = int(m.group(1)), int(m.group(2)), m.group(3)
+        table = ESPADA if major == 2 else CAPTAIN if major >= 3 else None
+        name = table[minor] if table and minor < len(table) else f"{major}.{minor}"
+        return (name, f"b.{major}.{minor}.{patch}", patch)
+    except Exception:
+        return ("", "", "")
+
+def git_prev_version():
+    """Best-effort "previous" version from git (HEAD~1's index.html) — used only to SEED
+       the shift on the very first run of a session, before the sidecar has a prior turn."""
+    try:
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        out = subprocess.run(["git", "-C", str(root), "show", "HEAD~1:index.html"],
+                             capture_output=True, text=True, timeout=5)
+        m = re.search(r'class="version">b\.\d+\.\d+\.(\d+)', out.stdout)
+        return m.group(1) if m else None
+    except Exception:
+        return None
+
+def version_label(transcript_path, prompt_num):
+    """The model+version line. Shows the SHIFT this turn — "Codename v.<start> -> v.<now>"
+       — where start = the version at the END of the previous reply (rule 40). The start is
+       LOCKED per-turn in a per-session sidecar (keyed by the transcript, indexed by prompt
+       number), so re-running the script within the SAME turn never loses or drifts it. No
+       bump this turn -> plain "Codename -> v.<now>"."""
+    name, full, patch = current_version()
+    if not name:
+        return ""
+    start = None
+    try:
+        side = Path(str(transcript_path) + ".costver.json")
+        data = {}
+        try:
+            data = json.loads(side.read_text())
+        except Exception:
+            data = {}
+        saved_prompt = data.get("prompt")
+        if saved_prompt == prompt_num:
+            start = data.get("start")                          # locked earlier this turn
+        elif saved_prompt is not None:
+            start = data.get("version")                        # prev turn's end = this start
+        else:
+            gp = git_prev_version()                            # seed: best-effort from git
+            start = f"b.0.0.{gp}" if gp else None              # only the patch matters below
+        try:
+            side.write_text(json.dumps({"prompt": prompt_num, "start": start, "version": full}))
+        except Exception:
+            pass
+    except Exception:
+        start = None
+    if start and start.rsplit(".", 1)[-1] != patch:
+        return f"{name} v.{start.rsplit('.', 1)[-1]} -> v.{patch}"
+    return f"{name} -> v.{patch}"
+
+# Owner-defined compact format (real numbers only — Python does ALL the math; rule 39).
+# CLEAN: model on its own line, then the version SHIFT "Codename v.<start> -> v.<now>"
+# when a bump happened this turn (else plain "Codename -> v.<now>"), rule 40 — then
+# a Tokens block — SINGLE PROMPT only (no session), each metric on its own line, % to 2
+# sig figs. No API-ceiling line, no redundant Branch/Version line (version is up top).
 print(f"""
-prompt #{last_prompt_num}: {prompt_preview}
-
-input tokens:      {turn['in']:>8,}  (fresh input)
-cumulative input:  {sess['in']:>8,}  (all prompts)
-
-cache tokens:      {turn['cr'] + turn['cw']:>8,}  (total, ~99% cache-reads — barely touch limits)
-output tokens:     {turn['out']:>8,}  (the honest meter)
-
-model:             {model}
-
-REAL cost (vs the limits you actually pay for · anchor: {anchor_note}):
-  this turn:       {fmt_eur(turn_real)}   (~{turn_5h:.1f}% of a 5h {model_short} window · ~{turn_5h/WEEKLY_WINDOWS:.2f}% of weekly)
-  session so far:  {fmt_eur(sess_real)}   ({sess['out']:,} output tok over all prompts in this transcript)
-  trend (10):      {sparkline}
-
-API list value (retail CEILING — NOT what a flat plan costs; ~100x real):
-  this turn:       {fmt_cost(turn['usd'])} / {fmt_eur(turn_eur)}
-  session:         ${sess['usd']:.2f} / {fmt_eur(sess_eur)}
-  ({model_short} list ${pin:.0f}/{pout:.0f} per Mtok; plan = €{MONTHLY_SUBSCRIPTION_EUR:.0f}/mo flat · see docs/cost-model.md)
+{model_label(model)}
+{version_label(path, last_prompt_num)}
+Tokens
+Prompt  - {turn['out']:,} · {fmt_eur(turn_real)}
+{sig2(turn_5h)}%5h - {sig2(turn_W)}%W
 """)

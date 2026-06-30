@@ -25,12 +25,12 @@ export const pct = (fraction: number): string => `${Math.round(fraction * 100)}%
 export const bwMult = (ratio: number): string => `${ratio.toFixed(2)} BW`;
 
 /** Weight with reps as a superscript, e.g. 100⁵. Unit (kg) lives in the header.
- * When there's no (added) weight — bodyweight reps, holds — the meaningless "0"
- * base is dropped and just the reps show as the superscript. Negative (assisted)
- * weights keep their number. */
+ * When there's no (added) weight — bodyweight reps, holds — show "0" as the base
+ * (owner: always write 0 when no weight was added), with the reps as the superscript.
+ * Truly empty (no weight AND no reps) stays "—". Negative (assisted) weights keep theirs. */
 export const wr = (weight: number | null, reps: number | null): string =>
   weight === null || weight === 0
-    ? (reps === null ? "—" : `<sup class="wr-bw">${reps}</sup>`)
+    ? (reps === null ? "—" : `0<sup>${reps}</sup>`)
     : `${fmt(weight)}${reps === null ? "" : `<sup>${reps}</sup>`}`;
 
 /** "2026-05-02" -> "May 2" (abbreviated month + day without leading zero). */
@@ -76,6 +76,23 @@ export const relativeDayLabel = (iso: string, today: string): string => {
     }
   }
   return `${dowLetter(iso)} ${shortDate(iso)}`; // older — compact "T Jun 2"
+};
+
+/** The workout-day header split into parts for the history list (owner request): a big
+ * relative phrase (`Today` / `Monday` / `Last Thursday` / else the plain weekday for
+ * older days), the smaller month-day (`May 12`), and the full `year` (shown only when the
+ * day is expanded). Both args are "YYYY-MM-DD". Pure. */
+export const dayHeaderParts = (iso: string, today: string): { rel: string; md: string; year: string } => {
+  const t = Date.parse(iso);
+  const weekday = Number.isNaN(t) ? "" : (WEEKDAY_FULL[new Date(t).getUTCDay()] ?? "");
+  let rel: string;
+  if (iso === today) rel = "Today";
+  else {
+    const wi = mondayWeekIndex(iso), tw = mondayWeekIndex(today);
+    rel = wi !== null && tw !== null && wi === tw - 1 ? `Last ${weekday}` : weekday; // last week → "Last X", else weekday
+  }
+  const mon = MONTH_ABBR[Number(iso.slice(5, 7)) - 1] ?? "";
+  return { rel, md: `${mon} ${Number(iso.slice(8, 10))}`, year: iso.slice(0, 4) };
 };
 
 /**

@@ -4,7 +4,7 @@ name: Deploy to GitHub Pages
 # the live URL always reflects the latest commit — just refresh the page.
 on:
   push:
-    branches: [claude/strength-training-dashboard-SdAlT]
+    branches: [opus-4.8]
   workflow_dispatch:
 
 permissions:

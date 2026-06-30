@@ -8,9 +8,9 @@ describe("version code-names (Bleach scheme)", () => {
     expect(versionParts("b.2.0.5")).toEqual({ name: "Glotonería", patch: "v.5" });
   });
 
-  it("makes the FINAL v2 minor (9) Aizen's Kyōka Suigetsu", () => {
-    expect(ESPADA_NAMES[9]).toBe("Kyōka Suigetsu");
-    expect(versionParts("b.2.9.3")?.name).toBe("Kyōka Suigetsu");
+  it("makes the FINAL v2 minor (9) Aizen's Suigetsu (shown 'Suigetsu')", () => {
+    expect(ESPADA_NAMES[9]).toBe("Suigetsu");
+    expect(versionParts("b.2.9.3")?.name).toBe("Suigetsu");
   });
 
   it("keeps the 4th tweak digit inside the patch label", () => {

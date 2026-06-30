@@ -1,12 +1,55 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, DEFAULT_VARIATION_CONFIG } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec, usesLegPctRom, offersPctRomTag, showsPctRomPill } from "./variationConfig";
 import { resolveNote } from "./variationModel";
+
+describe("familiesUsingDim", () => {
+  it("lists every family that carries a dimension", () => {
+    const band = familiesUsingDim(FAMILIES, "band");
+    expect(band).toContain("HSPU");
+    expect(band).toContain("PULLUP");
+    expect(familiesUsingDim(FAMILIES, "support")).toContain("HSPU");
+    // PUSHUP carries `position` but not `support`.
+    expect(familiesUsingDim(FAMILIES, "support")).not.toContain("PUSHUP");
+    expect(familiesUsingDim(FAMILIES, "position")).toContain("PUSHUP");
+  });
+  it("returns an empty list for an unknown dimension", () => {
+    expect(familiesUsingDim(FAMILIES, "nope")).toEqual([]);
+  });
+});
+
+describe("mergeDimOrder (built-in + user tags)", () => {
+  const ORDER = ["support", "band", "rom", "lean"];
+  const has = (dims: string[]) => (d: string) => dims.includes(d);
+  it("keeps built-in dims in display order, dropping ones the family lacks", () => {
+    expect(mergeDimOrder(ORDER, has(["band", "lean"]), [])).toEqual(["band", "lean"]);
+  });
+  it("appends user-created dims after the built-ins, order-stable", () => {
+    expect(mergeDimOrder(ORDER, has(["support"]), ["u_grip", "u_tempo"]))
+      .toEqual(["support", "u_grip", "u_tempo"]);
+  });
+  it("never duplicates a dim that is both built-in and listed as a user dim", () => {
+    expect(mergeDimOrder(ORDER, has(["support", "band"]), ["band", "u_grip"]))
+      .toEqual(["support", "band", "u_grip"]);
+  });
+  it("returns only user dims when the family has no built-ins", () => {
+    expect(mergeDimOrder(ORDER, has([]), ["u_a", "u_b"])).toEqual(["u_a", "u_b"]);
+  });
+});
 
 describe("familyOf", () => {
   it("maps known exercise names to a family, else null", () => {
     expect(familyOf("Handstand Push Ups")).toBe("HSPU");
     expect(familyOf("Push Up")).toBe("PUSHUP");
     expect(familyOf("Back Squat")).toBeNull();
+  });
+  it("maps pull-ups, chin-ups and the bare combined Pull/Chin lift to PULLUP", () => {
+    expect(familyOf("Pull Ups")).toBe("PULLUP");
+    expect(familyOf("Chin Up")).toBe("PULLUP");
+    expect(familyOf("Pull")).toBe("PULLUP");   // the owner's combined pull-up + chin-up lift
+    expect(familyOf("Chin")).toBe("PULLUP");
+    // Cable "pull*" lifts that merely contain "pull" are NOT the bar movement.
+    expect(familyOf("Lat Pulldown")).toBeNull();
+    expect(familyOf("Face Pull")).toBeNull();
   });
   it("recognises EVERY handstand push-up variant as HSPU, any spelling/origin", () => {
     for (const name of [
@@ -19,14 +62,45 @@ describe("familyOf", () => {
       "HSPU-B",
     ]) expect(familyOf(name)).toBe("HSPU");
   });
-  it("does NOT treat non-press handstands (holds/walks/kicks) as HSPU", () => {
-    expect(familyOf("Handstand Hold")).toBeNull();
-    expect(familyOf("Handstand Walk")).toBeNull();
-    expect(familyOf("Handstand Kicks")).toBeNull();
+  it("treats non-press handstands (holds/walks/kicks/wall tap) as the HANDSTAND setup model, NOT HSPU", () => {
+    // They get the shared handstand SETUP variations (support/ladder/yoga/lean), but
+    // never the pressing model — so they're HANDSTAND, distinct from HSPU.
+    expect(familyOf("Handstand Hold")).toBe("HANDSTAND");
+    expect(familyOf("Handstand Walk")).toBe("HANDSTAND");
+    expect(familyOf("Handstand Kicks")).toBe("HANDSTAND");
+    expect(familyOf("Handstand wall touch")).toBe("HANDSTAND");
+    expect(familyOf("Handstand touch shoulders")).toBe("HANDSTAND");
+    // The push-up variants are still matched FIRST → HSPU, not HANDSTAND.
+    expect(familyOf("Wall Handstand Push Up")).toBe("HSPU");
   });
   it("treats the scapular handstand push-up variant as HSPU", () => {
     expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
     expect(familyOf("Scapular HSPU")).toBe("HSPU");
+  });
+});
+
+describe("%-ROM passive tag", () => {
+  it("detects handstand kick spellings for %-only picker", () => {
+    for (const name of ["Handstand kicks", "Handstand Kicks", "handstand kick", "HS Kicks"]) {
+      expect(usesLegPctRom(name)).toBe(true);
+    }
+    expect(usesLegPctRom("Handstand hold")).toBe(false);
+    expect(usesLegPctRom("Handstand Push Ups")).toBe(false);
+  });
+  it("offers ROM in the palette for almost every named exercise", () => {
+    expect(offersPctRomTag("Handstand kicks")).toBe(true);
+    expect(offersPctRomTag("Handstand hold")).toBe(true);
+    expect(offersPctRomTag("Handstand wall touch")).toBe(true);
+    expect(offersPctRomTag("Handstand Push Ups")).toBe(true);
+    expect(offersPctRomTag("Push Up")).toBe(true);
+    expect(offersPctRomTag("Back Squat")).toBe(true);
+    expect(offersPctRomTag("")).toBe(false);
+  });
+  it("shows the %-ROM pill for all lifts except HSPU (cm rom dim)", () => {
+    expect(showsPctRomPill("Handstand kicks", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand walk", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand Push Ups", "HSPU")).toBe(false);
+    expect(showsPctRomPill("Push Up", "PUSHUP")).toBe(true);
   });
 });
 
@@ -44,6 +118,51 @@ describe("HSPU one-hand / low-ROM variation tokens", () => {
   });
   it("combines one-hand × low-ROM multiplicatively", () => {
     expect(res("one hand low rom").scalar).toBeCloseTo(1.8 * 0.7, 6);
+  });
+});
+
+describe("back support (shoulderDist) — blue 6cm / 30cm / 45cm", () => {
+  for (const fam of ["HSPU", "HANDSTAND"] as const) {
+    it(`${fam} offers the blue / 30cm / 45cm back-support levels`, () => {
+      const levels = FAMILIES[fam]!.dims.shoulderDist!;
+      expect(Object.keys(levels)).toEqual(expect.arrayContaining(["0cm", "blue", "30cm", "45cm"]));
+    });
+    it(`${fam} parses a 'blue' note → back-to-wall + the blue block`, () => {
+      const r = resolveNote(fam, "blue", DEFAULT_VARIATION_CONFIG);
+      expect(r.vec.shoulderDist).toBe("blue");
+      expect(r.vec.support).toBe("back_to_wall");
+    });
+    it(`${fam} parses a '30cm back' note → the 30cm support`, () => {
+      expect(resolveNote(fam, "30cm back", DEFAULT_VARIATION_CONFIG).vec.shoulderDist).toBe("30cm");
+    });
+  }
+});
+
+describe("Lever leverage model (EXR-163)", () => {
+  it("maps all four Lever lifts to the LEVER family", () => {
+    expect(familyOf("Lever Pronation")).toBe("LEVER");
+    expect(familyOf("Lever Supination")).toBe("LEVER");
+    expect(familyOf("Lever Abduction")).toBe("LEVER");
+    expect(familyOf("Lever Adduction")).toBe("LEVER");
+  });
+  it("the lever factor is EXACT moment-arm scaling: factor = cm / 40 reference", () => {
+    const lever = FAMILIES.LEVER!.dims.lever!;
+    expect(lever["40cm"]).toBeCloseTo(1.0, 6); // the ×1 reference
+    expect(lever["20cm"]).toBeCloseTo(20 / 40, 6); // half the arm → half the torque
+    expect(lever["60cm"]).toBeCloseTo(60 / 40, 6); // 1.5× the arm → 1.5× the torque
+    expect(lever["70cm"]).toBeCloseTo(70 / 40, 6);
+  });
+  it("the neutral default resolves to scalar 1 (plate kg = effort until a knob is picked)", () => {
+    const r = resolveNote("LEVER", "", DEFAULT_VARIATION_CONFIG);
+    expect(r.vec.lever).toBe("40cm");
+    expect(r.vec.reach).toBe("neutral");
+    expect(r.scalar).toBeCloseTo(1, 6);
+  });
+  it("arm reach gets harder as it extends (forward easier, further harder)", () => {
+    const reach = FAMILIES.LEVER!.dims.reach!;
+    expect(reach.tucked!).toBeLessThan(reach.neutral!);
+    expect(reach.neutral!).toBeLessThan(reach.extended!);
+    expect(reach.extended!).toBeLessThan(reach.far!);
   });
 });
 
@@ -75,5 +194,25 @@ describe("defaultLeanTable", () => {
   it("returns an empty table for an unknown family", () => {
     expect(defaultLeanTable("NOPE", "free")).toEqual({});
     expect(defaultLeanTable("NOPE", "back_to_wall")).toEqual({});
+  });
+});
+
+describe("KNEERAISE — on-hands + floor height", () => {
+  it("maps L-sit spellings to KNEERAISE", () => {
+    expect(familyOf("L Sit")).toBe("KNEERAISE");
+    expect(familyOf("Pike L-Sit")).toBe("KNEERAISE");
+    expect(familyOf("pike lsit")).toBe("KNEERAISE");
+  });
+  it("has hanging / on-hands support and a continuous floorHeight dim", () => {
+    const dims = FAMILIES.KNEERAISE!.dims;
+    expect(dims.support).toMatchObject({ hanging: 1, on_hands: 0.85 });
+    expect(dims.floorHeight).toBeDefined();
+    expect(dims.obstacle).toBeUndefined();
+  });
+  it("normalizeStaticLiftVec migrates dips_bar + obstacle S/M/L", () => {
+    expect(normalizeStaticLiftVec("KNEERAISE", { support: "dips_bar", obstacle: "M" }))
+      .toEqual({ support: "on_hands", obstacle: "M", floorHeight: "15cm" });
+    expect(resolveNote("KNEERAISE", "dips bar m yoga", DEFAULT_VARIATION_CONFIG).vec)
+      .toMatchObject({ support: "on_hands", floorHeight: "15cm" });
   });
 });

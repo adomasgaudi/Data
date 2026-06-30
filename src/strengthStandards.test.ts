@@ -1,0 +1,87 @@
+import { describe, it, expect } from "vitest";
+import {
+  curveFor, percentileFor, hasStandards, PERCENTILES, POPULATIONS,
+  STANDARDS_ESTIMATED, type Population,
+} from "./strengthStandards";
+
+describe("strengthStandards", () => {
+  it("knows common lifts and not unknown ones", () => {
+    expect(hasStandards("Bench Press")).toBe(true);
+    expect(hasStandards("Barbell Squat")).toBe(true);
+    expect(hasStandards("Romanian Deadlift")).toBe(true);
+    expect(hasStandards("Glute Bridge Thing 9000")).toBe(false);
+    expect(curveFor("Nonsense lift", "m", "strengthlevel")).toBeNull();
+    expect(percentileFor("Nonsense lift", "m", 1.5, "pro")).toBeNull();
+  });
+
+  it("most-specific keyword wins (front squat ≠ squat, leg press ≠ press)", () => {
+    // front squat curve is lower than back squat at the same percentile
+    const back = curveFor("Back Squat", "m", "strengthlevel")!;
+    const front = curveFor("Front Squat", "m", "strengthlevel")!;
+    expect(front[2]).toBeLessThan(back[2]!);
+  });
+
+  it("curves are monotonically increasing across percentiles", () => {
+    for (const lift of ["Bench Press", "Squat", "Deadlift", "Overhead Press"]) {
+      for (const pop of POPULATIONS) {
+        for (const sex of ["m", "f"] as const) {
+          const c = curveFor(lift, sex, pop)!;
+          expect(c.length).toBe(PERCENTILES.length);
+          for (let i = 1; i < c.length; i++) expect(c[i]).toBeGreaterThan(c[i - 1]!);
+        }
+      }
+    }
+  });
+
+  it("population ordering: general < gym < pro at every percentile", () => {
+    const order: Population[] = ["general", "strengthlevel", "pro"];
+    for (const lift of ["Bench Press", "Deadlift"]) {
+      const curves = order.map((p) => curveFor(lift, "m", p)!);
+      for (let i = 0; i < PERCENTILES.length; i++) {
+        expect(curves[0]![i]).toBeLessThan(curves[1]![i]!);
+        expect(curves[1]![i]).toBeLessThan(curves[2]![i]!);
+      }
+    }
+  });
+
+  it("percentileFor round-trips the anchors and clamps the ends", () => {
+    const c = curveFor("Bench Press", "m", "strengthlevel")!;
+    // The median anchor ratio should read back ~50th percentile.
+    expect(percentileFor("Bench Press", "m", c[2]!, "strengthlevel")).toBe(50);
+    // Way below the floor → clamped to ≥1; way above elite → ≤99.
+    expect(percentileFor("Bench Press", "m", 0.01, "strengthlevel")).toBeGreaterThanOrEqual(1);
+    expect(percentileFor("Bench Press", "m", 99, "strengthlevel")).toBeLessThanOrEqual(99);
+  });
+
+  it("is flagged as estimated data", () => {
+    expect(STANDARDS_ESTIMATED).toBe(true);
+  });
+
+  it("gym big-3 male curve is calibrated to StrengthLevel levels (Phase-5 #research)", () => {
+    // 5/25/50/75/95 ≈ beginner / novice / intermediate / advanced / elite. These anchors
+    // are cross-checked against published StrengthLevel-style standards (see the module
+    // header SOURCES) — pin them so a future edit can't silently drift them back up.
+    expect(curveFor("Bench Press", "m", "strengthlevel")).toEqual([0.5, 0.75, 1.0, 1.5, 2.0]);
+    expect(curveFor("Squat", "m", "strengthlevel")).toEqual([0.75, 1.0, 1.25, 1.75, 2.5]);
+    expect(curveFor("Deadlift", "m", "strengthlevel")).toEqual([1.0, 1.25, 1.5, 2.0, 2.75]);
+    // The median (intermediate) must read ~1.25× squat / 1.5× deadlift, NOT the old too-
+    // strong 1.5 / 2.0 (which mislabelled an advanced lifter as merely intermediate).
+    expect(curveFor("Squat", "m", "strengthlevel")![2]).toBe(1.25);
+    expect(curveFor("Deadlift", "m", "strengthlevel")![2]).toBe(1.5);
+  });
+
+  it("extended-coverage variants resolve and key BEFORE their base lift (STD-1)", () => {
+    for (const l of ["Romanian Deadlift", "Incline Bench Press", "Lat Pulldown",
+                     "Leg Extension", "Seated Leg Curl", "Standing Calf Raise"]) {
+      expect(hasStandards(l)).toBe(true);
+    }
+    // Each variant must NOT inherit the heavier base-lift curve.
+    expect(curveFor("Romanian Deadlift", "m", "strengthlevel")![2])
+      .toBeLessThan(curveFor("Deadlift", "m", "strengthlevel")![2]!);
+    expect(curveFor("Incline Bench Press", "m", "strengthlevel")![2])
+      .toBeLessThan(curveFor("Bench Press", "m", "strengthlevel")![2]!);
+    // A LEG curl must not read the BICEP-curl curve (keyword-order trap).
+    expect(curveFor("Seated Leg Curl", "m", "strengthlevel"))
+      .not.toEqual(curveFor("Bicep Curl", "m", "strengthlevel"));
+  });
+});

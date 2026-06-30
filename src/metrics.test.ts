@@ -11,7 +11,10 @@ import {
   BENCH_REPS_STUDY,
   nuzzo1RM,
   nuzzoWeightForReps,
+  nuzzoAddedWeightForReps,
   nuzzoRepsAtWeight,
+  nuzzoRepMaxes,
+  bestFitNuzzo1RM,
   estimate1RM,
   weightForReps,
   repsForWeight,
@@ -19,6 +22,8 @@ import {
   linearFit,
   strengthRetention,
   grownStability,
+  retentionWith,
+  DEFAULT_DECAY_PARAMS,
   daysBetweenIso,
   STRENGTH_DECAY,
 } from "./metrics";
@@ -245,6 +250,25 @@ describe("Nuzzo bench curve", () => {
     expect(nuzzoWeightForReps(120, 1)).toBeCloseTo(120, 6); // a single is the full 1RM
   });
 
+  it("nuzzoAddedWeightForReps translates the curve by the bodyweight share (pull-ups go negative)", () => {
+    // Bar-only lift (bodyShare 0) → identical to nuzzoWeightForReps.
+    for (const reps of [1, 3, 8, 15]) {
+      expect(nuzzoAddedWeightForReps(100, 0, reps)).toBeCloseTo(nuzzoWeightForReps(100, reps)!, 6);
+    }
+    // Pull-up: added 1RM +27, bodyweight share 80 → effective 1RM 107.
+    // At 1 rep the added weight IS the added 1RM (+27).
+    expect(nuzzoAddedWeightForReps(27, 80, 1)).toBeCloseTo(27, 6);
+    // Effective falls with reps; once effective < bodyweight share the ADDED weight is
+    // NEGATIVE (you'd need assistance) — the whole point of the reframe.
+    const hi = nuzzoAddedWeightForReps(27, 80, 25)!;
+    expect(hi).toBeLessThan(0);
+    // Monotonic: more reps ⇒ less added weight.
+    expect(nuzzoAddedWeightForReps(27, 80, 3)!).toBeGreaterThan(nuzzoAddedWeightForReps(27, 80, 6)!);
+    // The added curve = effective curve shifted down by exactly the body share.
+    expect(nuzzoAddedWeightForReps(27, 80, 10)!).toBeCloseTo(nuzzoWeightForReps(107, 10)! - 80, 6);
+    expect(nuzzoAddedWeightForReps(null, 80, 5)).toBeNull();
+  });
+
   it("nuzzoRepsAtWeight reads the curve back at a given load", () => {
     // 80% of a 100 kg 1RM (80 kg) should predict ~8-9 bench reps.
     expect(nuzzoRepsAtWeight(80, 100)!).toBeCloseTo(benchRepsAtPct(80), 6);
@@ -263,6 +287,27 @@ describe("Nuzzo bench curve", () => {
     expect(nuzzo1RM(0, 5)).toBeNull();
     expect(nuzzoWeightForReps(null, 5)).toBeNull();
     expect(nuzzoRepsAtWeight(80, null)).toBeNull();
+  });
+
+  it("nuzzoRepMaxes keeps the heaviest weight per rep, drops junk + out-of-range", () => {
+    const out = nuzzoRepMaxes([
+      { weight: 100, reps: 5 }, { weight: 110, reps: 5 }, { weight: 90, reps: 5 }, // 5-rep best = 110
+      { weight: 120, reps: 3 }, { weight: 60, reps: 12 }, { weight: 22, reps: 30 }, // 30-rep set kept (PB fix)
+      { weight: 0, reps: 4 }, { weight: 50, reps: null }, { weight: null, reps: 2 }, // junk dropped
+      { weight: 40, reps: 75 }, // past the 60-rep cap → dropped
+    ]);
+    expect(out).toEqual([
+      { reps: 3, weight: 120 }, { reps: 5, weight: 110 }, { reps: 12, weight: 60 }, { reps: 30, weight: 22 },
+    ]);
+    expect(nuzzoRepMaxes([])).toEqual([]);
+  });
+
+  it("bestFitNuzzo1RM recovers the 1RM that put points exactly on the curve", () => {
+    // Build rep-maxes FROM a known 1RM via the curve → the fit must return that 1RM.
+    const trueOrm = 140;
+    const repMaxes = [3, 5, 8, 12].map((reps) => ({ reps, weight: nuzzoWeightForReps(trueOrm, reps)! }));
+    expect(bestFitNuzzo1RM(repMaxes)!).toBeCloseTo(trueOrm, 4);
+    expect(bestFitNuzzo1RM([])).toBeNull();
   });
 });
 
@@ -436,6 +481,22 @@ describe("grownStability", () => {
     );
     expect(grownStability(STRENGTH_DECAY.maxStability)).toBe(STRENGTH_DECAY.maxStability);
     expect(grownStability(STRENGTH_DECAY.maxStability * 5)).toBe(STRENGTH_DECAY.maxStability);
+  });
+});
+
+describe("retentionWith (adjustable decay model)", () => {
+  it("level 1 is a straight line after the grace, floored", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 1 as const, graceDays: 14, linearLossPerDay: 0.01, floor: 0.5 };
+    expect(retentionWith(14, 30, p)).toBe(1); // still in the grace
+    expect(retentionWith(24, 30, p)).toBeCloseTo(0.9, 6); // 10 days × 1%/day lost
+    expect(retentionWith(34, 30, p)).toBeCloseTo(0.8, 6); // 20 days × 1%/day
+    expect(retentionWith(10_000, 30, p)).toBe(0.5); // floored, never below 50%
+    expect(retentionWith(24, 30, p)).toBeGreaterThan(retentionWith(24, 999, p) - 1e-9); // S is ignored at level 1
+  });
+  it("level 2/3 reproduce the logarithmic strengthRetention curve for matching params", () => {
+    const p = { ...DEFAULT_DECAY_PARAMS, level: 2 as const };
+    expect(retentionWith(60, 30, p)).toBeCloseTo(strengthRetention(60, 30), 6);
+    expect(retentionWith(120, 45, p)).toBeCloseTo(strengthRetention(120, 45), 6);
   });
 });
 

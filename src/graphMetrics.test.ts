@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 11 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(11);
+  it("registers all 12 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(12);
     for (const id of [
-      "weightRange", "e1rm", "pctWR", "strength", "strengthDecay", "predicted",
+      "weightRange", "e1rm", "pctWR", "pctBest", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -32,10 +32,68 @@ describe("graph metric registry (TASK 26)", () => {
     const e = graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
     expect(e.length).toBe(2);
     expect(e[0]!.x).toBeLessThan(e[1]!.x); // sorted by date ascending
+    expect(e[0]!.lo).toBe(100); // weight used — stem bottom for the 1RM bubble
+    expect(e[0]!.y).toBeGreaterThan(e[0]!.lo!);
     const vol = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
     expect(vol.map((p) => p.y)).toEqual([300, 450]); // 100×3, 90×5
     expect(graphMetric("reps")!.compute!(recs, DEFAULT_GRAPH_CONFIG).map((p) => p.y)).toEqual([3, 5]);
     expect(graphMetric("e1rm")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBe(2);
+  });
+
+  it("pctBest scales each set to a fraction of the best 1RM in view (peak = 1.0)", () => {
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 5 }),
+      rec({ date: "2024-02-01", weight: 100, origWeight: 100, reps: 5 }), // the strongest set
+    ];
+    const pts = graphMetric("pctBest")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(pts.length).toBe(2);
+    const peak = Math.max(...pts.map((p) => p.y!));
+    expect(peak).toBe(1); // the best set is 100%
+    expect(Math.min(...pts.map((p) => p.y!))).toBeCloseTo(0.5, 1); // half the load ≈ half
+    expect(graphMetric("pctBest")!.compute!([], DEFAULT_GRAPH_CONFIG)).toEqual([]); // empty-safe
+  });
+
+  it("volume uses ADDED (bar) weight, not the bodyweight-folded effective load", () => {
+    // A Hip-Thrust-like set: 60 kg on the bar (origWeight) folds to a 120 kg effective load
+    // (weight). Volume must match the workout history (added × reps), not double it.
+    const recs = [rec({ date: "2024-01-01", weight: 120, origWeight: 60, reps: 10 })];
+    expect(graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG)[0]!.y).toBe(600); // 60×10, not 1200
+  });
+
+  it("weekly buckets are Monday-start (matches the history), not epoch/Thursday weeks", () => {
+    // Mon Jan 1 2024 & Sun Jan 7 are the SAME Monday-week; Mon Jan 8 starts the next.
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-07", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-08", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const vol = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(vol.length).toBe(2); // two Monday-weeks (epoch/Thursday weeks would split Jan 1 / Jan 7)
+    expect(vol.map((p) => p.y)).toEqual([1000, 500]); // {Jan1+Jan7}, {Jan8}
+  });
+
+  it("quarter / year intervals bucket volume into 3- and 12-month blocks", () => {
+    const recs = [
+      rec({ date: "2024-01-15", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-03-20", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-05-10", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const q = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "quarter" });
+    expect(q.map((p) => p.y)).toEqual([1000, 500]); // Q1 {Jan+Mar}=1000, Q2 {May}=500
+    const y = graphMetric("volume")!.compute!(recs, { ...DEFAULT_GRAPH_CONFIG, interval: "year" });
+    expect(y.map((p) => p.y)).toEqual([1500]); // all of 2024 in one bucket
+  });
+
+  it("bi-week interval groups two Monday-weeks into one bucket", () => {
+    const cfg = { ...DEFAULT_GRAPH_CONFIG, interval: "biweek" as const };
+    const recs = [
+      rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-08", weight: 50, origWeight: 50, reps: 10 }),
+      rec({ date: "2024-01-15", weight: 50, origWeight: 50, reps: 10 }),
+    ];
+    const vol = graphMetric("volume")!.compute!(recs, cfg);
+    expect(vol.length).toBe(2); // 3 consecutive Monday-weeks span exactly 2 bi-week buckets
+    expect(vol.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500); // volume conserved
   });
 
   it("every registered metric now has a compute (TASKS 31–41)", () => {
@@ -100,6 +158,25 @@ describe("graph metric registry (TASK 26)", () => {
     expect(s.map((p) => p.y)).toEqual([100, 100]); // running max holds at 100
   });
 
+  it("strength line drops shadowed weak-set vertices, keeps corners + lull dips (UI-47)", () => {
+    // A strong session, then two WEAKER sessions inside a 28-day window (shadowed by the
+    // strong one), then a new PR. The weak sessions must NOT add their own data points —
+    // the line holds flat at the proven level, then steps up. (Owner: weaker sets confuse
+    // which point is real.)
+    const recs = [
+      rec({ date: "2024-01-01", weight: 100, reps: 1 }), // 100
+      rec({ date: "2024-01-08", weight: 90, reps: 1 }),  // weaker, shadowed → no vertex
+      rec({ date: "2024-01-15", weight: 92, reps: 1 }),  // weaker, shadowed → no vertex
+      rec({ date: "2024-01-22", weight: 110, reps: 1 }), // new PR → vertex
+    ];
+    const cfg = { ...DEFAULT_GRAPH_CONFIG, strengthWindow: 28 * 24 * 3600 * 1000 };
+    const ys = graphMetric("strength")!.compute!(recs, cfg).map((p) => p.y);
+    // Endpoints + the step: flat 100 (start + last-before-jump) then 110 — never 90/92.
+    expect(ys).toEqual([100, 100, 110]);
+    expect(ys).not.toContain(90);
+    expect(ys).not.toContain(92);
+  });
+
   it("predicted strength needs ≥3 points, else empty (TASK 36 missing-data)", () => {
     const few = [rec({ date: "2024-01-01" }), rec({ date: "2024-02-01" })];
     expect(graphMetric("predicted")!.compute!(few, DEFAULT_GRAPH_CONFIG)).toEqual([]);
@@ -110,13 +187,47 @@ describe("graph metric registry (TASK 26)", () => {
     ];
     expect(graphMetric("predicted")!.compute!(many, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
   });
+
+  it("projection basis honours warm-up exclusion + hard-only filter", () => {
+    // 4 sessions; each has a hard top set and a warm-up. rirOf marks warm-ups (rir 8).
+    const recs = [
+      rec({ date: "2024-01-01", weight: 100, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-01-01", weight: 40, reps: 10, setNumber: 2 }), // warm-up
+      rec({ date: "2024-02-01", weight: 105, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-03-01", weight: 110, reps: 3, setNumber: 1 }),
+      rec({ date: "2024-04-01", weight: 115, reps: 3, setNumber: 1 }),
+    ];
+    const rirOf = (r: SetRecord) => (r.weight != null && r.weight < 60 ? 8 : 1); // light = warm-up
+    const hardCfg = { ...DEFAULT_GRAPH_CONFIG, rirOf, projectionBasis: "hard" as const };
+    const allCfg = { ...DEFAULT_GRAPH_CONFIG, rirOf, projectionBasis: "all" as const };
+    // Both bases still produce a forecast (warm-up dropped, ≥3 hard points remain).
+    expect(graphMetric("predicted")!.compute!(recs, hardCfg).length).toBeGreaterThan(0);
+    expect(graphMetric("predicted")!.compute!(recs, allCfg).length).toBeGreaterThan(0);
+    // Records basis (default) is monotonic in the source → still fits.
+    expect(graphMetric("predicted")!.compute!(recs, DEFAULT_GRAPH_CONFIG).length).toBeGreaterThan(0);
+  });
+
+  it("projection fit-window (projectionFrom/To) excludes out-of-window sets", () => {
+    const recs = [2020, 2021, 2022, 2023, 2024].map((y, i) =>
+      rec({ date: `${y}-01-01`, weight: 100 + i * 5, reps: 3 }));
+    const all = graphMetric("predicted")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(all.length).toBeGreaterThan(0);
+    // Window covering only the last 2 points (< 3) → not enough to fit → empty.
+    const narrow = { ...DEFAULT_GRAPH_CONFIG, projectionFrom: Date.UTC(2023, 0, 1), projectionTo: Date.UTC(2024, 6, 1) };
+    expect(graphMetric("predicted")!.compute!(recs, narrow)).toEqual([]);
+    // Window covering the first 3 points → fits, and never starts before the window.
+    const early = { ...DEFAULT_GRAPH_CONFIG, projectionFrom: Date.UTC(2019, 0, 1), projectionTo: Date.UTC(2022, 6, 1) };
+    const earlyPts = graphMetric("predicted")!.compute!(recs, early);
+    expect(earlyPts.length).toBeGreaterThan(0);
+    expect(earlyPts[0]!.x).toBeGreaterThanOrEqual(Date.UTC(2020, 0, 1));
+  });
 });
 
 describe("graph config layer (TASK 29)", () => {
   it("has a default config with all settings", () => {
     expect(DEFAULT_GRAPH_CONFIG).toEqual({
-      aggregation: "none", interval: "week", smoothing: 0, prediction: false, decay: false,
-      formula: "epley", predictionDays: 90, opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1, spread: 0.9,
+      aggregation: "none", interval: "week", smoothing: 0, decay: false,
+      formula: "epley", predictionDays: 90, projectionBasis: "records", opacity: 0.6, rightHeadroom: 1, volumeYShift: 0, barGirth: 1, spread: 0.9,
     });
   });
 });

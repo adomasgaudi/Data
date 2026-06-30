@@ -53,7 +53,7 @@ export const FAMILIES: Record<string, FamilyDef> = {
       },
       // Ladder leg grip (only applies on the ladder). l-sit = legs out front (harder),
       // hooked = legs hooked on a rung (assisted, easier). none = neither.
-      ladderGrip: { none: 1.0, lsit: 1.1, hooked: 0.8 },
+      ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
       // Ladder rung height — how high your feet are (higher rung = more assist =
       // easier). none = unspecified. lad3 lowest … lad9 highest.
       ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
@@ -79,12 +79,17 @@ export const FAMILIES: Record<string, FamilyDef> = {
       // RANGE: a "low ROM" partial (only the short top portion — a more scapular,
       // shrug-like press) is an easier press → <1. full = the whole press (×1).
       range: { full: 1.0, low: 0.7 },
-      // BACK-TO-WALL ONLY: how far the shoulders sit OFF the wall, in cm. The "blue
-      // block" is 6cm thick (a named reference shown with a diagram/photo). Multipliers
-      // are NEUTRAL for now (calibrate later — likely farther = slightly harder).
-      shoulderDist: { "0cm": 1.0, blue: 1.0 },
+      // BACK-TO-WALL ONLY: the BACK SUPPORT — how far the shoulders/back sit OFF the
+      // wall, in cm, set by what's behind you. "blue" = the 6cm blue block (a named
+      // reference shown with a diagram/photo); 30cm / 45cm = a taller box/support.
+      // Multipliers are NEUTRAL for now (calibrate later — likely farther = harder).
+      shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
+      // FOREARM SUPPORT (owner) — resting the forearms on a block/support at this height
+      // (cm) makes the handstand work easier. Neutral ×1 placeholders for now — calibrate
+      // in ⚙ Difficulty multipliers (likely taller = more support = easier, <1).
+      forearmSupport: { none: 1.0, "7cm": 1.0, "15cm": 1.0, "23cm": 1.0, "30cm": 1.0 },
     },
-    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm" },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", band: "none", rom: "0cm", lean: "0cm", continuity: "uninterrupted", hands: "two", range: "full", shoulderDist: "0cm", forearmSupport: "none" },
   },
   PUSHUP: {
     // INCLINE (hands raised) is NOT a family dimension — it's how high the hands are,
@@ -123,7 +128,104 @@ export const FAMILIES: Record<string, FamilyDef> = {
     },
     defaults: { height: "0", angle: "1", position: "full", rom: "0cm" },
   },
+  KNEERAISE: {
+    // Knee raise + L-sit (owner): hanging vs on-hands support; on-hands floor height is a
+    // continuous cm height (yoga block / SQ / Smith / rack box…) scaled on the global incline
+    // curve — same tooling as push-up incline and HSPU ROM cm pickers.
+    dims: {
+      support: { hanging: 1.0, on_hands: 0.85 },
+      backrest: { none: 1.0, "30cm": 0.9 },
+      floorHeight: { "0cm": 1.0, "6cm": 1.05, "15cm": 1.1, "23cm": 1.15 },
+    },
+    defaults: { support: "hanging", backrest: "none", floorHeight: "0cm" },
+  },
+  CROSSSQUAT: {
+    // Cross-legged (seated cross-leg → stand) squat. The owner's two requested
+    // variables: an ASSISTANCE BAND (helps you up — heavier band = more help) and
+    // (handled universally) the range of motion. Band factors are PLACEHOLDERS (×1 —
+    // they capture the level without scaling yet); calibrate in ⚙ Difficulty
+    // multipliers. ROM is the per-exercise universal default (90%), not a dim here.
+    dims: {
+      band: { none: 1.0, "1": 1.0, "2": 1.0, "3": 1.0, "4": 1.0, "5": 1.0, "6": 1.0 },
+    },
+    defaults: { band: "none" },
+  },
+  // PB-36 — without this family the handstand skill lifts had NO variation pickers
+  // (only the generic ROM%); the owner "couldn't add variations for HS Wall Tap".
+  HANDSTAND: {
+    // The non-press handstand SKILL lifts — wall TAP (wall touch), touch-shoulders,
+    // kicks, hold, walk… — share the SAME setup variations as the handstand PUSH-UP
+    // (owner: "give wall tap the same variations HSPU has"), MINUS the pressing-only
+    // dims (band assist, press depth in cm, low/full press range, one-/two-hand
+    // press). What's left is the SETUP: wall orientation, the ladder (grip + rung
+    // height), a yoga BLOCK prop (S/M/L like the knee-raise obstacle), forward lean,
+    // and — back-to-wall only — shoulder distance. Support/ladder/lean factors mirror
+    // HSPU's so difficulty reads consistently across all handstand work; the yoga
+    // block is a neutral ×1 placeholder. Calibrate the numbers in ⚙ Difficulty
+    // multipliers. No "rom" dim (press depth is HSPU-only); every handstand skill can promote
+    // the generic %-ROM passive tag; Handstand kicks use a %-only leg-range picker.
+    dims: {
+      support: { free: 1.0, front_to_wall: 0.92, back_to_wall: 0.82, ladder: 0.55 },
+      ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
+      ladderH: { none: 1.0, lad3: 0.72, lad5: 0.6, lad6: 0.55, lad9: 0.42 },
+      // Yoga block used as a prop / target (S 6cm · M 15cm · L 23cm) — same obstacle
+      // dim the knee-raise uses; neutral ×1 placeholders for now (calibrate).
+      obstacle: { none: 1.0, S: 1.0, M: 1.0, L: 1.0 },
+      lean: { "0cm": 1.0, "3cm": 1.03, "5cm": 1.04, "8cm": 1.07, "10cm": 1.09, "13cm": 1.11, "15cm": 1.13, "18cm": 1.16, "20cm": 1.17, "23cm": 1.2 },
+      // BACK SUPPORT (back-to-wall) — same as HSPU: blue 6cm block, or a 30/45cm box.
+      shoulderDist: { "0cm": 1.0, blue: 1.0, "30cm": 1.0, "45cm": 1.0 },
+      // FOREARM SUPPORT (owner) — forearms rested on a block at this height (cm). Neutral
+      // ×1 placeholders for now — calibrate in ⚙ Difficulty multipliers.
+      forearmSupport: { none: 1.0, "7cm": 1.0, "15cm": 1.0, "23cm": 1.0, "30cm": 1.0 },
+      // WALL-TAP CONTACT (owner) — what touches the wall × rest vs light tap. The labels /
+      // hints live in handstandLean.ts (TAP_CONTACT_*); THESE are the difficulty factors
+      // (the SSOT the resolver reads). More support (hips+shoulders) and resting are easier;
+      // shoulders-only light-tap is the hardest reference. "none" = not a wall-tap / unset.
+      tapContact: { none: 1.0, hips_rest: 0.85, sh_rest: 0.92, hips_tap: 0.97, sh_tap: 1.0 },
+    },
+    defaults: { support: "free", ladderGrip: "none", ladderH: "none", obstacle: "none", lean: "0cm", shoulderDist: "0cm", forearmSupport: "none", tapContact: "none" },
+  },
+  // The owner's "Lever" lifts (EXR-163) — an adjustable one-sided loaded handle: a
+  // plate on a movable collar near one END, gripped at the other, swung like a
+  // mace/axe. Its whole point is LEVERAGE, so the resistance a wrist/forearm
+  // rotation feels is a TORQUE = plate mass × moment arm (the distance from the
+  // wrist pivot to the plate). The owner asked for "exact torque", so the LEVER
+  // factor is the moment-arm RATIO (cm ÷ a 40cm reference = ×1) — true physics, not
+  // a guessed multiplier — and it scales the logged plate kg into an effective-
+  // torque effort, so a 5kg plate held far out lines up against 5kg pulled in.
+  // Shared by all four Lever lifts (Pronation/Supination forearm rotations +
+  // Abduction/Adduction wrist deviations) — they differ only by axis, not by the knobs.
+  //  • lever — plate distance from the grip, in cm (owner's "weight-distance"). EXACT
+  //    moment-arm scaling: factor = cm ÷ 40. Recalibrate the reference/numbers (e.g.
+  //    your real handle geometry) in ⚙ Difficulty multipliers.
+  //  • reach — how far the whole arm is held out (owner's "very important" distance:
+  //    forward = easier, further = harder). Arm reach changes posture/stabiliser
+  //    leverage, which is NOT a clean single-measurement torque like the lever — so
+  //    these are a calibratable gradient (placeholder, tune by feel), not exact.
+  LEVER: {
+    dims: {
+      lever: { "20cm": 0.5, "30cm": 0.75, "40cm": 1.0, "50cm": 1.25, "60cm": 1.5, "70cm": 1.75 },
+      reach: { tucked: 0.85, neutral: 1.0, extended: 1.15, far: 1.3 },
+    },
+    defaults: { lever: "40cm", reach: "neutral" },
+  },
 };
+
+/** Every family that carries a given variation dimension (tag). Pure — used by the
+ * tag info panel's "used by" list so it can't drift from the real config. */
+export function familiesUsingDim(families: Record<string, FamilyDef>, dim: string): string[] {
+  return Object.keys(families).filter((fam) => !!families[fam]!.dims[dim]);
+}
+
+/** A family's tag (dimension) list IN DISPLAY ORDER: the built-in dims it carries (kept in
+ * `order`), then any USER-created dims appended (order-stable, deduped). Pure — the single source
+ * for "which tags does a family show", so the palette, per-set pickers, variation editor and
+ * scaling all enumerate the same set and a new tag can never appear in one place but not another. */
+export function mergeDimOrder(order: string[], hasDim: (dim: string) => boolean, userDims: string[]): string[] {
+  const base = order.filter(hasDim);
+  const user = userDims.filter((d) => !base.includes(d));
+  return [...base, ...user];
+}
 
 export const TOKENS: Record<string, Record<string, TokenDef>> = {
   HSPU: {
@@ -163,6 +265,16 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     lsit: { support: "ladder", ladderGrip: "lsit" },
     hooked: { support: "ladder", ladderGrip: "hooked" },
     "užkabintos kojos": { support: "ladder", ladderGrip: "hooked" }, // hooked legs (assisted)
+    // BACK SUPPORT — the blue 6cm block, or a 30/45cm box behind the back (back-to-wall).
+    blue: { support: "back_to_wall", shoulderDist: "blue" },
+    "blue block": { support: "back_to_wall", shoulderDist: "blue" },
+    "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
+    "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
+    // FOREARM SUPPORT — forearms rested on a block at this height (cm).
+    "forearm 7": { forearmSupport: "7cm" },
+    "forearm 15": { forearmSupport: "15cm" },
+    "forearm 23": { forearmSupport: "23cm" },
+    "forearm 30": { forearmSupport: "30cm" },
     // lean / continuity
     "forward lean": { lean: "15cm" },
     uninterupted: { continuity: "uninterrupted" }, // (owner's spelling)
@@ -221,6 +333,102 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
     "full bend": { position: "full" },
     full: { position: "full" },
   },
+  KNEERAISE: {
+    hanging: { support: "hanging" },
+    "hang bar": { support: "hanging" },
+    "on hands": { support: "on_hands", priority: 4 },
+    "on hand": { support: "on_hands", priority: 4 },
+    parallettes: { support: "on_hands" },
+    "dips bar": { support: "on_hands", priority: 4 },
+    "dip bar": { support: "on_hands", priority: 4 },
+    dips: { support: "on_hands" },
+    lygiagretės: { support: "on_hands" },
+    lygiageretes: { support: "on_hands" },
+    "back rest": { backrest: "30cm" },
+    backrest: { backrest: "30cm" },
+    "back pad": { backrest: "30cm" },
+    "nugaros atrama": { backrest: "30cm" },
+    "l yoga": { support: "on_hands", floorHeight: "23cm" },
+    "yoga l": { support: "on_hands", floorHeight: "23cm" },
+    "yoga block l": { support: "on_hands", floorHeight: "23cm" },
+    "m yoga": { support: "on_hands", floorHeight: "15cm" },
+    "yoga m": { support: "on_hands", floorHeight: "15cm" },
+    "yoga block m": { support: "on_hands", floorHeight: "15cm" },
+    "yoga block": { support: "on_hands", floorHeight: "15cm" },
+    yoga: { support: "on_hands", floorHeight: "15cm" },
+    "s yoga": { support: "on_hands", floorHeight: "6cm" },
+    "yoga s": { support: "on_hands", floorHeight: "6cm" },
+    "yoga block s": { support: "on_hands", floorHeight: "6cm" },
+  },
+  CROSSSQUAT: {
+    // Assistance band by number (higher = heavier = more help). Longest-match-first
+    // means "band 5" beats bare "band"/"assisted" (which assume a mid band).
+    "band 1": { band: "1" },
+    "band 2": { band: "2" },
+    "band 3": { band: "3" },
+    "band 4": { band: "4" },
+    "band 5": { band: "5" },
+    "band 6": { band: "6" },
+    "guma 1": { band: "1" },
+    "guma 2": { band: "2" },
+    "guma 3": { band: "3" },
+    "guma 4": { band: "4" },
+    "guma 5": { band: "5" },
+    "guma 6": { band: "6" },
+    band: { band: "5" },
+    assisted: { band: "5" },
+    "band assisted": { band: "5" },
+    guma: { band: "5" },
+  },
+  HANDSTAND: {
+    // Wall orientation (same cues as HSPU). Bare "wall" = back-to-wall; "butt to wall"
+    // too; chest/face cues = front-to-wall; "no wall" wins.
+    wall: { support: "back_to_wall" },
+    "back to wall": { support: "back_to_wall", priority: 4 },
+    "butt to wall": { support: "back_to_wall", priority: 4 },
+    "front to wall": { support: "front_to_wall", priority: 4 },
+    "navel to wall": { support: "front_to_wall", priority: 4 },
+    "close to wall": { support: "front_to_wall", priority: 4 },
+    "no wall": { support: "free", priority: 5 },
+    freestanding: { support: "free" },
+    ladder: { support: "ladder" },
+    // Yoga BLOCK prop → the obstacle dim (S/M/L). Longest-match-first means "yoga l"
+    // beats bare "yoga". (Bare single letters M/L aren't tokens — too collision-prone.)
+    "l yoga": { obstacle: "L" },
+    "yoga l": { obstacle: "L" },
+    "m yoga": { obstacle: "M" },
+    "yoga m": { obstacle: "M" },
+    "s yoga": { obstacle: "S" },
+    "yoga s": { obstacle: "S" },
+    "yoga block": { obstacle: "M" },
+    yoga: { obstacle: "M" },
+    // Shoulders touching the wall (back-to-wall, shoulders on it).
+    "shoulders to wall": { support: "back_to_wall", shoulderDist: "0cm" },
+    // BACK SUPPORT — the blue 6cm block, or a 30/45cm box behind the back (back-to-wall).
+    blue: { support: "back_to_wall", shoulderDist: "blue" },
+    "blue block": { support: "back_to_wall", shoulderDist: "blue" },
+    "30cm back": { support: "back_to_wall", shoulderDist: "30cm" },
+    "45cm back": { support: "back_to_wall", shoulderDist: "45cm" },
+    // FOREARM SUPPORT — forearms rested on a block at this height (cm).
+    "forearm 7": { forearmSupport: "7cm" },
+    "forearm 15": { forearmSupport: "15cm" },
+    "forearm 23": { forearmSupport: "23cm" },
+    "forearm 30": { forearmSupport: "30cm" },
+    // Forward lean.
+    "forward lean": { lean: "15cm" },
+    // Ladder rung height (+ the ladder support it implies).
+    lad3: { support: "ladder", ladderH: "lad3" },
+    lad5: { support: "ladder", ladderH: "lad5" },
+    lad6: { support: "ladder", ladderH: "lad6" },
+    "ladder 5": { support: "ladder", ladderH: "lad5" },
+    "ladder 6": { support: "ladder", ladderH: "lad6" },
+    "5 lygis": { support: "ladder", ladderH: "lad5" },
+    // Legs on the ladder → a grip (and the ladder setup).
+    hooked: { support: "ladder", ladderGrip: "hooked" },
+    "l sit": { support: "ladder", ladderGrip: "lsit" },
+    "l-sit": { support: "ladder", ladderGrip: "lsit" },
+    lsit: { support: "ladder", ladderGrip: "lsit" },
+  },
 };
 
 /** The bundled config (passed by default to the resolver; callers may pass their
@@ -228,7 +436,20 @@ export const TOKENS: Record<string, Record<string, TokenDef>> = {
 export const DEFAULT_VARIATION_CONFIG: VariationConfig = { FAMILIES, TOKENS };
 
 /** Bump on ANY edit to FAMILIES/TOKENS so caches keyed on (note, version) drop. */
-export const CONFIG_VERSION = 13;
+export const CONFIG_VERSION = 22;
+
+/** Migrate legacy knee-raise vec keys (dips_bar support, obstacle S/M/L) → on_hands + floorHeight cm. */
+export function normalizeStaticLiftVec(fam: string, vec: Record<string, string>): Record<string, string> {
+  if (fam !== "KNEERAISE") return vec;
+  const out = { ...vec };
+  if (out.support === "dips_bar") out.support = "on_hands";
+  if (out.obstacle && !out.floorHeight) {
+    const map: Record<string, string> = { none: "0cm", S: "6cm", M: "15cm", L: "23cm" };
+    const fh = map[out.obstacle];
+    if (fh) out.floorHeight = fh;
+  }
+  return out;
+}
 
 /**
  * Which family's model an exercise uses (decision: family = exercise). Many
@@ -250,6 +471,37 @@ export const EXERCISE_FAMILY: Record<string, string> = {
   "Chin Up": "PULLUP",
   "Chin Ups": "PULLUP",
   "Roman Chair Side Bend": "RCSIDEBEND",
+  "Knee Raise": "KNEERAISE",
+  "Knee Raises": "KNEERAISE",
+  "Hanging Knee Raise": "KNEERAISE",
+  "Hanging Knee Raises": "KNEERAISE",
+  "L Sit": "KNEERAISE",
+  "L-Sit": "KNEERAISE",
+  "L Sits": "KNEERAISE",
+  "Pike L-Sit": "KNEERAISE",
+  "Pike L Sit": "KNEERAISE",
+  "Cross-Legged Squats": "CROSSSQUAT",
+  "Cross-Legged Squat": "CROSSSQUAT",
+  "Cross-leg Squat": "CROSSSQUAT",
+  "Cross-leg squat": "CROSSSQUAT",
+  "Cross Legged Squat": "CROSSSQUAT",
+  // Non-press handstand SKILL lifts → the shared HANDSTAND setup model (wall tap /
+  // touch-shoulders, kicks, hold, walk, the bare "Handstand"). The pattern fallback
+  // below catches every other handstand spelling/variant too; these explicit entries
+  // document the common ones. (The PUSH-UP variants stay HSPU — matched first.)
+  "Handstand wall touch": "HANDSTAND",
+  "Handstand touch shoulders": "HANDSTAND",
+  "Handstand touch shoulder": "HANDSTAND",
+  "Handstand kicks": "HANDSTAND",
+  "Handstand hold": "HANDSTAND",
+  "Handstand walk": "HANDSTAND",
+  Handstand: "HANDSTAND",
+  // The four "Lever" wrist/forearm rotations (EXR-163) share ONE leverage model
+  // — lever length (plate distance) × arm reach; see the LEVER family above.
+  "Lever Pronation": "LEVER",
+  "Lever Supination": "LEVER",
+  "Lever Abduction": "LEVER",
+  "Lever Adduction": "LEVER",
 };
 
 export function familyOf(
@@ -272,7 +524,41 @@ export function familyOf(
   // kg like HSPU — however it's spelled (assisted, wide/neutral grip, weighted…). Lat
   // PULLDOWNs contain "pull" but not "pullup", so they're correctly excluded.
   if (n.includes("pullup") || n.includes("chinup")) return "PULLUP";
+  // A bare "Pull" / "Chin" is the owner's combined pull-up + chin-up lift — give it the
+  // PULLUP model too (band "guma" picker + kg-assist), matched EXACTLY so "pulldown" /
+  // "pullover" / "facepull" (which contain "pull" but aren't the bar movement) stay out.
+  if (n === "pull" || n === "pulls" || n === "chin" || n === "chins") return "PULLUP";
+  // Any OTHER handstand (wall tap / touch / kicks / hold / walk / steps / leg curls /
+  // on head / dance…) uses the HANDSTAND setup model — "handstand" anywhere. The
+  // push-up variants were already returned as HSPU above ("handstandpush" is caught
+  // first), so this only catches the non-press handstand skill work.
+  if (n.includes("handstand")) return "HANDSTAND";
+  // L-sit / knee-raise static core work — same support + floor-height model.
+  if (n.includes("kneeraise") || n.includes("kneeraises")) return "KNEERAISE";
+  if (n.includes("lsit") || n.includes("lsits")) return "KNEERAISE";
   return null;
+}
+
+/** Leg-movement handstand skills (e.g. Handstand kicks): ROM is % of how far the kick
+ * goes / what you touch — NOT cm hand height like HSPU's press-depth rom dim. */
+export function usesLegPctRom(exerciseName: string): boolean {
+  const n = exerciseName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return /handstandkick|hskick/.test(n);
+}
+
+export function offersPctRomTag(exerciseName: string): boolean {
+  return !!exerciseName;
+}
+
+/** Should the %-ROM pill render inline on an add-set line (when promoted)? HSPU uses its cm rom
+ * dim instead; all other lifts (incl. handstand skills) get the %-ROM pill. */
+export function showsPctRomPill(
+  exerciseName: string,
+  fam: string | null,
+  families: Record<string, FamilyDef> = FAMILIES,
+): boolean {
+  if (!exerciseName) return false;
+  return !families[fam ?? ""]?.dims.rom;
 }
 
 /** Centimetres encoded in a lean-level key (e.g. "15" → 15); 0 when unparseable. */

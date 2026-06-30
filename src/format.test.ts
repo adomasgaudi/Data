@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   fmt, pct, bwMult, wr, shortDate, dowLetter, isoWeekNumber, todayIso, trainingDuration,
-  relativeDayLabel,
+  relativeDayLabel, dayHeaderParts,
 } from "./format";
 
 describe("fmt", () => {
@@ -34,9 +34,9 @@ describe("pct / bwMult", () => {
 });
 
 describe("wr", () => {
-  it("drops the meaningless 0 base for bodyweight reps", () => {
-    expect(wr(null, 5)).toBe('<sup class="wr-bw">5</sup>');
-    expect(wr(0, 5)).toBe('<sup class="wr-bw">5</sup>');
+  it("shows a 0 base when no weight was added (owner: always write 0)", () => {
+    expect(wr(null, 5)).toBe("0<sup>5</sup>");
+    expect(wr(0, 5)).toBe("0<sup>5</sup>");
   });
   it("shows an em-dash when there is neither weight nor reps", () => {
     expect(wr(null, null)).toBe("—");
@@ -67,6 +67,13 @@ describe("dates", () => {
     expect(relativeDayLabel("2026-05-31", today)).toBe("Last Sunday");   // last week (Sun end)
     expect(relativeDayLabel("2026-05-25", today)).toBe("Last Monday");   // last week (Mon start)
     expect(relativeDayLabel("2026-05-24", today)).toBe(`${dowLetter("2026-05-24")} May 24`); // older → compact
+  });
+  it("dayHeaderParts: relative phrase + month-day + year", () => {
+    const today = "2026-06-04"; // Thursday
+    expect(dayHeaderParts(today, today)).toEqual({ rel: "Today", md: "Jun 4", year: "2026" });
+    expect(dayHeaderParts("2026-06-01", today)).toEqual({ rel: "Monday", md: "Jun 1", year: "2026" }); // this week
+    expect(dayHeaderParts("2026-05-28", today)).toEqual({ rel: "Last Thursday", md: "May 28", year: "2026" }); // last week
+    expect(dayHeaderParts("2026-05-12", today)).toEqual({ rel: "Tuesday", md: "May 12", year: "2026" }); // older → plain weekday
   });
   it("isoWeekNumber matches Monday-start ISO weeks", () => {
     expect(isoWeekNumber("2021-01-04")).toBe(1); // first Monday of 2021

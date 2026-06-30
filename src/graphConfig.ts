@@ -3,24 +3,46 @@
  * plain data object SEPARATE from rendering — the Universal Analytics Graph reads
  * it, and future settings plug in here without touching the renderer.
  */
-import type { OneRepMaxFormula } from "./metrics";
+import type { OneRepMaxFormula, DecayParams } from "./metrics";
 import type { SetRecord } from "./domain";
 
 export interface GraphConfig {
   /** How same-interval points are combined: none = every set, else per interval. */
   aggregation: "none" | "max" | "avg" | "sum";
-  /** Bucket size when aggregating. */
-  interval: "day" | "week" | "month";
+  /** Bucket size when aggregating (volume/counts bars + aggregation). The month-multiples
+   *  (quarter = 3 mo, halfyear = 6 mo, year = 12 mo) read longer-range volume. */
+  interval: "day" | "week" | "biweek" | "month" | "quarter" | "halfyear" | "year";
   /** Moving-average window in points (0 = off). */
   smoothing: number;
-  /** Extend a trend into the future (a general flag; the Predicted metric projects). */
-  prediction: boolean;
   /** Apply the strength-fade (detraining) model to strength metrics. */
   decay: boolean;
+  /** The strength-decay MODEL to use (complexity level + its variables) for the
+   *  Strength Decay metric and the `decay` fade. Omitted = the shipped full model. */
+  decayParams?: DecayParams | undefined;
   /** 1RM formula for the strength/1RM metrics (matches the app-wide choice). */
   formula: OneRepMaxFormula;
+  /** Rolling WINDOW (ms) over which the (non-decay) Strength line takes the best top set:
+   * at each date it's the max e1RM within the last `strengthWindow`. Undefined / Infinity =
+   * all-time (the legacy running-max that never drops). Smaller = the line tracks recent best
+   * and can fall when you haven't beaten it lately. */
+  strengthWindow?: number | undefined;
+  /** REPS-VERSUS-WEIGHT mode: swap the graph to a scatter of every set at
+   * (x = weight kg, y = reps) per exercise, instead of the time-series metrics. */
+  repsVsWeight?: boolean;
+  /** Draw a per-exercise least-squares best-fit line on the reps-vs-weight scatter. */
+  repsVsWeightFit?: boolean;
   /** How far ahead the Predicted Strength metric projects, in days. */
   predictionDays: number;
+  /** What logged points feed the projection fit:
+   *  "records" = the running-max (PR) e1RM line (smooth lifetime trend, default),
+   *  "hard"    = only hard sets' e1RM (near-failure effort),
+   *  "all"     = every working set's e1RM.
+   *  Warm-ups (clearly submaximal) are ALWAYS excluded, whatever the basis. */
+  projectionBasis: "records" | "hard" | "all";
+  /** Optional fit WINDOW (ms timestamps): only sets logged within [from, to] feed the
+   * projection fit — the draggable vertical lines on the graph. Undefined = no bound. */
+  projectionFrom?: number | undefined;
+  projectionTo?: number | undefined;
   /** Fill opacity (0..1) for bar series (e.g. Volume), so they don't hide other
    * series. Default 0.6 — a touch more solid than the scatter dots. */
   opacity: number;
@@ -45,6 +67,11 @@ export interface GraphConfig {
    * resolver the app injects so the scatter can size each dot by effort — higher
    * RIR (easier) draws smaller, the hardest stay biggest. Absent = uniform dots. */
   rirOf?: (r: SetRecord) => number | null;
+  /** Render-time hook (NOT persisted): resolves the projection's flattening CEILING
+   * (kg) for a group's records — the user's Potential ceiling if set, else the
+   * exercise's world-record level. Null = no ceiling known → the projection falls
+   * back to the plain log fit. */
+  ceilingOf?: (records: readonly SetRecord[]) => number | null;
   /** "Lifetime potential" log view: when on, the LEFT (strength/kg) axis is spaced by
    *  −ln(ceiling − value), so an exponential approach to the ceiling reads as a straight
    *  line. A real plateau still flattens; continued gains keep rising. Single ceiling for
@@ -62,10 +89,10 @@ export const DEFAULT_GRAPH_CONFIG: GraphConfig = {
   aggregation: "none",
   interval: "week",
   smoothing: 0,
-  prediction: false,
   decay: false,
   formula: "epley",
   predictionDays: 90,
+  projectionBasis: "records",
   opacity: 0.6,
   rightHeadroom: 1,
   volumeYShift: 0,
