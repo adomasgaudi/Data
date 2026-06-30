@@ -19352,13 +19352,9 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   }
   // Edit path: pre-select each dropdown to the set's EFFECTIVE level (what its note
   // implies + any per-set picks); the add path pre-selects the most-used recent level.
-<<<<<<< HEAD
-  const effVec = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
-  const projVec = effVec ?? projectedAddVec(exerciseName, fam);
-=======
   const effVecRaw = edit ? { ...rNote(fam, edit.note).vec, ...noteVecOverride(exerciseName, edit.note) } : null;
   const effVec = effVecRaw && fam ? normalizeStaticLiftVec(fam, effVecRaw) : effVecRaw;
->>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
+  const projVec = effVec ?? projectedAddVec(exerciseName, fam);
   // ROOT FIX (PB-48, owner #persistent ×3 — gray "NONE" tags kept leaking next to the weight).
   // A PASSIVE tag is no longer RENDERED-then-HIDDEN (that hide raced the async select-enhancement
   // and failed via .closest, so the gray pills leaked through). Instead the ADD path renders ONLY
@@ -19369,15 +19365,11 @@ function variantSelectsHtml(exerciseName: string, edit?: { note: string }): stri
   // In the ADD path `lean` is its own rich pill (leanPillHtml), gated by tagActive in addmVariantField.
   const selects = famDimOrder(fam)
     .filter((d) => {
-<<<<<<< HEAD
+      if (d === "floorHeight" && effVec?.support !== "on_hands") return false;
       if (d === "lean" && !edit) return false;
       if (edit) return true;
       if (!tagActive(exerciseName, fam, d)) return false;
       return dimAppliesInVec(fam, d, projVec);
-=======
-      if (d === "floorHeight" && effVec?.support !== "on_hands") return false;
-      return !(d === "lean" && !edit) && (edit ? true : tagActive(exerciseName, fam, d));
->>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
     })
     .map((dim) => dimVtagHtml(exerciseName, fam, dim, edit, effVec))
     .join("");
@@ -19422,14 +19414,14 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
       `<button type="button" class="wo-af-romdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — hand height in cm. Tap to pick.">${escapeHtml(afLevelText("rom", cur, fam))}</button>` +
       `</span>`;
   }
-<<<<<<< HEAD
   // Shoulder gap / forearm support / wall touch: floating chip picker — the inline xdd
   // dropdown in the scrolling tag row was clipped/unusable on mobile (PB-55 class).
   if (dimUsesChipPicker(dim)) {
     return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
       `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${opts}</select>` +
       `<button type="button" class="wo-af-cmdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — tap to pick.">${escapeHtml(afLevelText(dim, cur, fam))}</button>` +
-=======
+      `</span>`;
+  }
   if (dim === "floorHeight") {
     const extraOpt = (cur && levels[cur] == null && /^[+-]?\d+cm$/.test(cur))
       ? `<option value="${escapeHtml(cur)}" selected>${escapeHtml(afLevelText("floorHeight", cur, fam))}</option>`
@@ -19437,7 +19429,6 @@ function dimVtagHtml(exerciseName: string, fam: string, dim: string, edit?: { no
     return `<span class="addm-vtag" data-dim="floorHeight"><span class="addm-vtag-cap">${escapeHtml(cap)}</span>` +
       `<select class="wo-af-dim wo-af-dimpill" data-no-xdd hidden${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="floorHeight" data-dimdefault="${escapeHtml(dflt)}" aria-hidden="true">${extraOpt}${opts}</select>` +
       `<button type="button" class="wo-af-fhdimpill wo-af-dimpill${cur !== dflt ? " is-set" : ""}" title="${escapeHtml(cap)} — how high the floor/hands are (cm, yoga block, SQ, Smith…). Tap to pick.">${escapeHtml(afLevelText("floorHeight", cur, fam))}</button>` +
->>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
       `</span>`;
   }
   return `<span class="addm-vtag" data-dim="${escapeHtml(dim)}"><span class="addm-vtag-cap">${escapeHtml(cap)}</span><select class="wo-af-dim wo-af-dimpill"${editAttrs} data-ex="${escapeHtml(exerciseName)}" data-dim="${escapeHtml(dim)}" data-dimdefault="${escapeHtml(dflt)}" title="${escapeHtml(cap)}" aria-label="${escapeHtml(cap)}">${opts}</select></span>`;
@@ -19515,7 +19506,6 @@ function openRomDimPicker(pill: HTMLElement): void {
     },
   });
 }
-<<<<<<< HEAD
 /** Floating chip picker for shoulder gap / forearm support — never clipped (PB-55). */
 function openCmDimPicker(pill: HTMLElement): void {
   const sel = pill.previousElementSibling;
@@ -19578,7 +19568,6 @@ function refreshContextualDimTags(form: HTMLElement): void {
   syncAddmReal(form);
   refreshAddmPalette(ex);
 }
-=======
 /** Floating floor-height picker for knee-raise / L-sit on-hands sets — cm + yoga block + SQ /
  * Smith / rack / ladder box (owner: same tooling as push-up incline and HSPU ROM). Stores an
  * exact cm key in the hidden `.wo-af-dim` select; difficulty uses the global incline cm curve. */
@@ -19660,7 +19649,6 @@ function openFloorHeightPicker(pill: HTMLElement): void {
     },
   });
 }
->>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
 function afVariationField(exerciseName: string): string {
   const selects = variantSelectsHtml(exerciseName);
   if (selects) return selects; // the lean pill is added (captioned) in addmVariantField, like ROM
@@ -21222,14 +21210,11 @@ function onAddModalClick(e: MouseEvent): void {
   // old inline dropdown — PB-55).
   const romDimPill = t.closest<HTMLElement>(".wo-af-romdimpill");
   if (romDimPill) { openRomDimPicker(romDimPill); return; }
-<<<<<<< HEAD
   // Shoulder gap / forearm support / wall touch → floating chip picker (not the clipped inline dropdown).
   const cmDimPill = t.closest<HTMLElement>(".wo-af-cmdimpill");
   if (cmDimPill) { openCmDimPicker(cmDimPill); return; }
-=======
   const fhDimPill = t.closest<HTMLElement>(".wo-af-fhdimpill");
   if (fhDimPill) { openFloorHeightPicker(fhDimPill); return; }
->>>>>>> d7b14e6 (LIFT-120: knee raise / L sit floor-height tag)
   // Custom multiplier pill → the value + mode (× on top / = total) picker.
   const multPill = t.closest<HTMLElement>(".wo-af-multpill");
   if (multPill) { openCustomMultPicker(multPill); return; }
