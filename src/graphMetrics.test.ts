@@ -213,6 +213,19 @@ describe("graph metric registry (TASK 26)", () => {
     expect(easy[0]!.hi!).toBeLessThan(0);
   });
 
+  it("e1rm reflects difficultyMult (custom × / tag effort on the effective load)", () => {
+    const plain = graphMetric("e1rm")!.compute!(
+      [rec({ exerciseName: "Lat Pulldown", weight: 110, origWeight: 110, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    const scaled = graphMetric("e1rm")!.compute!(
+      [rec({ exerciseName: "Lat Pulldown", weight: 110, origWeight: 110, difficultyMult: 0.5, reps: 5 })],
+      DEFAULT_GRAPH_CONFIG,
+    );
+    expect(plain[0]!.y!).toBeGreaterThan(0);
+    expect(scaled[0]!.y!).toBeCloseTo(plain[0]!.y! * 0.5, 0);
+  });
+
   it("strength score never drops (running max), decay can dip (TASKS 34–35)", () => {
     const recs = [rec({ date: "2024-01-01", weight: 100, reps: 1 }), rec({ date: "2024-02-01", weight: 80, reps: 1 })];
     const s = graphMetric("strength")!.compute!(recs, DEFAULT_GRAPH_CONFIG);

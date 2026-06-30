@@ -539,6 +539,17 @@ export function familyOf(
   return null;
 }
 
+/** Stable slug for a per-exercise user-tag bucket (`@ex:lat_pulldown`). */
+export function exTagFamilyKey(exerciseName: string): string {
+  const slug = exerciseName.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "lift";
+  return `@ex:${slug}`;
+}
+
+/** Built-in variation family, or a per-exercise bucket for user-created tags on unmodelled lifts. */
+export function tagFamilyOf(exerciseName: string): string {
+  return familyOf(exerciseName) ?? exTagFamilyKey(exerciseName);
+}
+
 /** Leg-movement handstand skills (e.g. Handstand kicks): ROM is % of how far the kick
  * goes / what you touch — NOT cm hand height like HSPU's press-depth rom dim. */
 export function usesLegPctRom(exerciseName: string): boolean {

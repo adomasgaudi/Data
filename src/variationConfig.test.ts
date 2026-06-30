@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec, usesLegPctRom, offersPctRomTag, showsPctRomPill } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec, usesLegPctRom, offersPctRomTag, showsPctRomPill, tagFamilyOf, exTagFamilyKey } from "./variationConfig";
 import { resolveNote } from "./variationModel";
 
 describe("familiesUsingDim", () => {
@@ -76,6 +76,16 @@ describe("familyOf", () => {
   it("treats the scapular handstand push-up variant as HSPU", () => {
     expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
     expect(familyOf("Scapular HSPU")).toBe("HSPU");
+  });
+});
+
+describe("tagFamilyOf", () => {
+  it("returns the built-in family when one exists", () => {
+    expect(tagFamilyOf("Handstand Push Ups")).toBe("HSPU");
+  });
+  it("returns a per-exercise bucket for unmodelled lifts", () => {
+    expect(tagFamilyOf("Lat Pulldown")).toBe("@ex:lat_pulldown");
+    expect(exTagFamilyKey("Lat Pulldown")).toBe("@ex:lat_pulldown");
   });
 });
 

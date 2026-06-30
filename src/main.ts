@@ -84,7 +84,7 @@ import {
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec, offersPctRomTag, showsPctRomPill, usesLegPctRom } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec, offersPctRomTag, showsPctRomPill, tagFamilyOf, usesLegPctRom } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, handPointOffsetCm,
@@ -1983,11 +1983,13 @@ function rNote(family: string, note: string) {
 /** This note's EFFECTIVE relative-difficulty factor. Model lift → product of the
  * resolved-plus-picked attribute vector; otherwise the pin, else 1. */
 function variationScaleFor(exerciseName: string, note: string): number {
-  const fam = familyOf(exerciseName);
-  if (fam) {
-    const vec = normalizeStaticLiftVec(fam, { ...rNote(fam, note).vec, ...noteVecOverride(exerciseName, note) });
-    return scalarFromVec(fam, vec);
+  const builtInFam = familyOf(exerciseName);
+  if (builtInFam) {
+    const vec = normalizeStaticLiftVec(builtInFam, { ...rNote(builtInFam, note).vec, ...noteVecOverride(exerciseName, note) });
+    return scalarFromVec(builtInFam, vec);
   }
+  const vec = noteVecOverride(exerciseName, note);
+  if (Object.keys(vec).length > 0) return scalarFromVec(tagFamilyOf(exerciseName), vec);
   return notePin(exerciseName, note) ?? 1;
 }
 /** Whether the owner has reviewed this note: pinned a number (non-model) or picked
@@ -2002,9 +2004,9 @@ function variationReviewed(exerciseName: string, note: string): boolean {
 function variationNote(r: SetRecord): string {
   const note = (r.notes ?? "").trim();
   if (note) return note;
-  const fam = familyOf(r.exerciseName);
-  if (!fam) return "";
-  return `__set:${setId(r)}`; // implied default variation for an unspecified model-lift set
+  // Per-set synthetic key — model lifts get implied defaults; unmodelled lifts get a
+  // bucket for ROM / user tags / custom mult without a real note string.
+  return `__set:${setId(r)}`;
 }
 /** A set's note-variation factor (1 when it has no note/per-set variation). */
 function noteVariationScale(r: SetRecord): number {
@@ -3279,9 +3281,10 @@ const DIM_CHIP_CODE: Record<string, string> = {
  * "not comparable" mark so every 1RM/volume path drops it (reps/sets still count). */
 function computeRecord(r: SetRecord, logged = assistLoggedView): SetRecord {
   const base = computeRecordBase(r, logged);
-  // Stamp the per-NOTE variation difficulty so the 1RM (addedWeight1RM) scales the
-  // load by it — an easier variation reports a lower / negative 1RM. ×1 → unstamped.
-  const mult = noteVariationScale(base);
+  // Stamp the per-set effort scale (tags + incline + custom ×) so 1RM / graph paths
+  // match the history readout (scaleForRecord SSOT). ×1 → unstamped.
+  // Full effort scale (tags + incline level + custom ×/replace) — same SSOT as history.
+  const mult = scaleForRecord(base);
   const kg = noteAssistKg(base); // band assistance (kg) subtracted from the load
   let out = base;
   if (mult !== 1) out = { ...out, difficultyMult: mult };
@@ -8486,12 +8489,14 @@ function groupSessionCounts(exercises: readonly ExerciseCount[], dim: string): [
 /** A model-lift set's resolved variation vec — the SAME vec scaleForRecord uses (note
  * tokens + per-set `__set:<id>` picks + family defaults for unspecified sets). */
 function setVec(r: SetRecord): Record<string, unknown> {
-  const fam = familyOf(r.exerciseName);
-  if (!fam) return {};
+  const builtInFam = familyOf(r.exerciseName);
   const note = variationNote(r);
   if (!note) return {};
-  const raw = { ...rNote(fam, note).vec, ...noteVecOverride(r.exerciseName, note) };
-  return normalizeStaticLiftVec(fam, raw);
+  if (builtInFam) {
+    const raw = { ...rNote(builtInFam, note).vec, ...noteVecOverride(r.exerciseName, note) };
+    return normalizeStaticLiftVec(builtInFam, raw);
+  }
+  return noteVecOverride(r.exerciseName, note);
 }
 /** How many variation chips show before the rest collapse behind a "see more" (＋N)
  * chip (owner): a tag block caps at 6 visible — 5 tags + the expander — so it never runs
@@ -8538,11 +8543,11 @@ function variationChipsFromVec(fam: string | null, vec: Record<string, unknown>,
   return `<span class="wo-var-chips">${body}</span>`;
 }
 function variationChipsHtml(r: SetRecord, suppress?: Record<string, string>): string {
-  const fam = familyOf(r.exerciseName);
-  if (!fam) return "";
+  const builtInFam = familyOf(r.exerciseName);
+  const tagFam = tagFamilyOf(r.exerciseName);
   const vec = setVec(r);
   if (Object.keys(vec).length === 0) return "";
-  return variationChipsFromVec(fam, vec, suppress, r.username);
+  return variationChipsFromVec(builtInFam ?? tagFam, vec, suppress, r.username);
 }
 /** Incline/height label for a set — empty at floor (0cm). */
 function inclineTagKey(s: SetRecord): string | null {
@@ -20486,12 +20491,17 @@ function tagActive(ex: string, fam: string | null, id: string): boolean {
  * counterweight / unilateral / machine-wt live in the DEFAULTS row above this palette. */
 function passivePaletteHtml(ex: string): string {
   if (!ex) return "";
-  const fam = familyOf(ex);
+  const builtInFam = familyOf(ex);
+  const tagFam = tagFamilyOf(ex);
   const tags: { id: string; label: string }[] = [];
-  if (fam) for (const dim of famDimOrder(fam)) {
+  if (builtInFam) for (const dim of famDimOrder(builtInFam)) {
     if (dim === "rom") continue;
     if (dim === "tapContact" && !isWallTouchExercise(ex)) continue;
-    tags.push({ id: dim, label: dimLabel(dim, fam) });
+    tags.push({ id: dim, label: dimLabel(dim, builtInFam) });
+  }
+  // User-created tags on unmodelled lifts (e.g. Lat Pulldown grip) live on the per-exercise bucket.
+  if (!builtInFam) for (const dim of famDimOrder(tagFam)) {
+    tags.push({ id: dim, label: dimLabel(dim, tagFam) });
   }
   // ROM passive tag: offered for almost every lift (HSPU promotes cm rom dim; others get %-ROM).
   if (offersPctRomTag(ex)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
@@ -20500,7 +20510,7 @@ function passivePaletteHtml(ex: string): string {
   // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill
   // opens more info / edit"). A tag with no obvious baseline can't be deselected → ✓ LOCKED.
   const pill = (t: { id: string; label: string }, on: boolean): string => {
-    const locked = on && !tagDeselectable(fam, t.id);
+    const locked = on && !tagDeselectable(tagFam, t.id);
     const title = locked
       ? `${t.label} — always tagged (no obvious default to fall back to)`
       : on ? `Remove ${t.label} from the set tags` : `Add ${t.label} as a tag next to the weight`;
@@ -20509,11 +20519,10 @@ function passivePaletteHtml(ex: string): string {
       `<button type="button" class="addm-tag-info" data-taginfo="${escapeHtml(t.id)}" aria-label="About ${escapeHtml(t.label)}" title="What “${escapeHtml(t.label)}” does — its options, ×difficulty, rename, and which exercises use it">ⓘ</button>` +
       `</span>`;
   };
-  const passivePills = tags.filter((t) => !tagActive(ex, fam, t.id)).map((t) => pill(t, false)).join("");
-  const activePills = tags.filter((t) => tagActive(ex, fam, t.id)).map((t) => pill(t, true)).join("");
-  // ＋ new tag — create a brand-new variation tag for this exercise (family lifts only; an
-  // unmodelled lift has no family to attach a dimension to). Sits at the end of the "add tag" row.
-  const newTagPill = fam ? `<button type="button" class="addm-newtag" data-newtag title="Create a brand-new tag for this exercise">＋ new tag</button>` : "";
+  const passivePills = tags.filter((t) => !tagActive(ex, tagFam, t.id)).map((t) => pill(t, false)).join("");
+  const activePills = tags.filter((t) => tagActive(ex, tagFam, t.id)).map((t) => pill(t, true)).join("");
+  // ＋ new tag — every named exercise (modelled or not). Sits at the end of the "add tag" row.
+  const newTagPill = `<button type="button" class="addm-newtag" data-newtag title="Create a brand-new tag for this exercise">＋ new tag</button>`;
   // Two labelled rows, passive on top / active below; an empty row is dropped so the block stays
   // tight. Separator under the whole palette splits it from the set lines beneath.
   const grp = (lbl: string, pills: string) => pills ? `<div class="addm-passive-grp"><span class="addm-passive-lbl muted">${escapeHtml(lbl)}</span><div class="addm-passive-pills">${pills}</div></div>` : "";
@@ -20528,8 +20537,7 @@ function refreshAddmPalette(ex: string): void {
 /** The "＋ new tag" creator popup: name the tag + give its first option, then create it. The new
  * tag is a normal passive pill afterwards (tap to add, ⓘ to add more options / tune ×difficulty). */
 function openNewTagCreator(anchor: HTMLElement, ex: string): void {
-  const fam = familyOf(ex);
-  if (!fam) return;
+  const fam = tagFamilyOf(ex);
   const renderHtml = (): string =>
     `<div class="taginfo-hd">New tag</div>` +
     `<div class="taginfo-sub muted">a new variation for ${escapeHtml(displayName(ex))} — name it and give one option to start</div>` +
@@ -20629,7 +20637,7 @@ function tagKindText(fam: string | null, id: string): string {
  * the existing family setters (setFamLabel / setFamFactor) so editing here can't drift from the
  * inline dim pickers; the add/remove button reuses the palette pill's own click path. */
 function openTagInfo(anchor: HTMLElement, ex: string, id: string): void {
-  const fam = familyOf(ex);
+  const fam = tagFamilyOf(ex);
   if (id === CUSTOM_MULT_ID) {
     const renderHtml = (): string => {
       const on = tagActive(ex, fam, id);
@@ -20957,19 +20965,22 @@ function openAddModal(exerciseName: string | null, date: string, prefillOverride
     // Pre-select every variation pill to the set's EFFECTIVE vec (what its note implies + per-set
     // picks). Set the <select> value BEFORE the body MutationObserver enhances it into an .xdd
     // twin — the twin then renders the chosen level, and the rAF syncAddmVtags colours it.
-    const fam = familyOf(ex);
-    if (fam) {
-      const effVec = { ...rNote(fam, edit.note).vec, ...noteVecOverride(ex, edit.note) };
+    const builtInFam = familyOf(ex);
+    const tagFam = tagFamilyOf(ex);
+    const effVec = builtInFam
+      ? { ...rNote(builtInFam, edit.note).vec, ...noteVecOverride(ex, edit.note) }
+      : noteVecOverride(ex, edit.note);
+    if (builtInFam || Object.keys(famUserDims[tagFam] ?? {}).length > 0) {
       // PB-48: the add-modal renders only ACTIVE tags, so a dim this set CARRIES at a non-default
       // level (but isn't a promoted/active tag) wouldn't be rendered. Insert its pill into each
       // line's tag wrap so editing SHOWS (and can change) it; the loop below then pre-selects it.
-      for (const dim of famDimOrder(fam)) {
+      for (const dim of famDimOrder(tagFam)) {
         if (dim === "lean") continue; // lean = its own pill
-        const dflt = famDefaultLevel(fam, dim);
+        const dflt = famDefaultLevel(tagFam, dim);
         if (String(effVec[dim] ?? dflt) === dflt) continue; // at default → not a carried tag
         for (const slot of wrap.querySelectorAll<HTMLElement>(".addm-line-vars")) {
           if (slot.querySelector(`.addm-vtag[data-dim="${CSS.escape(dim)}"]`)) continue;
-          const html = dimVtagHtml(ex, fam, dim, { note: edit.note }, effVec);
+          const html = dimVtagHtml(ex, builtInFam ?? tagFam, dim, { note: edit.note }, effVec);
           const dimsWrap = slot.querySelector<HTMLElement>(".wo-af-dims");
           if (dimsWrap) dimsWrap.insertAdjacentHTML("beforeend", html);
           else slot.insertAdjacentHTML("afterbegin", `<span class="wo-af-dims">${html}</span>`);
@@ -21252,7 +21263,7 @@ function onAddModalClick(e: MouseEvent): void {
     if (ex) openTagInfo(infoBtn, ex, infoBtn.dataset.taginfo);
     return;
   }
-  // ＋ new tag → the create-a-brand-new-tag popup (name + first option). Only shown for family lifts.
+  // ＋ new tag → the create-a-brand-new-tag popup (name + first option).
   const newTagBtn = t.closest<HTMLElement>("[data-newtag]");
   if (newTagBtn) {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
@@ -21268,7 +21279,7 @@ function onAddModalClick(e: MouseEvent): void {
     const ex = form.dataset.addex || wrap.querySelector<HTMLInputElement>(".wo-af-ex")?.value.trim() || "";
     if (ex) {
       const id = passBtn.dataset.passive;
-      const fam = familyOf(ex);
+      const fam = tagFamilyOf(ex);
       const shown = tagActive(ex, fam, id);
       if (shown && !tagDeselectable(fam, id)) return; // locked — can't deselect (no obvious baseline)
       setTagShown(ex, id, !shown);
