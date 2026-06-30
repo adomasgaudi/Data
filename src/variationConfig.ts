@@ -162,8 +162,8 @@ export const FAMILIES: Record<string, FamilyDef> = {
     // and — back-to-wall only — shoulder distance. Support/ladder/lean factors mirror
     // HSPU's so difficulty reads consistently across all handstand work; the yoga
     // block is a neutral ×1 placeholder. Calibrate the numbers in ⚙ Difficulty
-    // multipliers. No "rom" dim → the depth×lean pad is skipped (it's HSPU-press only);
-    // lean shows as its own chip row, and the universal per-set ROM% covers range.
+    // multipliers. No "rom" dim (press depth is HSPU-only); Handstand kicks get a
+    // per-set %-ROM tag for leg kick range — other non-press handstands have none.
     dims: {
       support: { free: 1.0, front_to_wall: 0.92, back_to_wall: 0.82, ladder: 0.55 },
       ladderGrip: { none: 1.0, lsit: 0.8, hooked: 0.5 },
@@ -537,6 +537,39 @@ export function familyOf(
   if (n.includes("kneeraise") || n.includes("kneeraises")) return "KNEERAISE";
   if (n.includes("lsit") || n.includes("lsits")) return "KNEERAISE";
   return null;
+}
+
+/** Leg-movement handstand skills (e.g. Handstand kicks): ROM is % of how far the kick
+ * goes / what you touch — NOT cm hand height like HSPU's press-depth rom dim. */
+export function usesLegPctRom(exerciseName: string): boolean {
+  const n = exerciseName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return /handstandkick|hskick/.test(n);
+}
+
+export function isHandstandFamily(fam: string | null | undefined): boolean {
+  return fam === "HSPU" || fam === "HANDSTAND";
+}
+
+/** Should the passive-tag palette offer the %-ROM tag? HSPU promotes its cm rom dim;
+ *  other handstands skip ROM except leg-kick skills where ROM is a % kick range. */
+export function offersPctRomTag(
+  exerciseName: string,
+  fam: string | null,
+  families: Record<string, FamilyDef> = FAMILIES,
+): boolean {
+  if (usesLegPctRom(exerciseName)) return true;
+  if (!!families[fam ?? ""]?.dims.rom) return true;
+  return !isHandstandFamily(fam);
+}
+
+/** Should the %-ROM pill render inline on an add-set line (when promoted)? */
+export function showsPctRomPill(
+  exerciseName: string,
+  fam: string | null,
+  families: Record<string, FamilyDef> = FAMILIES,
+): boolean {
+  if (!exerciseName || !!families[fam ?? ""]?.dims.rom) return false;
+  return usesLegPctRom(exerciseName) || !isHandstandFamily(fam);
 }
 
 /** Centimetres encoded in a lean-level key (e.g. "15" → 15); 0 when unparseable. */

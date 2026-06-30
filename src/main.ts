@@ -84,7 +84,7 @@ import {
 import { hardSetWeight, warmupRamp, roundToIncrement, WARMUP_PLANS, type WarmupPlan } from "./prescription";
 import { levelLabel, levelKey, defaultLevelScale, isInclineLevelExercise, inclineScale, type LevelDim } from "./variants";
 import { resolveNote } from "./variationModel";
-import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec } from "./variationConfig";
+import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder, normalizeStaticLiftVec, offersPctRomTag, showsPctRomPill, usesLegPctRom } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
   leanCanonicalCm, leanCanonicalFromBlock, handPointOffsetCm,
@@ -2645,11 +2645,6 @@ const unilateralOverrides: Record<string, boolean> = (() => {
 /** Effective unilateral state for a lift: name auto-detect, overridden per-exercise. */
 function isUni(exerciseName: string): boolean {
   return isUnilateralBase(exerciseName, unilateralOverrides[exerciseName]);
-}
-/** The two handstand families (HSPU = presses, HANDSTAND = holds/walks/taps). Used to keep their
- * tag set consistent — e.g. the generic %-ROM pill is irrelevant for both (owner). */
-function isHandstandFam(fam: string | null | undefined): boolean {
-  return fam === "HSPU" || fam === "HANDSTAND";
 }
 /** Force a lift unilateral on/off (clears the key to fall back to auto-detect). */
 function setUnilateralOverride(exerciseName: string, state: boolean | undefined): void {
@@ -20090,10 +20085,16 @@ function romPillLabel(unit: string, val: number): string {
 }
 function romPillHtml(ex: string): string {
   const romDef = romDefaultFor(ex || "");
+  const leg = usesLegPctRom(ex);
   // ROM is now a unit-pill (owner): tap it to set the range as a PERCENT or in CM, and for cm pick
   // what it's measured FROM (the floor, your body, or any other reference). Stored as a note token
   // ("ROM 90%" / "ROM 20cm from floor"); it's a recorded label, not a difficulty multiplier.
-  return `<button type="button" class="wo-af-rompill wo-af-rom" data-romunit="pct" data-romval="${romDef}" data-romref="" data-romdefault="${romDef}" title="Range of motion — tap to set as % or in cm (measured from the floor, your body, or another reference)">${romPillLabel("pct", romDef)}</button>`;
+  // Leg-kick handstands (Handstand kicks): %-only — how far the legs go, not cm hand height.
+  const title = leg
+    ? "Leg range of motion — tap to set as % of how far the kick goes"
+    : "Range of motion — tap to set as % or in cm (measured from the floor, your body, or another reference)";
+  const legAttr = leg ? ' data-romleg="1"' : "";
+  return `<button type="button" class="wo-af-rompill wo-af-rom"${legAttr} data-romunit="pct" data-romval="${romDef}" data-romref="" data-romdefault="${romDef}" title="${escapeHtml(title)}">${romPillLabel("pct", romDef)}</button>`;
 }
 // Floating ROM picker for the add-set ROM pill (NOT a native control). Pick the UNIT (% or cm);
 // in cm you also choose what it's measured FROM (floor / body / any typed reference). Mirrors the
@@ -20152,7 +20153,9 @@ function openRomPicker(pill: HTMLElement): void {
   // Owner: ROM can be entered in cm OR in yoga blocks (like the lean picker), and for handstands
   // measured FROM the floor or your HEAD. `mode` drives the picker UI (% / cm / block); a block
   // resolves to its cm height, so storage stays {unit:"cm"|"pct", val, ref} — no schema change.
-  let mode: "pct" | "cm" | "block" = pill.dataset.romunit === "cm" ? "cm" : "pct";
+  // Handstand kicks: %-only (leg kick range — not cm hand height).
+  const legOnly = pill.dataset.romleg === "1";
+  let mode: "pct" | "cm" | "block" = legOnly ? "pct" : (pill.dataset.romunit === "cm" ? "cm" : "pct");
   let val = Number(pill.dataset.romval) || 0;
   let ref = pill.dataset.romref || "floor";
   const def = Number(pill.dataset.romdefault) || 0;
@@ -20166,11 +20169,11 @@ function openRomPicker(pill: HTMLElement): void {
     pill.classList.toggle("is-set", u === "cm" || val !== def); // cm is always a deliberate value
   };
   const renderHtml = () =>
-    `<div class="inc-units">` +
+    (legOnly ? "" : `<div class="inc-units">` +
     `<button type="button" class="inc-unit${mode === "pct" ? " is-on" : ""}" data-rommode="pct">%</button>` +
     `<button type="button" class="inc-unit${mode === "cm" ? " is-on" : ""}" data-rommode="cm">cm</button>` +
     `<button type="button" class="inc-unit${mode === "block" ? " is-on" : ""}" data-rommode="block">block</button>` +
-    `</div>` +
+    `</div>`) +
     (mode === "block"
       ? `<div class="rom-ref-chips rom-blocks">` + BLOCKS.map((b) => `<button type="button" class="rom-ref-chip${val === yogaBlockCm(b) ? " is-on" : ""}" data-romblock="${b}">${b} · ${yogaBlockCm(b)}cm</button>`).join("") + `</div>`
       : `<div class="inc-valrow"><button type="button" class="inc-step" data-romstep="-1" aria-label="Lower">−</button>` +
@@ -20178,7 +20181,7 @@ function openRomPicker(pill: HTMLElement): void {
         `<span class="rom-unit-lbl muted">${mode === "cm" ? "cm" : "%"}</span>` +
         `<button type="button" class="inc-step" data-romstep="1" aria-label="Higher">+</button></div>`) +
     (mode === "pct"
-      ? `<div class="inc-eq muted">% of the full range of motion</div>`
+      ? `<div class="inc-eq muted">${legOnly ? "% of the full kick range (how far the legs go)" : "% of the full range of motion"}</div>`
       : `<div class="rom-ref"><span class="rom-ref-lbl muted">measured from</span>` +
         `<div class="rom-ref-chips">` + REFS.map((r) => `<button type="button" class="rom-ref-chip${r === ref ? " is-on" : ""}" data-romref="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join("") + `</div>` +
         `<input type="text" class="rom-ref-input" value="${escapeHtml(ref)}" placeholder="from…" aria-label="Reference point" /></div>`) +
@@ -20426,12 +20429,10 @@ function addmVariantField(ex: string): string {
   const cap = (label: string, pill: string) => `<span class="addm-vtag"><span class="addm-vtag-cap">${escapeHtml(label)}</span>${pill}</span>`;
   // ROM is a PASSIVE tag (owner: "90% as a default doesn't make sense, don't always ask me"):
   // shown ONLY when promoted via the passive-tag palette above the sets — not on every lift.
-  // The generic %-ROM pill is SUPPRESSED for handstands (owner: "% rom is not relevant for hs"):
-  // HSPU already has its own cm hand-height `rom` DIM (the select), so showing the % pill too made
-  // "two ROMs"; the non-press handstands have no ROM concept at all. Only families WITHOUT their own
-  // rom dim and that aren't handstands get the generic % pill.
+  // HSPU has its own cm hand-height `rom` dim; other handstands have no ROM except leg-kick
+  // skills (Handstand kicks) where ROM is a % of kick range (owner).
   const rfam = familyOf(ex);
-  const showPctRom = !!ex && tagActive(ex, rfam, "rom") && !FAMILIES[rfam ?? ""]?.dims.rom && !isHandstandFam(rfam);
+  const showPctRom = tagActive(ex, rfam, "rom") && showsPctRomPill(ex, rfam);
   const rom = showPctRom ? cap("ROM", romPillHtml(ex)) : "";
   // INCLINE/height tag — push-ups (incl. the Smith-machine incline push-up, the same lift)
   // are done at a hand height set in cm, a squat-rack hole or a Smith notch (all convert to
@@ -20479,9 +20480,9 @@ function passivePaletteHtml(ex: string): string {
     if (dim === "tapContact" && !isWallTouchExercise(ex)) continue;
     tags.push({ id: dim, label: dimLabel(dim, fam) });
   }
-  // Generic %-ROM tag: offered for HSPU (toggles its cm hand-height rom dim) and ordinary lifts,
-  // but NOT for the non-press handstands, which have no ROM concept (owner: "% rom not relevant for hs").
-  if (!!FAMILIES[fam ?? ""]?.dims.rom || !isHandstandFam(fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
+  // Generic %-ROM tag: HSPU uses its cm rom dim; leg-kick handstands get %-ROM; other lifts too.
+  // Non-press handstands (hold/walk/tap…) have no ROM unless they're kick skills.
+  if (offersPctRomTag(ex, fam)) tags.push({ id: "rom", label: AF_DIM_LBL["rom"] ?? "ROM" });
   tags.push({ id: CUSTOM_MULT_ID, label: "multiplier" });
   // Each tag is ONE pill = [label button that toggles add/remove] + [ⓘ info/edit button], so a tap
   // adds the tag while the ⓘ opens its menu (owner: "click adds it; a small button in the same pill

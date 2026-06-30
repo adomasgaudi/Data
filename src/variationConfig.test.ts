@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec } from "./variationConfig";
+import { FAMILIES, defaultLeanTable, familyOf, familiesUsingDim, mergeDimOrder, DEFAULT_VARIATION_CONFIG, normalizeStaticLiftVec, usesLegPctRom, offersPctRomTag, showsPctRomPill } from "./variationConfig";
 import { resolveNote } from "./variationModel";
 
 describe("familiesUsingDim", () => {
@@ -76,6 +76,27 @@ describe("familyOf", () => {
   it("treats the scapular handstand push-up variant as HSPU", () => {
     expect(familyOf("Scapular Handstand Push Up")).toBe("HSPU");
     expect(familyOf("Scapular HSPU")).toBe("HSPU");
+  });
+});
+
+describe("leg %-ROM (Handstand kicks)", () => {
+  it("detects handstand kick spellings", () => {
+    for (const name of ["Handstand kicks", "Handstand Kicks", "handstand kick", "HS Kicks"]) {
+      expect(usesLegPctRom(name)).toBe(true);
+    }
+    expect(usesLegPctRom("Handstand hold")).toBe(false);
+    expect(usesLegPctRom("Handstand Push Ups")).toBe(false);
+  });
+  it("offers %-ROM in the palette for kicks but not other handstand skills", () => {
+    expect(offersPctRomTag("Handstand kicks", "HANDSTAND")).toBe(true);
+    expect(offersPctRomTag("Handstand hold", "HANDSTAND")).toBe(false);
+    expect(offersPctRomTag("Handstand Push Ups", "HSPU")).toBe(true); // cm rom dim
+    expect(offersPctRomTag("Push Up", "PUSHUP")).toBe(true);
+  });
+  it("shows the %-ROM pill inline only for kicks among handstand skills", () => {
+    expect(showsPctRomPill("Handstand kicks", "HANDSTAND")).toBe(true);
+    expect(showsPctRomPill("Handstand walk", "HANDSTAND")).toBe(false);
+    expect(showsPctRomPill("Handstand Push Ups", "HSPU")).toBe(false); // cm dim instead
   });
 });
 
