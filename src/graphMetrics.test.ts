@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { SetRecord } from "./domain";
-import { GRAPH_METRICS, graphMetric, graphCompatibilityNotes } from "./graphMetrics";
+import { GRAPH_METRICS, graphMetric, graphCompatibilityNotes, bucketBounds } from "./graphMetrics";
 import { DEFAULT_GRAPH_CONFIG } from "./graphConfig";
 
 function rec(p: Partial<SetRecord>): SetRecord {
@@ -112,6 +112,21 @@ describe("graph metric registry (TASK 26)", () => {
     const vol = graphMetric("volume")!.compute!(recs, cfg);
     expect(vol.length).toBe(2); // 3 consecutive Monday-weeks span exactly 2 bi-week buckets
     expect(vol.reduce((s, p) => s + (p.y ?? 0), 0)).toBe(1500); // volume conserved
+  });
+
+  it("adjacent week buckets share boundaries (contiguous bars)", () => {
+    const w1 = bucketBounds(Date.parse("2024-01-01"), "week");
+    const w2 = bucketBounds(Date.parse("2024-01-08"), "week");
+    expect(w1.hi).toBe(w2.lo);
+    expect(w1.center).toBeLessThan(w2.center);
+  });
+
+  it("volume bar points carry xLo/xHi spanning the bucket", () => {
+    const recs = [rec({ date: "2024-01-01", weight: 50, origWeight: 50, reps: 10 })];
+    const pt = graphMetric("volume")!.compute!(recs, DEFAULT_GRAPH_CONFIG)[0]!;
+    const b = bucketBounds(Date.parse("2024-01-01"), "week");
+    expect(pt.xLo).toBe(b.lo);
+    expect(pt.xHi).toBe(b.hi);
   });
 
   it("multi-day intervals (2d–5d) bucket volume into fixed N-day windows", () => {

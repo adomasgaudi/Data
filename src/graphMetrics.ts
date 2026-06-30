@@ -35,6 +35,9 @@ export interface GraphPoint {
   /** Per-POINT marker shape: for a combined / comparison lift, each member-origin
    * gets its OWN shape (same colour) so you can tell the mixed sources apart. */
   shape?: "circle" | "diamond" | "square" | "triangle" | "ring" | "plus";
+  /** Bars only: bucket span on the time axis (ms). Bar fills [xLo, xHi] with no gap. */
+  xLo?: number;
+  xHi?: number;
 }
 /** Marker shapes cycled across a combined/comparison lift's member origins (same
  * colour, different form). Order chosen so the first few read most distinctly. */
@@ -348,60 +351,56 @@ function predict(pts: { x: number; y: number }[], horizonDays: number, ceiling: 
 }
 
 const WEEK = 7 * DAY;
-/** Plot x for a time's bucket: the MIDDLE of the period (day / week / month), so a
- * bar (drawn centred on its x) sits OVER the period it covers rather than pinned to
- * its left edge / the month gridline. Weeks use fixed 7-day blocks from the epoch
- * (same as Frequency); months use the true mid-point between the 1st and the next
- * 1st. The value is also a stable per-bucket key for grouping. */
-function bucketCenter(t: number, interval: GraphConfig["interval"]): number {
-  if (interval === "day") return Math.floor(t / DAY) * DAY + DAY / 2;
+/** Calendar bucket [lo, hi) on the time axis + its plot centre. Weeks are Monday-
+ * anchored (matching history); multi-day buckets sit inside each Monday-week. */
+export function bucketBounds(t: number, interval: GraphConfig["interval"]): { lo: number; hi: number; center: number } {
+  if (interval === "day") {
+    const lo = Math.floor(t / DAY) * DAY;
+    return { lo, hi: lo + DAY, center: lo + DAY / 2 };
+  }
   const multiDay = interval === "2d" ? 2 : interval === "3d" ? 3 : interval === "4d" ? 4 : interval === "5d" ? 5 : 0;
   if (multiDay) {
-    // N-day windows within each Monday-week (same Monday anchor as week/bi-week).
     const day = Math.floor(t / DAY);
     const mondayDay = day - ((day + 3) % 7);
     const startDay = mondayDay + Math.floor((day - mondayDay) / multiDay) * multiDay;
-    return (startDay + multiDay / 2) * DAY;
+    const lo = startDay * DAY;
+    const span = multiDay * DAY;
+    return { lo, hi: lo + span, center: lo + span / 2 };
   }
-  // Calendar month-multiples: month (1) · quarter (3) · half-year (6) · year (12). Each set
-  // floors to its block start (aligned to January) so the longer-range volume bars are stable.
   const monthSpan = interval === "month" ? 1 : interval === "quarter" ? 3 : interval === "halfyear" ? 6 : interval === "year" ? 12 : 0;
   if (monthSpan) {
     const d = new Date(t);
     const startMo = Math.floor(d.getUTCMonth() / monthSpan) * monthSpan;
-    const start = Date.UTC(d.getUTCFullYear(), startMo, 1);
-    const next = Date.UTC(d.getUTCFullYear(), startMo + monthSpan, 1);
-    return (start + next) / 2;
+    const lo = Date.UTC(d.getUTCFullYear(), startMo, 1);
+    const hi = Date.UTC(d.getUTCFullYear(), startMo + monthSpan, 1);
+    return { lo, hi, center: (lo + hi) / 2 };
   }
-  // WEEK buckets start on MONDAY (matching the workout history + heatmap), NOT the raw
-  // epoch week (floor(t/WEEK) starts THURSDAY, since epoch day 0 is a Thursday) — else a
-  // set lands in a different week than the history shows it ("days don't match"). Shift the
-  // epoch-day to the Monday on/before: Monday-as-0 index = (dayOfEpoch + 3) % 7.
   const day = Math.floor(t / DAY);
   const mondayDay = day - ((day + 3) % 7);
   if (interval === "biweek") {
-    // 2-week buckets anchored to a fixed Monday (epoch day −3 is a Monday), so pairs of
-    // Monday-weeks group consistently; centre = the bucket's midpoint (+7 days).
     const ANCHOR = -3;
     const startDay = ANCHOR + Math.floor((day - ANCHOR) / 14) * 14;
-    return (startDay + 7) * DAY;
+    const lo = startDay * DAY;
+    return { lo, hi: lo + 14 * DAY, center: lo + 7 * DAY };
   }
-  return mondayDay * DAY + WEEK / 2; // week (Monday-anchored)
+  const lo = mondayDay * DAY;
+  return { lo, hi: lo + WEEK, center: lo + WEEK / 2 };
 }
 /** Sum a per-set value into one point per time bucket (volume / reps "by date").
  * Buckets by the configured interval — week by default — so the count/volume bars
  * read as weekly totals unless the user switches Interval to Day. */
 function byBucketSum(records: readonly SetRecord[], sel: (r: SetRecord) => number | null | undefined, interval: GraphConfig["interval"]): GraphPoint[] {
-  const m = new Map<number, number>();
+  const m = new Map<number, { y: number; lo: number; hi: number }>();
   for (const r of records) {
     const v = sel(r);
     if (v == null || !Number.isFinite(v)) continue;
     const t = ts(r.date);
     if (!Number.isFinite(t)) continue;
-    const key = bucketCenter(t, interval);
-    m.set(key, (m.get(key) ?? 0) + v);
+    const { center, lo, hi } = bucketBounds(t, interval);
+    const prev = m.get(center);
+    m.set(center, { y: (prev?.y ?? 0) + v, lo, hi });
   }
-  return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([x, y]) => ({ x, y: r1(y) }));
+  return [...m.entries()].sort((a, b) => a[0] - b[0]).map(([x, b]) => ({ x, y: r1(b.y), xLo: b.lo, xHi: b.hi }));
 }
 /** Count sets per time bucket. */
 function setsPerBucket(records: readonly SetRecord[], interval: GraphConfig["interval"]): GraphPoint[] {
@@ -416,7 +415,7 @@ function sessionsPerWeek(records: readonly SetRecord[]): GraphPoint[] {
   }
   const weeks = new Map<number, Set<number>>();
   for (const d of days) {
-    const wk = (d - ((d + 3) % 7)) * DAY + WEEK / 2; // Monday-anchored week centre (matches bucketCenter)
+    const wk = bucketBounds(d * DAY, "week").center;
     (weeks.get(wk) ?? weeks.set(wk, new Set()).get(wk)!).add(d);
   }
   return [...weeks.entries()].sort((a, b) => a[0] - b[0]).map(([x, set]) => ({ x, y: set.size }));

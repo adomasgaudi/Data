@@ -106,6 +106,9 @@ export interface SvgPoint {
   /** Per-POINT glow — a soft halo behind the scatter marker, for a VERY recent set so it
    * "shines" (e.g. logged in the last 2 weeks). */
   glow?: boolean;
+  /** Bars only: bucket span on the time axis (ms). Bar fills [xLo, xHi] edge-to-edge. */
+  xLo?: number;
+  xHi?: number;
 }
 export interface SvgSeries {
   name: string;
@@ -854,52 +857,45 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
           body += `<line x1="${seg.px.toFixed(1)}" y1="${seg.yTop.toFixed(1)}" x2="${seg.px.toFixed(1)}" y2="${seg.yBot.toFixed(1)}" stroke="${shine}" stroke-width="3" stroke-linecap="round" stroke-opacity="0.95" filter="url(#${glowId})"/>`;
         }
       } else {
-        // bars: from baseline (0, clamped into plot) to the value. Each bar is as
-        // wide as the data's own x-step (e.g. one week) so bars butt up against
-        // each other like a histogram, rather than thin fixed-width sticks.
-        const xs = s.points.map((p) => p.x).sort((a, b) => a - b);
-        let step = Infinity;
-        for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
-        // Bar width tracks the data's own x-step (histogram look). Cap it so a sparse
-        // series — a single bucket, or a few far-apart ones — can't blow up into one
-        // giant bar that paints a whole shaded band across the chart (the old
-        // Infinity-step fallback used the entire plot width).
-        const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * xW : xW / 24;
-        const girth = cfg.barGirth ?? 1; // user width knob (grouped lanes get thin, so allow fattening)
-        const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth); // ~30% thinner than a step, capped, ×girth
-        // Baseline = the (possibly shifted) zero line. Both the baseline and each
-        // bar's top are clamped to the plot, so a vertically-shifted series stays
-        // rigid and just clips at the floor/ceiling instead of stretching.
+        // bars: from baseline (0, clamped into plot) to the value. Bucketed metrics
+        // carry xLo/xHi so each bar spans its full interval with no gaps; legacy
+        // bars without a span still use the centred step-width fallback.
         const base = ymap(0);
         const clampY = (y: number) => Math.min(h - M.b, Math.max(M.t, y));
-        // Multiple bar series: keep EVERY bar the SAME full width (a month-wide
-        // bar stays month-wide no matter how many lifts are shown) and OFFSET each
-        // extra series a little to the RIGHT, so they overlap "one on top of
-        // another" with a slight rightward slant instead of splitting the slot into
-        // thin side-by-side lanes that shrink as you add lifts. One series → a plain
-        // full-width bar centred on its bucket, as before.
-        const bi = Math.max(0, visBars.indexOf(s));
-        const rightShift = Math.min(bw * 0.3, 10); // per-series rightward slant
-        const laneCenter = bi * rightShift;
-        const rectW = bw; // same width for every series, regardless of how many
-        // Overlapping bars need SOME translucency so the one behind still shows, but
-        // the owner wants them solid-ish ("not too transparent") — floor the fill so
-        // a low opacity slider can't wash the overlap into mud when 2+ bars stack.
         const baseOp = s.fillOpacity ?? 1;
         const fillOp = barN > 1 ? Math.max(baseOp, 0.78) : baseOp;
-        // Bars can be outline-only or a translucent fill so they don't hide other series.
         const paint = s.outline
           ? `fill="none" stroke="${s.color}" stroke-width="1.3"`
           : `fill="${s.color}" fill-opacity="${fillOp}"`;
+        const bi0 = Math.max(0, visBars.indexOf(s));
+        const laneShift = barN > 1 ? bi0 * 8 : 0;
         for (const p of s.points) {
-          const x = xPix(p.x) + laneCenter;
-          if (x < M.l - bw || x > W - M.r + bw) continue;
+          let xLeft: number;
+          let rectW: number;
+          let hitX: number;
+          if (p.xLo != null && p.xHi != null && Number.isFinite(p.xLo) && Number.isFinite(p.xHi) && p.xHi > p.xLo) {
+            xLeft = xPix(p.xLo) + laneShift;
+            rectW = Math.max(1, xPix(p.xHi) - xPix(p.xLo));
+            hitX = xLeft + rectW / 2;
+          } else {
+            const xs = s.points.map((pt) => pt.x).sort((a, b) => a - b);
+            let step = Infinity;
+            for (let i = 1; i < xs.length; i++) { const d = xs[i]! - xs[i - 1]!; if (d > 0 && d < step) step = d; }
+            const stepPx = Number.isFinite(step) ? (step / (view.xMax - view.xMin)) * xW : xW / 24;
+            const girth = cfg.barGirth ?? 1;
+            const bw = Math.max(2, Math.min(stepPx * 0.63, plotW / 14) * girth);
+            const laneCenter = bi0 * Math.min(bw * 0.3, 10);
+            rectW = bw;
+            hitX = xPix(p.x) + laneCenter;
+            xLeft = hitX - rectW / 2;
+          }
+          if (xLeft + rectW < M.l || xLeft > W - M.r) continue;
           const top = ymap(p.y ?? 0);
           const yTop = clampY(Math.min(top, base));
           const yBot = clampY(Math.max(top, base));
-          if (yBot - yTop < 0.2) continue; // fully clipped out of the plot
-          body += `<rect x="${(x - rectW / 2).toFixed(1)}" y="${yTop.toFixed(1)}" width="${rectW.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
-          hitPoints.push({ px: x, py: yTop, yTop, yBot, s, p });
+          if (yBot - yTop < 0.2) continue;
+          body += `<rect x="${xLeft.toFixed(1)}" y="${yTop.toFixed(1)}" width="${rectW.toFixed(1)}" height="${(yBot - yTop).toFixed(1)}" rx="2" ${paint}/>`;
+          hitPoints.push({ px: hitX, py: yTop, yTop, yBot, s, p });
         }
       }
       // Floating exercise name next to this series' last record (dots/lines only —
