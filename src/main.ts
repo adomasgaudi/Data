@@ -16608,10 +16608,22 @@ async function init() {
         if (chosenGroup(scope, name, key)?.id === gid) setLens(scope, name, key, undefined); // tap again = off
         else { setLens(scope, name, key, gid); if (chosenGroup(scope, name, other)?.id === gid) setLens(scope, name, other, undefined); } // one view per group
       }
-      else if (act === "only") { if (scope === "graph") waGraphSel = [name]; else waSelected = [name]; }
-      else if (act === "member") { const mem = row.dataset.lmmem; if (mem) { if (scope === "graph") waGraphSel = [mem]; else waSelected = [mem]; } }
+      else if (act === "only") {
+        setLens(scope, name, "combine", undefined);
+        setLens(scope, name, "compare", undefined);
+        if (scope === "graph") waGraphSel = [name]; else waSelected = [name];
+      }
+      else if (act === "member") {
+        const mem = row.dataset.lmmem;
+        if (mem) {
+          setLens(scope, name, "combine", undefined);
+          setLens(scope, name, "compare", undefined);
+          if (scope === "graph") waGraphSel = [mem]; else waSelected = [mem];
+          if (currentExInfo) jumpToExerciseInfo(mem);
+        }
+      }
       closeLiftMenu();
-      if (currentExInfo && name === currentExInfo && (act === "merged" || act === "separated" || act === "only")) refreshExerciseInfo();
+      if (currentExInfo && (name === currentExInfo || (act === "member" && row.dataset.lmmem === currentExInfo)) && (act === "merged" || act === "separated" || act === "only" || act === "member")) refreshExerciseInfo();
       deferRender(renderWorkoutAnalysis);
       return;
     }
@@ -24313,6 +24325,9 @@ function renderGraphMini(): void {
 function buildBubbleInput(
   bubble: GraphBubble,
   viewPersist?: { getSavedView: () => GraphBubble["savedView"]; setSavedView: (v: GraphBubble["savedView"]) => void },
+  /** When set (exercise-info Curve tab), plot through cardLiftRecords — same lens + spelling-merge
+   *  rules as the Volume map and the card's Nuzzo fit, not the generic bubble exercise filter. */
+  exInfoCard?: string,
 ): Parameters<typeof renderAnalyticsGraph>[1] {
   const formula = currentFormula();
   const user = els.athlete.value;
@@ -24323,9 +24338,15 @@ function buildBubbleInput(
   const athletes = waCompareOpen ? graphAthleteList() : [user];
   const multiAthlete = athletes.length > 1;
   const exCap = Math.max(1, Math.floor(WA_GRAPH_MAX / athletes.length));
-  const exsBase = bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
+  const exsBase = exInfoCard ? [exInfoCard] : bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
   const exs = lensExpand("graph", exsBase).slice(0, exCap);
-  const recs = applyHardSetsFilter(computedRecords().filter((r) => athletes.includes(r.username)));
+  const groupLens = exInfoCard ? cardGroupLensActive(exInfoCard) : false;
+  const pool = (exInfoCard ? computedRecordsAllLifts() : computedRecords()).filter((r) => athletes.includes(r.username));
+  const cardRecs = exInfoCard
+    ? athletes.flatMap((u) => filterCardLiftRecords(pool, u, exInfoCard, exs, groupLens))
+    : pool;
+  const recs = applyHardSetsFilter(cardRecs);
+  const plotted = exInfoCard ? recs : recs.filter((r) => exs.includes(r.exerciseName));
   const sm = currentStrengthByUserExercise(formula);
   // Per-bubble config CLONE so a bubble's type/×BW never leak to its neighbours (the bug the
   // owner hit). The shared Options knobs (aggregation/decay…) ride the base config for now.
@@ -24353,7 +24374,7 @@ function buildBubbleInput(
   // lines the carousel/full graph have (owner: "fit data points for the projection graph not
   // working"). Build them here too — projectionFitMarkers also sets the projection window
   // bounds on waGraphConfig, so copy those onto this bubble's cloned cfg. (rvw ignores xMarkers.)
-  const projMarkers = isRvw ? undefined : projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
+  const projMarkers = isRvw ? undefined : projectionFitMarkers(plotted, drawMetricIds);
   cfg.projectionFrom = waGraphConfig.projectionFrom;
   cfg.projectionTo = waGraphConfig.projectionTo;
   // "Remember my pan/zoom across bubble/tab switches + refresh" (owner). The saved view is
@@ -24365,7 +24386,6 @@ function buildBubbleInput(
   // view was restored and update() only re-fit the right axis — the new datapoint fell outside
   // the stale frame and was clipped off-screen (owner: "I add a set but don't see the dot").
   // Folding count + latest date + a cheap value-sum in means any add / delete / edit re-fits.
-  const plotted = recs.filter((r) => exs.includes(r.exerciseName));
   let dataMax = "";
   let dataSum = plotted.length;
   for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
@@ -25199,7 +25219,8 @@ function renderExInfoGraph(name: string): void {
   S.waPerBodyweight = bubble.perBodyweight;
   if (bubble.type === "rvw") S.waRepsVsWeightFit = true;
 
-  const stageKey = `${name}::${bubble.type}::${bubble.perBodyweight}::${[...waMetrics].sort().join(",")}`;
+  const lensKey = `${cardPlotExerciseNames(name).join("\0")}${cardGroupLensActive(name) ? ":lens" : ""}`;
+  const stageKey = `${name}::${bubble.type}::${bubble.perBodyweight}::${[...waMetrics].sort().join(",")}::${lensKey}`;
   let keepStage = host.querySelector<HTMLElement>("#exInfoGraphStage");
   if (keepStage) keepStage.remove();
   if (exInfoGraphStageKey !== stageKey) keepStage = null;
@@ -25234,7 +25255,7 @@ function renderExInfoGraph(name: string): void {
     getSavedView: () => loadExInfoBubble(name).savedView,
     setSavedView: (v: GraphBubble["savedView"]) => { patchExInfoBubble(name, { savedView: v ?? null }); },
   };
-  renderAnalyticsGraph(stage, buildBubbleInput(bubble, viewPersist));
+  renderAnalyticsGraph(stage, buildBubbleInput(bubble, viewPersist, name));
   exInfoGraphStageKey = stageKey;
 
   // Relocate ONLY the ⤢ Fit control into the top-right overlay (same as the main graph);
