@@ -39,11 +39,16 @@ export const setTimeCompact = (on: boolean): void => setCompactPref(on);
  * device; subscribers redraw on change. */
 const FAINT_KEY = "colosseum.faintLines.v1";
 const TAGS_KEY = "colosseum.dataTags.v1";
+const STEM_KEY = "colosseum.e1rmStems.v1";
 let faintLines = (() => { try { return localStorage.getItem(FAINT_KEY) === "1"; } catch { return false; } })();
 let dataTags = (() => { try { return localStorage.getItem(TAGS_KEY) === "1"; } catch { return false; } })();
+/** Thin weight→1RM stems on scatter dots (the 1RM view). Default on; off in Settings. */
+let stemLines = (() => { try { return localStorage.getItem(STEM_KEY) !== "0"; } catch { return true; } })();
 const styleSubs = new Set<() => void>();
 function setFaintLines(on: boolean): void { if (on === faintLines) return; faintLines = on; try { localStorage.setItem(FAINT_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
 function setDataTags(on: boolean): void { if (on === dataTags) return; dataTags = on; try { localStorage.setItem(TAGS_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
+export const getE1rmStems = (): boolean => stemLines;
+export function setE1rmStems(on: boolean): void { if (on === stemLines) return; stemLines = on; try { localStorage.setItem(STEM_KEY, on ? "1" : "0"); } catch { /* ignore */ } for (const fn of [...styleSubs]) fn(); }
 
 /** Dedup key for on-chart exercise names — one label per lift, not per metric series. */
 function seriesLabelKey(name: string): string {
@@ -768,7 +773,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // Optional lo → y stems (the 1RM view): a thin solid line from the weight
         // used up to the bubble — unlike the weight-range bars, not segmented.
         for (const p of s.points) {
-          if (p.lo != null && p.y != null && Math.abs(p.y - p.lo) > 0.05) {
+          if (stemLines && p.lo != null && p.y != null && Math.abs(p.y - p.lo) > 0.05) {
             const cx = xPix(p.x), yTop = ymap(p.y), yBot = ymap(p.lo);
             body += `<line x1="${cx.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${s.color}" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.28"/>`;
           }
@@ -1028,7 +1033,8 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     // Two tiny style toggles (opt-in): faint trend lines + line tags.
     const styleBtns = cfg.styleToggles
       ? `<button type="button" class="svgc-style-btn${faintLines ? " is-on" : ""}" data-stylebtn="faint" aria-pressed="${faintLines}" title="${faintLines ? "Trend lines are thin/dashed/grey — tap for bold lines." : "Make the trend lines thin, dashed & grey so the data dots stand out."}">〰</button>` +
-        `<button type="button" class="svgc-style-btn${dataTags ? " is-on" : ""}" data-stylebtn="tags" aria-pressed="${dataTags}" title="${dataTags ? "Line tags shown — tap to hide." : "Tag each line with a leader-brace label naming it."}">⟨ ⟩</button>`
+        `<button type="button" class="svgc-style-btn${dataTags ? " is-on" : ""}" data-stylebtn="tags" aria-pressed="${dataTags}" title="${dataTags ? "Line tags shown — tap to hide." : "Tag each line with a leader-brace label naming it."}">⟨ ⟩</button>` +
+        `<button type="button" class="svgc-style-btn${stemLines ? " is-on" : ""}" data-stylebtn="stems" aria-pressed="${stemLines}" title="${stemLines ? "1RM stems shown — tap to hide." : "Show thin weight→1RM lines on each bubble."}">│</button>`
       : "";
     // Many keys get cramped in an inline row, so past a handful collapse them into
     // a floating "Legend" dropdown (overlay — doesn't grow the chart). The compact
@@ -1492,7 +1498,13 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
     if ((e.target as HTMLElement).closest(".svgc-center")) { e.stopPropagation(); if (interactive()) fitView(); return; }
     if ((e.target as HTMLElement).closest(".svgc-compact")) { e.stopPropagation(); setCompactPref(!compactPref); return; }
     const sb = (e.target as HTMLElement).closest<HTMLElement>(".svgc-style-btn");
-    if (sb?.dataset.stylebtn) { e.stopPropagation(); if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines); else setDataTags(!dataTags); return; }
+    if (sb?.dataset.stylebtn) {
+      e.stopPropagation();
+      if (sb.dataset.stylebtn === "faint") setFaintLines(!faintLines);
+      else if (sb.dataset.stylebtn === "tags") setDataTags(!dataTags);
+      else setE1rmStems(!stemLines);
+      return;
+    }
     const grp = (e.target as HTMLElement).closest<HTMLElement>(".svgc-grp-chip");
     if (grp?.dataset.grouppos !== undefined && grp.dataset.groupval !== undefined) {
       e.stopPropagation(); toggleGroup(Number(grp.dataset.grouppos), grp.dataset.groupval); return;

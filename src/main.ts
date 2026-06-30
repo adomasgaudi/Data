@@ -19,7 +19,7 @@ import roadmapMd from "../docs/roadmap.md?raw";
 import { loadJsonObject, saveJson } from "./storage";
 import { FREQ_TIERS, frequencyTier } from "./frequencyTier";
 import { S, type HeatColorDim, type IndexGroupMode } from "./appState";
-import { mountSvgChart, getTimeCompact, setTimeCompact, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
+import { mountSvgChart, getTimeCompact, setTimeCompact, getE1rmStems, setE1rmStems, type SvgChart, type SvgSeries, type SvgChartConfig, type SvgPoint } from "./svgChart";
 import { loadData, buildLoaded, fetchLatestCsv, type LoadedData } from "./dataSource";
 import { parseCsvRows } from "./csv";
 import {
@@ -235,6 +235,7 @@ const els = {
   status: $("status"),
   settingsBtn: $<HTMLButtonElement>("settingsBtn"),
   themeBtn: $<HTMLButtonElement>("themeBtn"),
+  e1rmStemsBtn: $<HTMLButtonElement>("e1rmStemsBtn"),
   viewAsSelect: $<HTMLSelectElement>("viewAsSelect"),
   authBtn: $<HTMLButtonElement>("authBtn"),
   syncUpBtn: $<HTMLButtonElement>("syncUpBtn"),
@@ -15815,6 +15816,16 @@ const REP_BANDS: { id: string; label: string; min: number; max?: number }[] = [
 function setSettingsOpen(open: boolean) {
   els.settingsPanel.hidden = !open;
   els.settingsBtn.setAttribute("aria-expanded", String(open));
+  if (open) refreshE1rmStemsBtn();
+}
+
+function refreshE1rmStemsBtn(): void {
+  const on = getE1rmStems();
+  els.e1rmStemsBtn.textContent = on ? "│ 1RM stems" : "│ 1RM stems off";
+  els.e1rmStemsBtn.setAttribute("aria-pressed", String(on));
+  els.e1rmStemsBtn.title = on
+    ? "Hide the thin weight→1RM lines on the graph."
+    : "Show thin weight→1RM lines on each 1RM bubble.";
 }
 
 async function init() {
@@ -16103,6 +16114,9 @@ async function init() {
   els.themeBtn.addEventListener("click", () =>
     setTheme(document.documentElement.getAttribute("data-theme") !== "dark"),
   );
+
+  refreshE1rmStemsBtn();
+  els.e1rmStemsBtn.addEventListener("click", () => { setE1rmStems(!getE1rmStems()); refreshE1rmStemsBtn(); });
 
   // Admin / "view as a user" / logged-out picker: apply the saved choice, react to changes.
   setupViewSwitch();

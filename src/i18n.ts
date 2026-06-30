@@ -41,6 +41,8 @@ const LT: Record<string, string> = {
   "exercises": "pratimai",
   "Guide": "Vadovas",
   "Settings": "Nustatymai",
+  "│ 1RM stems": "│ 1RM stiebeliai",
+  "│ 1RM stems off": "│ 1RM stiebeliai išj.",
   // ---- "More" menu ----
   "Clients": "Klientai",
   "Coach": "Treneris",
