@@ -679,6 +679,26 @@ export function scaleToGroup(
   return out;
 }
 
+/** Exercise-info / card graph: which logged sets belong on this lift's curve & stats.
+ *  Uses the same plot-name list as the Analysis graph lens (merged group name, separated
+ *  members, or the lift itself). Spelling-merge variants (originalExerciseName) are kept
+ *  only when no group lens is active — avoids silently mixing Squat-pattern synthetics. */
+export function filterCardLiftRecords(
+  records: readonly SetRecord[],
+  username: string,
+  cardName: string,
+  plotExerciseNames: readonly string[],
+  groupLensActive: boolean,
+): SetRecord[] {
+  const plot = new Set(plotExerciseNames);
+  return records.filter((r) => {
+    if (r.username !== username) return false;
+    if (plot.has(r.exerciseName)) return true;
+    if (!groupLensActive && r.originalExerciseName === cardName) return true;
+    return false;
+  });
+}
+
 /** A combinable/comparable group as the synthetic generator needs it. */
 export interface SyntheticGroupDef {
   /** Registry tag id, stamped onto each synthetic record (e.g. "compare.dl-pattern"). */
