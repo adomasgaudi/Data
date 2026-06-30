@@ -69,7 +69,7 @@ export type SvgShape = "circle" | "diamond" | "square" | "triangle" | "ring" | "
 export interface SvgPoint {
   x: number;
   y?: number; // line / bars
-  lo?: number; // range bottom
+  lo?: number; // range bottom, or scatter stem bottom (weight used → 1RM bubble)
   hi?: number; // range top
   /** For range bars: split the line into exactly this many dashes (e.g. reps). */
   dashes?: number;
@@ -336,7 +336,9 @@ function yExtent(series: SvgSeries[], beginAtZero?: boolean) {
   let yMin = Infinity, yMax = -Infinity;
   for (const s of series) {
     for (const p of s.points) {
-      const ys = s.type === "range" ? [p.lo ?? 0, p.hi ?? 0] : [p.y ?? 0];
+      const ys = s.type === "range" ? [p.lo ?? 0, p.hi ?? 0]
+        : s.type === "scatter" && p.lo != null ? [p.y ?? 0, p.lo]
+        : [p.y ?? 0];
       if (s.type === "bars") ys.push(0);
       for (const y of ys) {
         if (y < yMin) yMin = y;
@@ -763,8 +765,18 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
         // Dots only, no connecting line — for values that jump around (e.g. a
         // day's est-1RM) where a line would imply a trend that isn't there. Slight
         // transparency so overlapping same-day sets read as a denser blob (depth).
+        // Optional lo → y stems (the 1RM view): a thin solid line from the weight
+        // used up to the bubble — unlike the weight-range bars, not segmented.
+        for (const p of s.points) {
+          if (p.lo != null && p.y != null && Math.abs(p.y - p.lo) > 0.05) {
+            const cx = xPix(p.x), yTop = ymap(p.y), yBot = ymap(p.lo);
+            body += `<line x1="${cx.toFixed(1)}" y1="${yTop.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yBot.toFixed(1)}" stroke="${s.color}" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.5"/>`;
+          }
+        }
         for (const p of s.points) {
           const cx = xPix(p.x), cy = ymap(p.y ?? 0);
+          const yStemTop = p.y != null ? ymap(p.y) : cy;
+          const yStemBot = p.lo != null ? ymap(p.lo) : cy;
           if (p.fail) {
             // A failed attempt → an ✕ in the SERIES colour (same as the lift).
             const d = 3.8;
@@ -790,7 +802,7 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
             const dot = `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r.toFixed(1)}" fill="${s.color}" fill-opacity="${(p.op ?? 0.55).toFixed(2)}"/>`;
             body += p.glow ? `<g filter="url(#${glowId})">${dot}</g>` : dot;
           }
-          hitPoints.push({ px: cx, py: cy, yTop: cy, yBot: cy, s, p });
+          hitPoints.push({ px: cx, py: cy, yTop: Math.min(yStemTop, yStemBot), yBot: Math.max(yStemTop, yStemBot), s, p });
         }
       } else if (s.type === "range") {
         const bars: { px: number; yTop: number; yBot: number }[] = [];
