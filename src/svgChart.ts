@@ -893,33 +893,33 @@ export function mountSvgChart(container: HTMLElement, initial: SvgChartConfig): 
       if (wantTags && s.type === "scatter" && s.points.length >= 3 && tagAnnotations.length < 12) {
         const lbl = seriesLabelKey(s.name);
         if (!tagged.has(lbl)) {
-        tagged.add(lbl);
-        const px = s.points
-          .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
-          .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
-        if (px.length >= 3) {
-          // Densest point = the one with the most neighbours within R px.
-          const R2 = 22 * 22;
-          let best = px[0]!, bestC = -1;
-          for (const a of px) {
-            let c = 0;
-            for (const b of px) { const dx = a.x - b.x, dy = a.y - b.y; if (dx * dx + dy * dy <= R2) c++; }
-            if (c > bestC) { bestC = c; best = a; }
+          tagged.add(lbl);
+          const px = s.points
+            .map((p) => ({ x: xPix(p.x), y: ymap(p.y ?? 0) }))
+            .filter((q) => q.x >= M.l && q.x <= W - M.r && q.y >= M.t && q.y <= h - M.b);
+          if (px.length >= 3) {
+            // Densest point = the one with the most neighbours within R px.
+            const R2 = 22 * 22;
+            let best = px[0]!, bestC = -1;
+            for (const a of px) {
+              let c = 0;
+              for (const b of px) { const dx = a.x - b.x, dy = a.y - b.y; if (dx * dx + dy * dy <= R2) c++; }
+              if (c > bestC) { bestC = c; best = a; }
+            }
+            // Skip if a cluster was already tagged right here (don't stack labels).
+            if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
+              tagSpots.push(best);
+              const col = grayify(s.color, 0.12); // keep most of the athlete hue
+              const right = best.x < W - M.r - 56;
+              const lx = best.x + (right ? 16 : -16);
+              const ly = Math.max(M.t + 8, best.y - 13);
+              tagAnnotations.push(
+                `<text x="${best.x.toFixed(1)}" y="${(best.y + 4).toFixed(1)}" font-size="13" text-anchor="middle" fill="${col}" fill-opacity="0.9">${right ? "{" : "}"}</text>` +
+                  `<line x1="${(best.x + (right ? 5 : -5)).toFixed(1)}" y1="${best.y.toFixed(1)}" x2="${(lx - (right ? 3 : -3)).toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.6"/>` +
+                  `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" font-size="9" text-anchor="${right ? "start" : "end"}" paint-order="stroke" stroke="#fff" stroke-width="2.2" stroke-opacity="0.9" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
+              );
+            }
           }
-          // Skip if a cluster was already tagged right here (don't stack labels).
-          if (bestC >= 3 && !tagSpots.some((t) => Math.hypot(t.x - best.x, t.y - best.y) < 22)) {
-            tagSpots.push(best);
-            const col = grayify(s.color, 0.12); // keep most of the athlete hue
-            const right = best.x < W - M.r - 56;
-            const lx = best.x + (right ? 16 : -16);
-            const ly = Math.max(M.t + 8, best.y - 13);
-            tagAnnotations.push(
-              `<text x="${best.x.toFixed(1)}" y="${(best.y + 4).toFixed(1)}" font-size="13" text-anchor="middle" fill="${col}" fill-opacity="0.9">${right ? "{" : "}"}</text>` +
-                `<line x1="${(best.x + (right ? 5 : -5)).toFixed(1)}" y1="${best.y.toFixed(1)}" x2="${(lx - (right ? 3 : -3)).toFixed(1)}" y2="${ly.toFixed(1)}" stroke="${col}" stroke-width="0.8" stroke-opacity="0.6"/>` +
-                `<text x="${lx.toFixed(1)}" y="${(ly + 3).toFixed(1)}" font-size="9" text-anchor="${right ? "start" : "end"}" paint-order="stroke" stroke="#fff" stroke-width="2.2" stroke-opacity="0.9" fill="${col}" style="font-weight:700">${esc(lbl)}</text>`,
-            );
-          }
-        }
         }
       }
       // Floating name at the series end — only when ⟨⟩ line-tags are OFF (they name the
