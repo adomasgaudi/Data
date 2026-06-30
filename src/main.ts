@@ -86,7 +86,8 @@ import { resolveNote } from "./variationModel";
 import { familyOf as baseFamilyOf, FAMILIES, defaultLeanTable, familiesUsingDim, mergeDimOrder } from "./variationConfig";
 import { TAP_CONTACT_ORDER, TAP_CONTACT_LABEL, TAP_CONTACT_HINT, type TapContact,
   DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT, YOGA_BLOCK_CM,
-  leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm, handPointOffsetCm,
+  leanCanonicalCm, leanCanonicalFromBlock, handPointOffsetCm,
+  leanFingertipCmFromReading, leanLevelKey,
   cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   type HandPoint, type YogaBlockSide } from "./handstandLean";
 import {
@@ -1740,7 +1741,9 @@ function famLevels(family: string, dim: string): Record<string, number> {
 /** Lean's effect depends on support (back- vs front-to-wall differ), so a
  * "lean:<support>" override wins over the shared base lean. */
 function leanFactorFor(family: string, support: string, level: string): number {
-  return famLevels(family, `lean:${support}`)[level] ?? famLevels(family, "lean")[level] ?? 1;
+  const sup = famLevels(family, `lean:${support}`);
+  const base = famLevels(family, "lean");
+  return sup[level] ?? base[level] ?? interpCmFactor(sup, level) ?? interpCmFactor(base, level) ?? 1;
 }
 function saveFamFactors(): void {
   saveJson(FAM_FACTORS_KEY, famFactorOverrides);
@@ -19948,7 +19951,6 @@ function leanPillHtml(ex: string, level?: string): string {
 function openLeanPicker(pill: HTMLElement): void {
   const ex = pill.dataset.leanex ?? "";
   const fam = familyOf(ex);
-  const keys = leanLevelKeys(ex);
   const username = els.athlete.value;
   let unit: "cm" | "block" = "cm";
   let point: HandPoint = DEFAULT_HAND_POINT;
@@ -19959,17 +19961,19 @@ function openLeanPicker(pill: HTMLElement): void {
   const syncLeanBlockFromReading = () => { block = nearestYogaBlockSide(reading); };
   const syncLeanReadingFromBlock = () => { reading = yogaBlockCm(block); };
   const canonical = (): number => (unit === "cm" ? leanCanonicalCm(reading, point, hand) : leanCanonicalFromBlock(block, point, hand));
-  const eqText = () => `= ${Math.round(canonical())}cm from the palm → tag ${snapToLeanLevelCm(canonical(), keys)}`;
+  const tagCm = (): number => leanFingertipCmFromReading(unit === "cm" ? reading : yogaBlockCm(block), point, hand);
+  const eqText = () => {
+    const t = tagCm();
+    return t <= 0 ? "→ tag no lean" : `→ tag ${t}cm`;
+  };
   const commit = () => {
-    const level = snapToLeanLevelCm(canonical(), keys);
+    const level = leanLevelKey(canonical());
     pill.dataset.leanlevel = level;
     pill.textContent = leanPillLabel(level);
     pill.classList.toggle("is-set", level !== (pill.dataset.leandefault ?? "0cm"));
   };
-  const renderHtml = () => {
-    const canon = Math.round(canonical());
-    const level = snapToLeanLevelCm(canon, keys);
-    return `<div class="inc-units">` +
+  const renderHtml = () =>
+    `<div class="inc-units">` +
       `<button type="button" class="inc-unit${unit === "cm" ? " is-on" : ""}" data-leanunit="cm">cm</button>` +
       `<button type="button" class="inc-unit${unit === "block" ? " is-on" : ""}" data-leanunit="block">block</button>` +
       `</div>` +
@@ -19982,9 +19986,8 @@ function openLeanPicker(pill: HTMLElement): void {
       LEAN_POINTS.map((p) => `<button type="button" class="rom-ref-chip${p === point ? " is-on" : ""}" data-leanpoint="${p}">${escapeHtml(LEAN_POINT_LBL[p])}</button>`).join("") + `</div></div>` +
       `<div class="rom-ref lean-hand"><span class="rom-ref-lbl muted">your hand (tips→palm)</span>` +
       `<input type="number" class="rom-ref-input lean-hand-val" step="1" min="1" value="${hand}" aria-label="Your hand length, fingertips to palm-base (cm)" /><span class="rom-unit-lbl muted">cm</span></div>` +
-      `<div class="inc-eq muted">= ${canon}cm from the palm → tag ${leanFingertipCm(level, username) <= 0 ? "no lean" : `${leanFingertipCm(level, username)}cm`}</div>` +
+      `<div class="inc-eq muted">${eqText()}</div>` +
       `<button type="button" class="inc-floor" data-leandefaultbtn>no lean (default)</button>`;
-  };
   openFloatingPicker(pill, {
     className: "inc-pop rom-pop lean-pop",
     renderHtml,
@@ -20006,7 +20009,16 @@ function openLeanPicker(pill: HTMLElement): void {
       const bl = t.closest<HTMLElement>("[data-leanblock]");
       if (bl?.dataset.leanblock) { block = bl.dataset.leanblock as YogaBlockSide; syncLeanReadingFromBlock(); rerender(); commit(); return; }
       const pt = t.closest<HTMLElement>("[data-leanpoint]");
-      if (pt?.dataset.leanpoint) { point = pt.dataset.leanpoint as HandPoint; rerender(); commit(); return; }
+      if (pt?.dataset.leanpoint) {
+        const newPoint = pt.dataset.leanpoint as HandPoint;
+        if (newPoint !== point) {
+          const canon = canonical();
+          point = newPoint;
+          reading = Math.max(0, canon - handPointOffsetCm(point, hand));
+          if (unit === "block") syncLeanBlockFromReading();
+        }
+        rerender(); commit(); return;
+      }
       if (t.closest("[data-leandefaultbtn]")) { unit = "cm"; reading = 0; syncLeanBlockFromReading(); rerender(); commit(); return; }
     },
     onInput: (t, pop) => {

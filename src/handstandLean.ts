@@ -28,8 +28,8 @@ export const HAND_POINT_FRACTION: Record<HandPoint, number> = {
 /** The owner's default fingertips→palm-base length (cm); overridable per athlete. */
 export const DEFAULT_HAND_LENGTH_CM = 16;
 
-/** Owner's usual measuring point — the default the picker pre-selects (shown, not tagged). */
-export const DEFAULT_HAND_POINT: HandPoint = "fingerKnuckles";
+/** Default measuring point — fingertips (tag cm matches the reading at tips). */
+export const DEFAULT_HAND_POINT: HandPoint = "fingertips";
 
 export type YogaBlockSide = "small" | "medium" | "large";
 /** One yoga block, read by the side it stands on (owner-confirmed cm). */
@@ -43,6 +43,30 @@ export function handPointOffsetCm(point: HandPoint, handLengthCm: number = DEFAU
 /** Canonical lean (cm from the palm-base to the wall) from a cm reading taken at `point`. */
 export function leanCanonicalCm(readingCm: number, point: HandPoint, handLengthCm: number = DEFAULT_HAND_LENGTH_CM): number {
   return readingCm + handPointOffsetCm(point, handLengthCm);
+}
+
+/** Distance from the fingertips back toward the palm to `point` (cm along the hand). */
+export function handPointOffsetFromTips(point: HandPoint, handLengthCm: number = DEFAULT_HAND_LENGTH_CM): number {
+  return handLengthCm - handPointOffsetCm(point, handLengthCm);
+}
+
+/** Tag cm read from the fingertips: reading at `point` minus the tips→point segment. */
+export function leanFingertipCmFromReading(
+  readingCm: number, point: HandPoint, handLengthCm: number = DEFAULT_HAND_LENGTH_CM,
+): number {
+  return Math.max(0, Math.round(readingCm - handPointOffsetFromTips(point, handLengthCm)));
+}
+
+/** Inverse: cm to type at `point` so the fingertip tag reads `fingertipCm`. */
+export function readingCmAtPoint(
+  fingertipCm: number, point: HandPoint, handLengthCm: number = DEFAULT_HAND_LENGTH_CM,
+): number {
+  return Math.max(0, fingertipCm + handPointOffsetFromTips(point, handLengthCm));
+}
+
+/** Store a canonical palm-base lean as a level key ("5cm", "19cm" — no "+" prefix). */
+export function leanLevelKey(canonicalCm: number): string {
+  return `${Math.round(canonicalCm)}cm`;
 }
 
 /** Canonical lean from a yoga-block reading (the block side fills the gap at `point`). */

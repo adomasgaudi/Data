@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
-  handPointOffsetCm, leanCanonicalCm, leanCanonicalFromBlock, snapToLeanLevelCm,
+  handPointOffsetCm, handPointOffsetFromTips, leanCanonicalCm, leanCanonicalFromBlock,
+  leanFingertipCmFromReading, readingCmAtPoint, leanLevelKey, snapToLeanLevelCm,
   cmLevelKey, interpCmFactor, parseCmLevelKey, nearestYogaBlockSide,
   YOGA_BLOCK_CM, TAP_CONTACT_ORDER, TAP_CONTACT_LABEL,
-  DEFAULT_HAND_LENGTH_CM,
+  DEFAULT_HAND_LENGTH_CM, DEFAULT_HAND_POINT,
 } from "./handstandLean";
 import { FAMILIES } from "./variationConfig";
 
@@ -12,9 +13,25 @@ describe("handstand lean — hand-point conversion", () => {
     expect(handPointOffsetCm("base", 16)).toBe(0);
     expect(leanCanonicalCm(20, "base", 16)).toBe(20);
   });
-  it("fingertips are a full hand-length toward the wall (owner's 3cm@tips ⇒ 19cm)", () => {
+  it("fingertips are a full hand-length toward the wall (owner's 3cm@tips ⇒ 19cm palm)", () => {
     expect(handPointOffsetCm("fingertips", 16)).toBe(16);
     expect(leanCanonicalCm(3, "fingertips", 16)).toBe(19);
+  });
+  it("default measuring point is fingertips", () => {
+    expect(DEFAULT_HAND_POINT).toBe("fingertips");
+  });
+  it("tag cm is the reading at tips; other points subtract the tips→point segment", () => {
+    expect(leanFingertipCmFromReading(5, "fingertips", 14)).toBe(5);
+    expect(handPointOffsetFromTips("fingerKnuckles", 10)).toBeCloseTo(3); // 0.3 × 10
+    expect(leanFingertipCmFromReading(7, "fingerKnuckles", 10)).toBe(4); // 7 − 3
+    expect(leanFingertipCmFromReading(7, "knuckles", 14)).toBe(0); // 7 − 7 (tips→MCP)
+    expect(leanFingertipCmFromReading(5, "base", 14)).toBe(0); // 5 − 14, clamped
+    expect(readingCmAtPoint(5, "fingertips", 14)).toBe(5);
+    expect(readingCmAtPoint(4, "fingerKnuckles", 10)).toBe(7);
+  });
+  it("stores exact canonical palm cm as a lean level key", () => {
+    expect(leanLevelKey(19)).toBe("19cm");
+    expect(leanLevelKey(0)).toBe("0cm");
   });
   it("in-between points are fractions of the hand length", () => {
     expect(handPointOffsetCm("knuckles", 16)).toBe(8);       // 0.5 L
