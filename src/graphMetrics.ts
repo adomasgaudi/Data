@@ -223,20 +223,25 @@ function runningMax(pts: { x: number; y: number }[]): GraphPoint[] {
  * early-in-day point swallow the WHOLE previous day — the "1d line never drops" bug (owner: the
  * curve should jump on 1d view). We instead look back (windowDays − 1) whole days, so "1d" = the
  * SAME calendar day only, "1w" = today + 6 prior days, etc.; the line then drops between periods. */
-function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
-  let raw: GraphPoint[];
+/** Best e1RM in the trailing window at EACH point (same calendar-day rules as windowedMax).
+ * Used by the Now% metric — one strength denominator per set, not the corner-pruned line. */
+function windowedMaxAtEach(pts: { x: number; y: number }[], windowMs: number | undefined): number[] {
   if (windowMs == null || !Number.isFinite(windowMs)) {
-    raw = runningMax(pts);
-  } else {
-    const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
-    const dayOf = (x: number) => Math.floor(x / DAY);
-    raw = pts.map((p, i) => {
-      const di = dayOf(p.x);
-      let m = p.y;
-      for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
-      return { x: p.x, y: r1(m) };
-    });
+    let m = -Infinity;
+    return pts.map((p) => r1((m = Math.max(m, p.y))));
   }
+  const daysBack = Math.max(0, Math.round(windowMs / DAY) - 1);
+  const dayOf = (x: number) => Math.floor(x / DAY);
+  return pts.map((p, i) => {
+    const di = dayOf(p.x);
+    let m = p.y;
+    for (let j = i - 1; j >= 0 && di - dayOf(pts[j]!.x) <= daysBack; j--) m = Math.max(m, pts[j]!.y);
+    return r1(m);
+  });
+}
+
+function windowedMax(pts: { x: number; y: number }[], windowMs: number | undefined): GraphPoint[] {
+  const raw = windowedMaxAtEach(pts, windowMs).map((y, i) => ({ x: pts[i]!.x, y }));
   return keepLevelCorners(raw);
 }
 
@@ -436,6 +441,27 @@ export const GRAPH_METRICS: GraphMetricDef[] = [
       return pts.map((p) =>
         p.y == null ? p : { ...p, y: Math.round((p.y / peak) * 1000) / 1000, meta: `${Math.round((p.y / peak) * 100)}% of best (${r1(p.y)} 1RM)` },
       );
+    },
+  },
+  // "% of strength THEN" — each set's added-weight 1RM as a FRACTION of the Strength line
+  // AT THAT DATE (the same rolling best: window as the Strength metric). Unlike Best% (peak
+  // in view), training at a steady relative intensity as you get stronger reads as a FLAT line.
+  {
+    id: "pctNow",
+    label: "Now%",
+    type: "scatter",
+    compute: (rs, cfg) => {
+      const pts = perSet(rs, (r) => addedWeight1RM(r, cfg.formula), undefined, cfg);
+      if (!pts.length) return [];
+      const e1rm = pts.map((p) => ({ x: p.x, y: p.y! }));
+      const strength = windowedMaxAtEach(e1rm, cfg.strengthWindow);
+      return pts.map((p, i) => {
+        if (p.y == null) return p;
+        const s = strength[i]!;
+        if (!Number.isFinite(s) || s <= 0) return p;
+        const frac = Math.round((p.y / s) * 1000) / 1000;
+        return { ...p, y: frac, meta: `${Math.round(frac * 100)}% of then (${r1(s)} 1RM)` };
+      });
     },
   },
   { id: "strength", label: "Strength", compute: (rs, cfg) => windowedMax(e1rmPoints(rs, cfg.formula), cfg.strengthWindow) },

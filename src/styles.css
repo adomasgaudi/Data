@@ -4005,6 +4005,7 @@ body.view-s2 [data-wacfgtoggle="decay"] { display: none; }
 body.view-s2 .wa-metric[data-wametric="strengthDecay"],
 body.view-s2 .wa-metric[data-wametric="pctWR"],
 body.view-s2 .wa-metric[data-wametric="pctBest"],
+body.view-s2 .wa-metric[data-wametric="pctNow"],
 body.view-s2 .wa-metric[data-wametric="volume"],
 body.view-s2 .wa-metric[data-wametric="frequency"] { display: none; }
 /* Graph Options: drop the bottom All-graphs / Assist row. */

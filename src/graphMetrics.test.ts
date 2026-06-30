@@ -12,10 +12,10 @@ function rec(p: Partial<SetRecord>): SetRecord {
 }
 
 describe("graph metric registry (TASK 26)", () => {
-  it("registers all 12 metrics, referenceable by id", () => {
-    expect(GRAPH_METRICS.length).toBe(12);
+  it("registers all 13 metrics, referenceable by id", () => {
+    expect(GRAPH_METRICS.length).toBe(13);
     for (const id of [
-      "weightRange", "e1rm", "pctWR", "pctBest", "strength", "strengthDecay", "predicted",
+      "weightRange", "e1rm", "pctWR", "pctBest", "pctNow", "strength", "strengthDecay", "predicted",
       "volume", "volumeLoad", "reps", "sets", "frequency",
     ]) {
       expect(graphMetric(id), id).toBeDefined();
@@ -51,6 +51,24 @@ describe("graph metric registry (TASK 26)", () => {
     expect(peak).toBe(1); // the best set is 100%
     expect(Math.min(...pts.map((p) => p.y!))).toBeCloseTo(0.5, 1); // half the load ≈ half
     expect(graphMetric("pctBest")!.compute!([], DEFAULT_GRAPH_CONFIG)).toEqual([]); // empty-safe
+  });
+
+  it("pctNow scales each set to a fraction of strength at that date (steady % → flat)", () => {
+    // PR days set the then-strength; submax sets at ~80% of that strength should read ~flat.
+    const recs = [
+      rec({ date: "2024-01-01", weight: 100, origWeight: 100, reps: 1 }), // PR → 100%
+      rec({ date: "2024-01-08", weight: 80, origWeight: 80, reps: 5 }), // submax vs 100
+      rec({ date: "2024-02-01", weight: 120, origWeight: 120, reps: 1 }), // new PR → 100%
+      rec({ date: "2024-02-08", weight: 96, origWeight: 96, reps: 5 }), // submax vs 120
+    ];
+    const pts = graphMetric("pctNow")!.compute!(recs, DEFAULT_GRAPH_CONFIG);
+    expect(pts.length).toBe(4);
+    expect(pts[0]!.y).toBe(1); // only set so far = at then-strength
+    expect(pts[2]!.y).toBe(1); // new PR = at then-strength
+    const submax = [pts[1]!.y!, pts[3]!.y!];
+    expect(submax[0]).toBeCloseTo(submax[1]!, 1); // same relative intensity → flat
+    expect(submax[0]!).toBeLessThan(1);
+    expect(graphMetric("pctNow")!.compute!([], DEFAULT_GRAPH_CONFIG)).toEqual([]);
   });
 
   it("volume uses ADDED (bar) weight, not the bodyweight-folded effective load", () => {

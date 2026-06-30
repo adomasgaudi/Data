@@ -24032,7 +24032,7 @@ function graphOptionsFoldHtml(scopeExercises: string[], container: HTMLElement |
   const hasSetMetric = drawMetricIds.some((id) => { const m = GRAPH_METRICS.find((x) => x.id === id); return !!m && (m.type === "range" || m.type === "scatter"); });
   const METRIC_GROUPS: { label: string; ids: string[] }[] = [
     { label: "Weight", ids: ["e1rm", "weightRange"] },
-    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "pctBest"] },
+    { label: "Strength", ids: ["strength", "strengthDecay", "pctWR", "pctBest", "pctNow"] },
     { label: "Volume & frequency", ids: ["volume", "volumeLoad", "reps", "sets", "frequency"] },
   ];
   const openMetricGroups = new Set<string>();
@@ -24721,7 +24721,7 @@ const SETTING_INFO: Record<string, string> = {
   repsweight: "Weight × reps scatter — plot every set as weight (x) × reps (y) instead of the time graph. Best-fit — a straight line through each lift's points.",
   window: "Set window — limit the reps×kg scatter to a time window. Mode toggles increasing windows (last day → … → all time) vs fixed rolling 2-week periods; the second pill cycles which window.",
   mWeight: "1RM — estimated 1RM of every set. Weight range — each set's weight up to its 1RM, banded per rep.",
-  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%).",
+  mStrength: "Strength — your best 1RM so far (running max). Strength decay — strength fading during time off. WR% — your 1RM as a fraction of the world record. Best% — each set as a percentage of your own top performance for this lift (your peak = 100%). Now% — each set as a percentage of your strength AT THAT TIME (same best: window as the Strength line); steady relative training reads as a flat line as you get stronger.",
   decaymodel: "Strength-fade model — pick how the decay curve works and dial its variables, live on the data. Linear: full for the grace days, then lose a flat %/day. Log: a slowing logarithmic fade with a fixed durability. Full: the log fade PLUS durability that grows with training, an RIR-confidence blend, a per-session growth cap and gap calibration. Phases: three growth phases by hard-set count (beginner → intermediate → advanced), each with its own growth PACE (how fast it accepts gains); only the world record caps gains, and phase 1 reads your RIR (assumes 3 upper / 6 lower when none is logged). Boundary lines mark each phase on the graph. All levels share the grace days and the floor. Full formulas: Plan → Formulas → 'How the numbers work'.",
   mVolume: "Volume — weight × reps summed per Interval (bars). Vol overlay — a second volume series at its own interval (Options → Vol overlay interval). Reps — total reps per interval. Sets — sets per interval. Frequency — sessions per week (rolling).",
   allgraphs: "All graphs — show every graph, ignoring per-exercise approval. Approved only — show just approved graphs.",
