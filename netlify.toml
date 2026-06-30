@@ -2,16 +2,27 @@
 # Connect this GitHub repo to Netlify and it picks this up automatically.
 
 [build]
-  command = "npm run build"
-  publish = "dist"
-  # Netlify skips deploys when this exits 0. Always rebuild on push — the publish dir
-  # is dist/ (gitignored), so file-diff detection cannot see when the app changed.
-  ignore = "exit 1"
+  command = "npm run build && npm run netlify:stage"
+  # Publish repo root so a skipped build still ships the committed single-file
+  # index.html (dist/ is gitignored — publish=dist left Netlify stuck on old deploys).
+  publish = "."
+  # Exit 1 = always build. (`exit` is a shell builtin — use `false`.)
+  ignore = "false"
 
 # Functions live in netlify/functions and are auto-detected. The data function
 # declares its own route (/api/data) via `export const config = { path }`.
 [functions]
   node_bundler = "esbuild"
+
+# Auxiliary pages live under public/; links use root paths (reps-1rm.html).
+[[redirects]]
+  from = "/reps-1rm.html"
+  to = "/public/reps-1rm.html"
+  status = 200
+[[redirects]]
+  from = "/handoff.html"
+  to = "/public/handoff.html"
+  status = 200
 
 # Always revalidate the HTML so a new deploy shows up on the next refresh instead
 # of serving a stale cached page (the whole app is inlined into index.html, so
