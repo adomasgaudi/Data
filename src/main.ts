@@ -13792,14 +13792,14 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const cellHX = (Wd / nW) / 2 * CELL_FILL;
   const cellHZ = (Dp / nR) / 2 * CELL_FILL;
 
-  // BARS: a THIN 3D stick per (weight, rep) cell topped by a small CUBE head. Every face is
-  // shaded by its orientation along a warm-light → cool-shadow gradient so the perspective
-  // reads (flat identical teal was unreadable), with a darker edge and a soft ground shadow.
-  // (Owner: "2× thinner, top spheres → cubes 2× thicker than the bar but smaller, light
-  // shadows + different side shadings, darker edges, real colour theory".)
+  // BARS: a THIN 3D stick per (weight, rep) cell. Every face is shaded by its orientation
+  // along a warm-light → cool-shadow gradient so the perspective reads (flat identical teal
+  // was unreadable), with a darker edge. (Owner: "2× thinner, top spheres → cubes 2× thicker
+  // than the bar but smaller, light shadows + different side shadings, darker edges, real
+  // colour theory". Ground ellipses removed — owner: black circles looked like dirt.)
   type Face = { pts: { X: number; Y: number }[]; z: number; t: number; op: number };
   type BarColor = { r: number; g: number; b: number };
-  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number; shTip: { X: number; Y: number } };
+  type Bar = { corners: { X: number; Y: number; Z: number }[]; faces: Face[]; depth: number; tip: string; head: { X: number; Y: number }; count: number; color: BarColor; cx: number; cz: number; topY: number };
   // COLOUR: a cool→warm ramp (deep teal → warm brick-red) where RED = a TALLER bar — that rep
   // was done MORE times in the window (owner: "the color shows the height of each bar, not the
   // 1RM"). So the most-repeated cells glow red; rarely-hit cells stay teal — normalised across
@@ -13817,11 +13817,9 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
   const cl = (v: number) => Math.max(0, Math.min(255, Math.round(v)));
   const faceFill = (c: BarColor, t: number) => { const f = 0.55 + 0.62 * t; return `rgb(${cl(c.r * f)},${cl(c.g * f)},${cl(c.b * f)})`; };
   const edgeFill = (c: BarColor) => `rgb(${cl(c.r * 0.6)},${cl(c.g * 0.6)},${cl(c.b * 0.6)})`; // lighter than before (owner: corners too black)
-  const SHADOW = "#26323d"; // soft ground shadow
   // WORLD-FIXED light from an ANGLE (upper-front-right), NOT rotated into screen space — so
-  // spinning the model moves which faces are lit and the shadow direction (owner: "light stays
-  // the same, rotating changes shadow position; from an angle, not overhead"). Face normals are
-  // world-fixed, so the dot is constant per world-face; rotating the camera reveals them.
+  // spinning the model moves which faces are lit (owner: "light stays the same, rotating
+  // changes shadow position; from an angle, not overhead"). Face normals are world-fixed.
   const Lw = (() => { const n = Math.hypot(0.55, 0.6, 0.45); return { x: 0.55 / n, y: 0.6 / n, z: 0.45 / n }; })();
   const faceT = (nx: number, ny: number, nz: number): number => 0.3 + 0.7 * Math.max(0, nx * Lw.x + ny * Lw.y + nz * Lw.z);
   const SIDE_N: [number, number, number][] = [[0, 0, -1], [1, 0, 0], [0, 0, 1], [-1, 0, 0]];
@@ -13856,11 +13854,7 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
       cum += c;
     }
     const hd = rot(cx, topY, cz);
-    // Shadow tip: the bar's foot cast along the world light's opposite horizontal, length ∝
-    // height — so taller bars throw longer shadows and rotating moves them (light is world-fixed).
-    const shLen = mapH(p.count) * 0.5 + 0.12;
-    const shT = rot(cx - Lw.x * shLen, cy0, cz - Lw.z * shLen);
-    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.count), cx, cz, topY, shTip: { X: shT.X, Y: shT.Y } });
+    bars.push({ corners: stick, faces, depth: (stick[0]!.Z + stick[2]!.Z) / 2, tip: `${p.w}kg · rep ${p.repLabel ?? p.reps} · done ${p.count}×`, head: { X: hd.X, Y: hd.Y }, count: p.count, color: barColor(p.count), cx, cz, topY });
   }
 
   // Table grid lines (weight columns + rep rows) and its border — the "map on a table".
@@ -13944,17 +13938,9 @@ function renderSetsMap3d(d: SetsMap, yaw: number, pitch: number): string {
     if (cpts.length > 1) out += `<polyline points="${cpts.join(" ")}" fill="none" stroke="#e0573a" stroke-width="1.8" stroke-opacity="0.85" stroke-linejoin="round" stroke-linecap="round"/>`;
   }
 
-  // Far→near: each bar draws a soft ground shadow first, then its faces sorted far→near so
-  // near faces overpaint far ones (painter's algorithm).
+  // Far→near: each bar's faces sorted far→near so near faces overpaint far ones (painter's).
   bars.sort((a, b) => a.depth - b.depth);
   for (const bar of bars) {
-    // Elongated ANGLED shadow: the foot smeared toward the world-light's cast direction, its
-    // length set per-bar (taller = longer). Rotated to the screen angle of foot→tip.
-    const foot = rot(bar.cx, cy0, bar.cz);
-    const fx = sx(foot.X), fy = sy(foot.Y), tx = sx(bar.shTip.X), ty = sy(bar.shTip.Y);
-    const mx = (fx + tx) / 2, my = (fy + ty) / 2, ddx = tx - fx, ddy = ty - fy;
-    const slen = Math.hypot(ddx, ddy), sang = Math.atan2(ddy, ddx) * 180 / Math.PI;
-    out += `<ellipse cx="${mx.toFixed(1)}" cy="${my.toFixed(1)}" rx="${(slen / 2 + hwx * scale * 1.2).toFixed(1)}" ry="${Math.max(2, hwx * scale * 1.4).toFixed(1)}" transform="rotate(${sang.toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)})" fill="${SHADOW}" opacity="0.17"/>`;
     bar.faces.sort((a, b) => a.z - b.z);
     const edge = edgeFill(bar.color);
     for (const f of bar.faces) {
