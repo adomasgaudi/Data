@@ -40,6 +40,7 @@ import {
   addedWeight1RM,
   effectiveE1RM,
   filterCardLiftRecords,
+  recordsMatchingGraphPlot,
   filterRecords,
   leaderboard,
   personalRecords,
@@ -3411,6 +3412,32 @@ function lensExpand(scope: SelScope, names: readonly string[]): string[] {
     if (!added) out.push(n);
   }
   return [...new Set(out)];
+}
+/** Plot names for the Analysis GRAPH — mirrors {@link histFilterNames} for the graph
+ * scope. A synthetic combined/comparison lift picked WITHOUT an active lens expands to
+ * its raw member lifts (logged sets live under member names), so the graph doesn't
+ * come up empty while history shows data. */
+function graphPlotNames(names: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const n of names) {
+    const cg = chosenGroup("graph", n, "combine"); if (cg) { out.push(cg.derivedName ?? cg.label); continue; }
+    const pg = chosenGroup("graph", n, "compare"); if (pg) { out.push(...(pg.members ?? []).map((m) => m.exerciseName)); continue; }
+    out.push(...expandToRawExercises([n]));
+  }
+  return [...new Set(out)];
+}
+/** True when any selected lift has a Combine or Compare lens in graph scope. */
+function graphGroupLensActive(baseExercises: readonly string[]): boolean {
+  return baseExercises.some((n) => {
+    const l = lensFor("graph", n);
+    return !!(l.combine || l.compare);
+  });
+}
+/** Exercise names for graph-permission checks — union of the owner's picks and the
+ * lens-expanded plot list so approvals on "Dumbbell Bench Press" still count when the
+ * combine lens plots "Bench pattern". */
+function graphPermScopeNames(base: readonly string[], plot: readonly string[]): string[] {
+  return [...new Set([...base, ...plot])];
 }
 /** The exercise names to filter the WORKOUT HISTORY to, MATCHING how its records are
  * (lens-aware) remapped — so the filter and the records always agree (PB-6):
@@ -23972,8 +23999,10 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
   waGraphConfig.rirOf = (r) => rirBandMid(rpeFor(r)) ?? (waGraphConfig.decayParams?.level === 4 ? assumedPhase1Rir(r.exerciseName) : predictedRir(currentStrengthFor(sm, r), r.weight, r.reps, fm));
   const user = els.athlete.value;
   const recs = applyHardSetsFilter(computedRecords().filter((r) => r.username === user));
-  const exs = lensExpand("graph", [exercise]);
-  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
+  const exsBase = [exercise];
+  const groupLensActive = graphGroupLensActive(exsBase);
+  const exs = graphPlotNames(exsBase);
+  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, graphPermScopeNames(exsBase, exs));
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
   // Same forecast ceiling + draggable fit-window as the full graph, so a projection viewed
   // on the carousel curves toward the ceiling and gets the same period control (PROJ-1).
@@ -23982,10 +24011,11 @@ function renderGraphSlideChart(container: HTMLElement, exercise: string): void {
     if (!r) return null;
     return worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null);
   };
-  const projMarkers = projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
+  const projMarkers = projectionFitMarkers(recordsMatchingGraphPlot(recs, exs, groupLensActive), drawMetricIds);
   renderAnalyticsGraph(container, {
     exercises: exs,
     records: S.waRepsVsWeight ? rvwWindowRecords(recs) : recs,
+    groupLensActive,
     rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,
@@ -24273,7 +24303,8 @@ function renderGraphMini(): void {
   const bw = `<button type="button" class="wa-gov-btn gmini-bw${S.waPerBodyweight ? " is-on" : ""}" data-gmbw="1" title="Show kg metrics as multiples of bodyweight instead of kilograms.">${S.waPerBodyweight ? "×BW" : "kg"}</button>`;
   // The SAME "Options ▾" graph-settings dropdown the multi-graph view has, scoped to the
   // slide's lift — so the single view tweaks metrics/aggregation/etc. without leaving it.
-  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [graphCarLifts[graphCarIdx]!]), host);
+  const carEx = graphCarLifts[graphCarIdx]!;
+  const optionsFold = graphOptionsFoldHtml(graphPermScopeNames([carEx], graphPlotNames([carEx])), host);
   host.innerHTML =
     graphTypeTabsHtml() +
     // Single-view title tools (owner): a SWITCH icon (pick a different lift to view — "add"
@@ -24324,7 +24355,8 @@ function buildBubbleInput(
   const multiAthlete = athletes.length > 1;
   const exCap = Math.max(1, Math.floor(WA_GRAPH_MAX / athletes.length));
   const exsBase = bubble.exercises; // always multi-lift overlay (owner: the single/multi toggle is gone)
-  const exs = lensExpand("graph", exsBase).slice(0, exCap);
+  const groupLensActive = graphGroupLensActive(exsBase);
+  const exs = graphPlotNames(exsBase).slice(0, exCap);
   const recs = applyHardSetsFilter(computedRecords().filter((r) => athletes.includes(r.username)));
   const sm = currentStrengthByUserExercise(formula);
   // Per-bubble config CLONE so a bubble's type/×BW never leak to its neighbours (the bug the
@@ -24345,7 +24377,7 @@ function buildBubbleInput(
       return r ? worldRecordKg(r.exerciseName, athProfile(r.username)?.sex ?? "m", r.bodyweight ?? null) : null;
     },
   };
-  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, exs);
+  const scopeAllowed = allGraphsAllowed ? new Set(ALL_GRAPH_METRIC_IDS) : metricsAllowedForScope(graphPerms, graphPermScopeNames(exsBase, exs));
   // Metrics come from the GLOBAL Options menu (shared across bubbles for now); type/view/
   // lifts/×BW are the per-bubble dials. (bubble.metrics is reserved for future per-bubble metrics.)
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
@@ -24353,7 +24385,7 @@ function buildBubbleInput(
   // lines the carousel/full graph have (owner: "fit data points for the projection graph not
   // working"). Build them here too — projectionFitMarkers also sets the projection window
   // bounds on waGraphConfig, so copy those onto this bubble's cloned cfg. (rvw ignores xMarkers.)
-  const projMarkers = isRvw ? undefined : projectionFitMarkers(recs.filter((r) => exs.includes(r.exerciseName)), drawMetricIds);
+  const projMarkers = isRvw ? undefined : projectionFitMarkers(recordsMatchingGraphPlot(recs, exs, groupLensActive), drawMetricIds);
   cfg.projectionFrom = waGraphConfig.projectionFrom;
   cfg.projectionTo = waGraphConfig.projectionTo;
   // "Remember my pan/zoom across bubble/tab switches + refresh" (owner). The saved view is
@@ -24365,7 +24397,7 @@ function buildBubbleInput(
   // view was restored and update() only re-fit the right axis — the new datapoint fell outside
   // the stale frame and was clipped off-screen (owner: "I add a set but don't see the dot").
   // Folding count + latest date + a cheap value-sum in means any add / delete / edit re-fits.
-  const plotted = recs.filter((r) => exs.includes(r.exerciseName));
+  const plotted = recordsMatchingGraphPlot(recs, exs, groupLensActive);
   let dataMax = "";
   let dataSum = plotted.length;
   for (const r of plotted) { if (r.date && r.date > dataMax) dataMax = r.date; dataSum += (r.weight ?? 0) * 31 + (r.reps ?? 0); }
@@ -24409,6 +24441,7 @@ function buildBubbleInput(
   return {
     exercises: exs,
     records: isRvw ? rvwWindowRecords(recs) : recs,
+    groupLensActive,
     rvwAxis: isRvw ? rvwAxisExtent(recs, exs) : undefined,
     metrics: drawMetricIds,
     config: cfg,
@@ -24890,7 +24923,7 @@ function renderGraphDashboard(): void {
   // The shared Options ▾ menu (metrics + aggregation/decay/projection…), scoped to this
   // bubble's lifts — brought back per the owner. Its reps×weight toggle is hidden here (the
   // per-bubble "type" pill owns that switch).
-  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", bubble.exercises), box, { skipRvw: true, dashType: bubble.type });
+  const optionsFold = graphOptionsFoldHtml(graphPermScopeNames(bubble.exercises, graphPlotNames(bubble.exercises)), box, { skipRvw: true, dashType: bubble.type });
   // "Compare" (next to Options, owner): overlay other athletes on this bubble's graph. The
   // toggle reveals a sideways-scrolling athlete-pill row above the foot; hidden in locked
   // views / with nobody to compare (rule 21). Same data-wacompare / data-waath wiring as the
@@ -25205,7 +25238,7 @@ function renderExInfoGraph(name: string): void {
   if (exInfoGraphStageKey !== stageKey) keepStage = null;
 
   const canCompare = lockedUsername() === null && rosterUsers().length >= 2;
-  const optionsFold = graphOptionsFoldHtml(lensExpand("graph", [name]), host, { skipRvw: true, dashType: bubble.type });
+  const optionsFold = graphOptionsFoldHtml(graphPermScopeNames([name], graphPlotNames([name])), host, { skipRvw: true, dashType: bubble.type });
   const compareBtn = canCompare
     ? `<button type="button" class="wa-graph-compare-btn wa-clear${waCompareOpen ? " is-on" : ""}" data-wacompare="1" aria-pressed="${waCompareOpen}" title="${waCompareOpen ? "Hide the other-athlete compare row" : "Compare other athletes on this graph"}">Compare</button>`
     : "";
@@ -25324,7 +25357,8 @@ function renderWaGraph(): void {
   // The plot shows EXACTLY the picked lifts — clearing the selection leaves it
   // empty, never an implicit "show everything" (the owner wants an empty graph to
   // be possible). Use Select-all to plot the whole catalogue.
-  const baseExercises = lensExpand("graph", waGraphSel); // apply each lift's graph-scope Combine/Compare lens
+  const baseExercises = graphPlotNames(waGraphSel); // apply each lift's graph-scope Combine/Compare lens + synthetic expand
+  const graphLensActive = graphGroupLensActive(waGraphSel);
   // The exercise cap shrinks with each overlaid athlete so users × exercises ≤ 10.
   const exCap = graphExerciseCap();
   const graphExercises = baseExercises.slice(0, exCap);
@@ -25333,7 +25367,7 @@ function renderWaGraph(): void {
   // — UNLESS the global "All graphs" override is on, which lets everything draw.
   const scopeAllowed = allGraphsAllowed
     ? new Set(ALL_GRAPH_METRIC_IDS)
-    : metricsAllowedForScope(graphPerms, graphExercises);
+    : metricsAllowedForScope(graphPerms, graphPermScopeNames(waGraphSel, graphExercises));
   const drawMetricIds = [...waMetrics].filter((id) => scopeAllowed.has(id));
   // The "Options ▾" dropdown (metric chips + every config group) is built by the shared
   // graphOptionsFoldHtml() — so the single-lift carousel can show the SAME menu. It reads
@@ -25357,7 +25391,7 @@ function renderWaGraph(): void {
     // Graph options · Legend (relocated in below) · Compare share ONE row — the fold's
     // metric summary truncates so Compare never wraps to its own line.
     `<div class="wa-graph-ctrls">` +
-    graphOptionsFoldHtml(graphExercises, box) +
+    graphOptionsFoldHtml(graphPermScopeNames(waGraphSel, graphExercises), box) +
     compareBtn +
     // "Single ▴" — mirror of the carousel's "Multi ▾": flips the full multi graph back
     // to the single-lift carousel. Sits bottom-right, the same spot "Multi" occupies.
@@ -25422,6 +25456,7 @@ function renderWaGraph(): void {
   const analyticsInput = {
     exercises: graphExercises,
     records: S.waRepsVsWeight ? rvwWindowRecords(athleteRecs) : athleteRecs,
+    groupLensActive: graphLensActive,
     rvwAxis: S.waRepsVsWeight ? rvwAxisExtent(athleteRecs, graphExercises) : undefined,
     metrics: drawMetricIds,
     config: waGraphConfig,

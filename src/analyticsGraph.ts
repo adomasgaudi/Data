@@ -12,6 +12,7 @@
  */
 import { mountSvgChart, type SvgChart, type SvgSeries, type SvgPoint, type SvgShape, type SvgChartConfig, type ViewBox } from "./svgChart";
 import { decayedStrengthSeries, effectiveE1RM } from "./aggregate";
+import { filterGraphSeriesRecords } from "./aggregate";
 import type { SetRecord } from "./domain";
 import { graphMetric, type GraphPoint } from "./graphMetrics";
 import { bestFitNuzzo1RM, nuzzoWeightForReps, nuzzo1RM } from "./metrics";
@@ -133,6 +134,8 @@ export interface AnalyticsGraphInput {
   onViewChange?: ((view: ViewBox | null) => void) | undefined;
   /** Jump to an exercise's logged history (powers the pinned popup's "→ in history" link). */
   onPointHistory?: ((ex: string) => void) | undefined;
+  /** When any selected lift has a Combine/Compare lens, spelling-merge fallback is off. */
+  groupLensActive?: boolean;
 }
 
 /** Simple moving average over y, window `win` points. */
@@ -184,19 +187,22 @@ export function renderAnalyticsGraph(container: HTMLElement, input: AnalyticsGra
   // Same compute path either way — no mock data in the shipped view.
   const multiUser = !!(input.users && input.users.length > 1);
   const userLabel = (u: string) => input.userLabelOf?.(u) ?? u;
+  const groupLensActive = input.groupLensActive ?? false;
+  const seriesRecords = (ex: string, user?: string) =>
+    filterGraphSeriesRecords(records, ex, groupLensActive, user);
   const groups: { label: string; records: SetRecord[]; user?: string; userIdx?: number; exIdx?: number }[] = isAll
     ? [{ label: "All exercises", records: [...records] }]
     : multiUser
       ? input.exercises.flatMap((ex, ei) =>
           input.users!.map((u, ui) => ({
             label: `${userLabel(u)} · ${code(ex)}`,
-            records: records.filter((r) => r.exerciseName === ex && r.username === u),
+            records: seriesRecords(ex, u),
             user: u,
             userIdx: ui, // colour (hue) = the athlete
             exIdx: ei,   // shape = the exercise
           })),
         )
-      : input.exercises.map((ex) => ({ label: code(ex), records: records.filter((r) => r.exerciseName === ex) }));
+      : input.exercises.map((ex) => ({ label: code(ex), records: seriesRecords(ex) }));
 
   // ---- REPS vs WEIGHT mode (owner) -------------------------------------------
   // A non-time scatter: every set of each selected exercise plotted at (x = weight
