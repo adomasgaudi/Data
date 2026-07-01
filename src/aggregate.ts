@@ -679,6 +679,47 @@ export function scaleToGroup(
   return out;
 }
 
+/** Whether one record belongs on a plotted graph series. When no group lens is active,
+ *  spelling-merge variants (sets stored under a canonical name) still match the variant
+ *  the owner picked via originalExerciseName — the CHART-146 / EXR-170 fix path. */
+export function matchesGraphSeries(
+  r: SetRecord,
+  seriesName: string,
+  groupLensActive: boolean,
+): boolean {
+  if (r.exerciseName === seriesName) return true;
+  // Spelling-merge variants only — not synthetic group rows (those carry syntheticGroupId
+  // and stash the source member in originalExerciseName).
+  if (!groupLensActive && !r.syntheticGroupId && r.originalExerciseName === seriesName) return true;
+  return false;
+}
+
+/** One plotted series in the Analysis graph (per exercise × optional athlete overlay). */
+export function filterGraphSeriesRecords(
+  records: readonly SetRecord[],
+  seriesName: string,
+  groupLensActive: boolean,
+  username?: string,
+): SetRecord[] {
+  return records.filter((r) => {
+    if (username !== undefined && r.username !== username) return false;
+    return matchesGraphSeries(r, seriesName, groupLensActive);
+  });
+}
+
+/** Records matching ANY name in a graph's plot list (projection window, saved-view sig…). */
+export function recordsMatchingGraphPlot(
+  records: readonly SetRecord[],
+  plotExerciseNames: readonly string[],
+  groupLensActive: boolean,
+  username?: string,
+): SetRecord[] {
+  return records.filter((r) => {
+    if (username !== undefined && r.username !== username) return false;
+    return plotExerciseNames.some((ex) => matchesGraphSeries(r, ex, groupLensActive));
+  });
+}
+
 /** Exercise-info / card graph: which logged sets belong on this lift's curve & stats.
  *  Uses the same plot-name list as the Analysis graph lens (merged group name, separated
  *  members, or the lift itself). Spelling-merge variants (originalExerciseName) are kept
@@ -694,7 +735,7 @@ export function filterCardLiftRecords(
   return records.filter((r) => {
     if (r.username !== username) return false;
     if (plot.has(r.exerciseName)) return true;
-    if (!groupLensActive && r.originalExerciseName === cardName) return true;
+    if (!groupLensActive && !r.syntheticGroupId && r.originalExerciseName === cardName) return true;
     return false;
   });
 }

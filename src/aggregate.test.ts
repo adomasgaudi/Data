@@ -27,6 +27,8 @@ import {
   scaleToGroup,
   withSyntheticGroups,
   filterCardLiftRecords,
+  filterGraphSeriesRecords,
+  recordsMatchingGraphPlot,
   buildActiveExerciseSet,
   nearDuplicateExercises,
   canonicalizeExerciseNames,
@@ -353,6 +355,48 @@ describe("filterCardLiftRecords", () => {
     const got = filterCardLiftRecords(records, user, "Chin Ups", ["Chin Ups"], false);
     expect(got).toHaveLength(1);
     expect(got[0]!.originalExerciseName).toBe("Chin Ups");
+  });
+});
+
+describe("filterGraphSeriesRecords", () => {
+  const user = "ada";
+  const dbPress = rec({ username: user, exerciseName: "Dumbbell Bench Press", weight: 40, reps: 5, date: "2025-08-14" });
+  const bench = rec({ username: user, exerciseName: "Bench Press", weight: 100, reps: 5, date: "2025-08-14" });
+  const chinVariant = rec({
+    username: user,
+    exerciseName: "Pull Ups",
+    originalExerciseName: "Chin Ups",
+    weight: 0,
+    reps: 10,
+  });
+  const benchPattern = rec({
+    username: user,
+    exerciseName: "Bench pattern",
+    originalExerciseName: "Dumbbell Bench Press",
+    weight: 44,
+    reps: 5,
+    syntheticGroupId: "compare.bench-pattern",
+  });
+  const records = [dbPress, bench, chinVariant, benchPattern];
+
+  it("matches plain exerciseName", () => {
+    expect(filterGraphSeriesRecords(records, "Dumbbell Bench Press", false)).toEqual([dbPress]);
+  });
+
+  it("matches spelling-merge variants via originalExerciseName when no group lens", () => {
+    const got = filterGraphSeriesRecords(records, "Chin Ups", false, user);
+    expect(got).toEqual([chinVariant]);
+  });
+
+  it("with group lens matches exerciseName only (not cross-member originalExerciseName)", () => {
+    const got = filterGraphSeriesRecords(records, "Dumbbell Bench Press", true, user);
+    expect(got).toEqual([dbPress]);
+  });
+
+  it("recordsMatchingGraphPlot unions across plot names", () => {
+    const plot = ["Bench Press", "Dumbbell Bench Press"];
+    const got = recordsMatchingGraphPlot(records, plot, true, user);
+    expect(got.sort((a, b) => a.exerciseName.localeCompare(b.exerciseName))).toEqual([bench, dbPress]);
   });
 });
 
