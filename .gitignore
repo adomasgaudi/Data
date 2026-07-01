@@ -1,10 +1,16 @@
 node_modules/
 dist/
+dist-app/
 Colosseum-dashboard.html
 .env
+.env.keys
 .env.local
 *.log
 .DS_Store
 .userid-cache.json
 cost-report.html
 .claude/active-task.json
+# Playwright
+test-results/
+playwright-report/
+/db/migrations/

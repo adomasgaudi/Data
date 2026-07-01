@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./app/*"],
+      "@src/*": ["./src/*"],
+      "@api/*": ["./api/*"],
+      "@db/*": ["./db/*"]
+    },
+    "noEmit": true
+  },
+  "include": [
+    "app",
+    "api",
+    "db",
+    "tests",
+    "vite.app.config.ts",
+    "drizzle.config.ts",
+    "playwright.config.ts"
+  ]
+}
